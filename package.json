@@ -1,0 +1,18 @@
+{
+  "name": "mind-frag-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "blockkit-ts",
+    "game"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:blockkit": "npm run dev --workspace=blockkit-ts",
+    "dev:game": "npm run dev --workspace=game",
+    "test": "npm run test --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

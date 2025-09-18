@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": false
+  },
+  "exclude": [
+    "node_modules",
+    "example",
+    "**/*.test.*",
+    "**/*.spec.*"
+  ]
+}

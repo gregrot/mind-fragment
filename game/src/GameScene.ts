@@ -7,9 +7,9 @@ export class GameScene extends Phaser.Scene {
   constructor() { super("game"); }
 
   preload() {
-    // Create simple colored rectangles as placeholders for sprites
-    this.load.image("scrap", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAABYSURBVBiVY/z//z8DJYCJgUIwqoAyBf///2dkZGRkQAcMDAwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDAwAAP//AwDNZQABXvNWOQAAAABJRU5ErkJggg==");
-    this.load.image("bot", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAABYSURBVBiVY2RgYPjPQAlgYqAQjCqgTAEjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAyMjIwMjIyMDIyMjAwD//wMA0mUAAYbzVjkAAAAASUVORK5CYII=");
+    // Load sprite assets
+    this.load.image("scrap", "/assets/scrap.svg");
+    this.load.image("bot", "/assets/bot.svg");
   }
 
   create() {

@@ -4,6 +4,9 @@ node_modules/
 # Build outputs
 dist/
 
+# Keep assets
+!public/assets/
+
 # IDE files
 .vscode/
 .idea/

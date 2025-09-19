@@ -32,10 +32,21 @@ This task list sets out the minimum work required to stand up a controllable, mo
 - Provide a simulation tick that aggregates module outputs and resolves conflicting actuator requests deterministically.
 
 ### 3. Module Library & Inventory
+**Status:** Complete
+
 - Document the MVP module catalogue and their required attachment slots so designers can reason about progression.
 - Build module definitions for the starter set: **Movement**, **Manipulation**, **Crafting**, and **Scanning**. Each definition must include exposed parameters, block hooks, and telemetry channels.
 - Implement module initialisation routines that register their values and functions with the runtime when added to the stack and deregister them cleanly when removed.
 - Add placeholder art or iconography per module to clarify configuration inside the scene and debug tooling.
+
+| Module | Slot & Index | Provides | Parameters | Block Hooks | Telemetry |
+| --- | --- | --- | --- | --- | --- |
+| **Locomotion Thrusters Mk1** | `core · 0` | `movement.linear`, `movement.angular` | `maxLinearSpeed`, `maxAngularSpeed` | `setLinearVelocity`, `setAngularVelocity` | `distanceTravelled`, `lastCommand` |
+| **Precision Manipulator Rig** | `extension · 0` | `manipulation.grip` | `gripStrength` | `configureGrip`, `grip`, `release` | `gripEngaged`, `heldItem`, `operationsCompleted` |
+| **Field Fabricator** | `extension · 1` | `crafting.basic` | `defaultDuration` | `queueRecipe`, `cancelRecipe` | `queueLength`, `activeRecipe`, `lastCompleted` |
+| **Survey Scanner Suite** | `sensor · 0` | `scanning.survey` | `scanRange`, `cooldownSeconds` | `scan` | `cooldownRemaining`, `lastScan` |
+
+- Placeholder iconography representing locomotion, manipulation, fabrication, and scanning accompanies each module within the simulation debug panel to communicate the current loadout at a glance.
 
 ### 4. Programmable Interface
 - Integrate the existing block editor shell, narrowing the palette to module-derived blocks (Move, Manipulate, Craft, Scan) plus essential control primitives (Wait, Repeat, Conditional).

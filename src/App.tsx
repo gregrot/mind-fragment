@@ -1,6 +1,7 @@
 import BlockPalette from './components/BlockPalette';
 import Workspace from './components/Workspace';
 import SimulationShell from './simulation/SimulationShell';
+import ModuleInventory from './components/ModuleInventory';
 import { BLOCK_LIBRARY } from './blocks/library';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 
@@ -25,6 +26,7 @@ function App(): JSX.Element {
         <section className="panel simulation-panel">
           <h2>Simulation Shell</h2>
           <SimulationShell />
+          <ModuleInventory />
         </section>
       </main>
     </div>

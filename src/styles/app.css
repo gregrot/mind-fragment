@@ -198,6 +198,153 @@ body {
   gap: 0.75rem;
 }
 
+.module-inventory {
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem 1.35rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(32, 48, 76, 0.12), rgba(86, 118, 169, 0.12));
+  border: 1px solid rgba(32, 48, 76, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.module-inventory h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.module-inventory-summary {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.65);
+  font-size: 0.95rem;
+}
+
+.module-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.module-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  padding: 1rem 1.1rem 1.2rem;
+  border: 1px solid rgba(27, 35, 48, 0.1);
+  box-shadow: 0 12px 24px rgba(19, 33, 60, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.module-card[data-status='available'] {
+  background: linear-gradient(180deg, rgba(237, 248, 255, 0.9), rgba(225, 240, 255, 0.9));
+}
+
+.module-card-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.module-card-title h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.module-card-title p {
+  margin: 0.25rem 0 0;
+  color: rgba(27, 35, 48, 0.65);
+  font-size: 0.9rem;
+}
+
+.module-card-meta-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.module-status {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.module-status-installed {
+  background: rgba(23, 128, 95, 0.15);
+  color: #0f5f45;
+}
+
+.module-status-available {
+  background: rgba(25, 118, 210, 0.15);
+  color: #0d47a1;
+}
+
+.module-slot {
+  font-size: 0.85rem;
+  color: rgba(27, 35, 48, 0.65);
+}
+
+.module-card-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.module-card-details dt {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.module-card-details dd {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.72);
+}
+
+.module-card-section h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.module-card-section ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: rgba(27, 35, 48, 0.72);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.module-field-label {
+  font-weight: 600;
+}
+
+.module-field-unit {
+  margin-left: 0.35rem;
+  font-size: 0.8rem;
+  color: rgba(27, 35, 48, 0.55);
+}
+
+.module-card-section small {
+  display: block;
+  color: rgba(27, 35, 48, 0.6);
+}
+
+.module-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(19, 33, 60, 0.2);
+}
+
 .block-slot {
   background: rgba(102, 59, 178, 0.04);
   border-radius: 10px;

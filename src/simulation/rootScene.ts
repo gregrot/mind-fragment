@@ -2,7 +2,7 @@ import { Application, Renderer, Container, Graphics, Sprite, Ticker } from 'pixi
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
 import { RobotChassis } from './robot';
-import { DemoSpinModule } from './robot/modules/demoSpinModule';
+import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from './robot/modules/moduleLibrary';
 
 interface TickPayload {
   deltaMS: number;
@@ -48,7 +48,10 @@ export class RootScene {
     this.viewport.addChild(this.rootLayer);
 
     this.robotCore = new RobotChassis();
-    this.robotCore.attachModule(new DemoSpinModule());
+    for (const moduleId of DEFAULT_MODULE_LOADOUT) {
+      const moduleInstance = createModuleInstance(moduleId);
+      this.robotCore.attachModule(moduleInstance);
+    }
 
     this.robot = null;
     this.tickHandler = this.tick.bind(this);

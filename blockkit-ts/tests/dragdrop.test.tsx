@@ -3,10 +3,22 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { render, fireEvent, screen, act } from '@testing-library/react';
 import { StackEditor } from '../src/StackEditor';
 import { StackRegistry, createDefaultRegistry } from '../src/StackRegistry';
 import { StackProgram, StackBlock } from '../src/types';
+
+// Helper function to create mock DataTransfer
+function createMockDataTransfer() {
+  return {
+    data: {} as Record<string, string>,
+    setData: function(format: string, data: string) { this.data[format] = data; },
+    getData: function(format: string) { return this.data[format] || ''; },
+    clearData: function() { this.data = {}; },
+    dropEffect: 'copy' as const,
+    effectAllowed: 'copy' as const
+  };
+}
 
 describe('StackEditor Drag and Drop', () => {
   let registry: StackRegistry;
@@ -82,20 +94,14 @@ describe('StackEditor Drag and Drop', () => {
 
       // Simulate drag over and drop events with proper data transfer
       act(() => {
+        const mockDataTransfer = createMockDataTransfer();
+        mockDataTransfer.setData('application/json', JSON.stringify(dragData));
+
         // Simulate dragover first
-        const dragOverEvent = new DragEvent('dragover', {
-          dataTransfer: new DataTransfer(),
-          bubbles: true
-        });
-        dragOverEvent.dataTransfer!.setData('application/json', JSON.stringify(dragData));
-        fireEvent(dropZone!, dragOverEvent);
+        fireEvent.dragOver(dropZone!, { dataTransfer: mockDataTransfer });
 
         // Then simulate drop
-        const dropEvent = new DragEvent('drop', {
-          dataTransfer: dragOverEvent.dataTransfer,
-          bubbles: true
-        });
-        fireEvent(dropZone!, dropEvent);
+        fireEvent.drop(dropZone!, { dataTransfer: mockDataTransfer });
       });
 
       // Verify onChange was called with new block
@@ -163,18 +169,16 @@ describe('StackEditor Drag and Drop', () => {
       };
 
       // Simulate drag and drop
-      const dragStartEvent = new DragEvent('dragstart', {
-        dataTransfer: new DataTransfer()
-      });
-      dragStartEvent.dataTransfer!.setData('application/json', JSON.stringify(dragData));
-      
-      fireEvent(paletteBlock!, dragStartEvent);
+      act(() => {
+        const mockDataTransfer = createMockDataTransfer();
+        mockDataTransfer.setData('application/json', JSON.stringify(dragData));
 
-      const dropEvent = new DragEvent('drop', {
-        dataTransfer: dragStartEvent.dataTransfer
+        // Simulate dragover first
+        fireEvent.dragOver(slotDropZone!, { dataTransfer: mockDataTransfer });
+
+        // Then simulate drop
+        fireEvent.drop(slotDropZone!, { dataTransfer: mockDataTransfer });
       });
-      
-      fireEvent(slotDropZone, dropEvent);
 
       // Verify onChange was called and block was added to slot
       expect(mockOnChange).toHaveBeenCalled();
@@ -212,11 +216,12 @@ describe('StackEditor Drag and Drop', () => {
         spec: saySpec
       };
 
-      const dragEvent1 = new DragEvent('dragstart', { dataTransfer: new DataTransfer() });
-      dragEvent1.dataTransfer!.setData('application/json', JSON.stringify(dragData1));
-      
-      const dropEvent1 = new DragEvent('drop', { dataTransfer: dragEvent1.dataTransfer });
-      fireEvent(dropZone, dropEvent1);
+      act(() => {
+        const mockDataTransfer1 = createMockDataTransfer();
+        mockDataTransfer1.setData('application/json', JSON.stringify(dragData1));
+        fireEvent.dragOver(dropZone!, { dataTransfer: mockDataTransfer1 });
+        fireEvent.drop(dropZone!, { dataTransfer: mockDataTransfer1 });
+      });
 
       // Drag second block
       const thinkSpec = {
@@ -231,11 +236,12 @@ describe('StackEditor Drag and Drop', () => {
         spec: thinkSpec
       };
 
-      const dragEvent2 = new DragEvent('dragstart', { dataTransfer: new DataTransfer() });
-      dragEvent2.dataTransfer!.setData('application/json', JSON.stringify(dragData2));
-      
-      const dropEvent2 = new DragEvent('drop', { dataTransfer: dragEvent2.dataTransfer });
-      fireEvent(dropZone, dropEvent2);
+      act(() => {
+        const mockDataTransfer2 = createMockDataTransfer();
+        mockDataTransfer2.setData('application/json', JSON.stringify(dragData2));
+        fireEvent.dragOver(dropZone!, { dataTransfer: mockDataTransfer2 });
+        fireEvent.drop(dropZone!, { dataTransfer: mockDataTransfer2 });
+      });
 
       // Verify both blocks were added
       expect(mockOnChange).toHaveBeenCalledTimes(2);

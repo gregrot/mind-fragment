@@ -10,7 +10,13 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "types": ["vitest", "vite/client", "@testing-library/jest-dom"]
+    "types": [
+      "vitest",
+      "vite/client",
+      "@testing-library/jest-dom",
+      "@playwright/test",
+      "node"
+    ]
   },
   "include": [
     "src",

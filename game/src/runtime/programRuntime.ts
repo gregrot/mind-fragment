@@ -1,5 +1,4 @@
-import { StackInterpreter } from "../../../blockkit-ts/src/scratch/StackInterpreter";
-import type { StackProgram } from "../../../blockkit-ts/src/scratch/stackTypes";
+import { StackInterpreter, type StackProgram } from "blockkit-ts";
 import { world } from "../world/world";
 import { worldApi } from "../world/worldApi";
 import {

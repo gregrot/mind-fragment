@@ -19,6 +19,7 @@ export default defineConfig({
       }
     },
     sourcemap: true,
-    emptyOutDir: true
+    // Keep declaration files emitted by the TypeScript build step.
+    emptyOutDir: false
   }
 });

@@ -12,6 +12,7 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 ### Steering
 - [Experience & Loop Direction](docs/steering/experience.md) — Narrative framing, opening sequence, and the layered play loops we are preserving as the north star.
 - [Voice & Tone Sheet](docs/steering/voice-and-tone.md) — Dialogue direction and sample barks that keep the Mind Fragment’s personality intact while we rebuild systems.
+- [Visual Asset Studies — Crash Zone Set](docs/steering/visual-assets.md) — Palette, silhouettes, animation hooks, and a render script for the opening crash-zone core, first worker drone, and local sporeling nest.
 
 ### Planning
 - [Block Programming Plan](docs/planning/block-programming.md) — Architectural goals, player flow, and implementation priorities for the editor and runtime we need to recreate first.

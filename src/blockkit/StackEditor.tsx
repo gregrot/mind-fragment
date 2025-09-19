@@ -2,10 +2,18 @@
  * Main React component for the visual stack-based block editor
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { StackRegistry } from './StackRegistry';
 import { StackProgram, StackBlock, StackBlockSpec } from './types';
 import { serializeProgram } from './StackSerializer';
+
+interface DragContext {
+  type: 'palette-block' | 'existing-block';
+  spec?: StackBlockSpec;
+  blockId?: string;
+  block?: StackBlock;
+  sourceSequenceId?: string;
+}
 
 // Add CSS animation for drop indicator
 const pulseKeyframes = `
@@ -82,6 +90,204 @@ function createBlockFromSpec(spec: StackBlockSpec): StackBlock {
   return block;
 }
 
+interface RemoveResult {
+  blocks: StackBlock[];
+  removedBlock?: StackBlock;
+}
+
+function removeBlockFromSequence(blocks: StackBlock[], blockId: string): RemoveResult {
+  const index = blocks.findIndex(block => block.id === blockId);
+  if (index !== -1) {
+    const newBlocks = [...blocks];
+    const [removedBlock] = newBlocks.splice(index, 1);
+    return { blocks: newBlocks, removedBlock };
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (!block.slots) continue;
+
+    for (const [slotKey, slotBlocks] of Object.entries(block.slots)) {
+      const result = removeBlockFromSequence(slotBlocks, blockId);
+      if (result.removedBlock) {
+        const updatedBlock: StackBlock = {
+          ...block,
+          slots: {
+            ...block.slots,
+            [slotKey]: result.blocks,
+          },
+        };
+        const newBlocks = [...blocks];
+        newBlocks[i] = updatedBlock;
+        return { blocks: newBlocks, removedBlock: result.removedBlock };
+      }
+    }
+  }
+
+  return { blocks };
+}
+
+function removeBlockFromProgram(program: StackProgram, blockId: string) {
+  const result = removeBlockFromSequence(program.blocks, blockId);
+  return {
+    program: {
+      ...program,
+      blocks: result.blocks,
+    },
+    removedBlock: result.removedBlock,
+  };
+}
+
+function clampIndex(index: number, length: number) {
+  if (index < 0) return 0;
+  if (index > length) return length;
+  return index;
+}
+
+function insertBlockIntoBlock(
+  block: StackBlock,
+  targetBlockId: string,
+  slotKey: string,
+  blockToInsert: StackBlock,
+  targetIndex: number,
+): { updatedBlock: StackBlock; inserted: boolean } {
+  if (block.id === targetBlockId) {
+    const slots = block.slots ? { ...block.slots } : {};
+    const slotBlocks = slots[slotKey] ? [...slots[slotKey]!] : [];
+    const insertIndex = clampIndex(targetIndex, slotBlocks.length);
+    slotBlocks.splice(insertIndex, 0, blockToInsert);
+    return {
+      updatedBlock: {
+        ...block,
+        slots: {
+          ...slots,
+          [slotKey]: slotBlocks,
+        },
+      },
+      inserted: true,
+    };
+  }
+
+  if (!block.slots) {
+    return { updatedBlock: block, inserted: false };
+  }
+
+  let inserted = false;
+  const newSlots: Record<string, StackBlock[]> = {};
+  for (const [key, slotBlocks] of Object.entries(block.slots)) {
+    const updatedSlot: StackBlock[] = [];
+    let insertedInThisSlot = false;
+    for (const child of slotBlocks) {
+      const result = insertBlockIntoBlock(child, targetBlockId, slotKey, blockToInsert, targetIndex);
+      if (result.inserted) {
+        insertedInThisSlot = true;
+      }
+      updatedSlot.push(result.updatedBlock);
+    }
+
+    if (insertedInThisSlot) {
+      inserted = true;
+      newSlots[key] = updatedSlot;
+    } else {
+      newSlots[key] = slotBlocks;
+    }
+  }
+
+  if (inserted) {
+    return {
+      updatedBlock: {
+        ...block,
+        slots: newSlots,
+      },
+      inserted: true,
+    };
+  }
+
+  return { updatedBlock: block, inserted: false };
+}
+
+function insertBlockIntoProgram(
+  program: StackProgram,
+  block: StackBlock,
+  targetSequenceId: string,
+  targetIndex: number,
+): StackProgram {
+  if (targetSequenceId === 'main') {
+    const newBlocks = [...program.blocks];
+    const insertIndex = clampIndex(targetIndex, newBlocks.length);
+    newBlocks.splice(insertIndex, 0, block);
+    return {
+      ...program,
+      blocks: newBlocks,
+    };
+  }
+
+  if (!targetSequenceId.startsWith('slot:')) {
+    console.warn(`Unknown sequence target: ${targetSequenceId}`);
+    return program;
+  }
+
+  const [, parentBlockId, slotKey] = targetSequenceId.split(':');
+  if (!parentBlockId || !slotKey) {
+    console.warn(`Invalid slot sequence identifier: ${targetSequenceId}`);
+    return program;
+  }
+
+  const newBlocks: StackBlock[] = [];
+  let inserted = false;
+  for (const blockInProgram of program.blocks) {
+    if (inserted) {
+      newBlocks.push(blockInProgram);
+      continue;
+    }
+
+    const result = insertBlockIntoBlock(blockInProgram, parentBlockId, slotKey, block, targetIndex);
+    if (result.inserted) {
+      inserted = true;
+      newBlocks.push(result.updatedBlock);
+    } else {
+      newBlocks.push(result.updatedBlock);
+    }
+  }
+
+  if (!inserted) {
+    console.warn(`Target slot ${slotKey} on block ${parentBlockId} not found`);
+    return program;
+  }
+
+  return {
+    ...program,
+    blocks: newBlocks,
+  };
+}
+
+function findBlockInSequence(
+  blocks: StackBlock[],
+  blockId: string,
+  sequenceId: string,
+): { block: StackBlock; sequenceId: string } | null {
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return { block, sequenceId };
+    }
+
+    if (block.slots) {
+      for (const [slotKey, slotBlocks] of Object.entries(block.slots)) {
+        const result = findBlockInSequence(slotBlocks, blockId, `slot:${block.id}:${slotKey}`);
+        if (result) {
+          return result;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function findBlockInProgram(program: StackProgram, blockId: string) {
+  return findBlockInSequence(program.blocks, blockId, 'main');
+}
+
 /**
  * Component for rendering individual blocks
  */
@@ -92,9 +298,30 @@ interface BlockComponentProps {
   onBlockMove?: (blockId: string) => void;
   registry?: StackRegistry;
   isDraggable?: boolean;
+  onDragContextStart?: (info: { block: StackBlock; sequenceId?: string }) => void;
+  onDragContextEnd?: () => void;
+  sequenceId?: string;
+  dragContext?: DragContext | null;
+  onExistingBlockDrop?: (request: ExistingBlockDropRequest) => void;
+  onNestedBlockDragStart?: (info: { block: StackBlock; sequenceId: string }) => void;
+  onNestedDragEnd?: () => void;
 }
 
-function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isDraggable = true }: BlockComponentProps): JSX.Element {
+function BlockComponent({
+  block,
+  spec,
+  onBlockChange,
+  onBlockMove,
+  registry,
+  isDraggable = true,
+  onDragContextStart,
+  onDragContextEnd,
+  sequenceId,
+  dragContext,
+  onExistingBlockDrop,
+  onNestedBlockDragStart,
+  onNestedDragEnd,
+}: BlockComponentProps): JSX.Element {
   const handleInputChange = useCallback((inputKey: string, value: unknown) => {
     if (!onBlockChange) return;
     
@@ -155,15 +382,19 @@ function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isD
 
   const handleDragStart = (e: React.DragEvent) => {
     if (!isDraggable) return;
-    
     // Store the block data for movement
     e.dataTransfer.setData('application/json', JSON.stringify({
       type: 'existing-block',
       blockId: block.id,
-      block: block
+      block: block,
+      sourceSequenceId: sequenceId,
     }));
     e.dataTransfer.effectAllowed = 'move';
-    
+
+    if (onDragContextStart) {
+      onDragContextStart({ block, sequenceId });
+    }
+
     // Add visual feedback
     (e.currentTarget as HTMLElement).style.opacity = '0.5';
   };
@@ -171,6 +402,10 @@ function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isD
   const handleDragEnd = (e: React.DragEvent) => {
     // Reset visual feedback
     (e.currentTarget as HTMLElement).style.opacity = '1';
+
+    if (onDragContextEnd) {
+      onDragContextEnd();
+    }
   };
 
   // Different styling for C-blocks to create the C-shape
@@ -242,8 +477,8 @@ function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isD
                 )}
                 
                 {/* Nested sequence */}
-                <SequenceComponent 
-                  blocks={block.slots?.[slot.key] || []} 
+                <SequenceComponent
+                  blocks={block.slots?.[slot.key] || []}
                   registry={registry}
                   onSequenceChange={(newBlocks) => {
                     if (!onBlockChange) return;
@@ -260,6 +495,10 @@ function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isD
                   parentBlockId={block.id}
                   slotKey={slot.key}
                   isNestedInCBlock={true}
+                  dragContext={dragContext}
+                  onExistingBlockDrop={onExistingBlockDrop}
+                  onBlockDragStart={onNestedBlockDragStart}
+                  onDragEnd={onNestedDragEnd}
                 />
               </div>
               
@@ -278,11 +517,12 @@ function BlockComponent({ block, spec, onBlockChange, onBlockMove, registry, isD
   };
 
   return (
-    <div 
+    <div
       style={blockStyle}
       draggable={isDraggable}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      data-block-id={block.id}
     >
       {renderLabel()}
       {renderCBlockSlots()}
@@ -307,6 +547,14 @@ function getBlockColor(form: string): string {
 /**
  * Component for rendering a sequence of blocks
  */
+interface ExistingBlockDropRequest {
+  blockId: string;
+  blockSnapshot?: StackBlock;
+  sourceSequenceId?: string;
+  targetSequenceId: string;
+  targetIndex: number;
+}
+
 interface SequenceComponentProps {
   blocks: StackBlock[];
   onSequenceChange?: (blocks: StackBlock[]) => void;
@@ -315,11 +563,33 @@ interface SequenceComponentProps {
   parentBlockId?: string;
   slotKey?: string;
   isNestedInCBlock?: boolean;
+  dragContext?: DragContext | null;
+  onExistingBlockDrop?: (request: ExistingBlockDropRequest) => void;
+  onBlockDragStart?: (info: { block: StackBlock; sequenceId: string }) => void;
+  onDragEnd?: () => void;
 }
 
-function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, parentBlockId, slotKey, isNestedInCBlock = false }: SequenceComponentProps): JSX.Element {
+function SequenceComponent({
+  blocks,
+  onSequenceChange,
+  onBlockMove,
+  registry,
+  parentBlockId,
+  slotKey,
+  isNestedInCBlock = false,
+  dragContext,
+  onExistingBlockDrop,
+  onBlockDragStart,
+  onDragEnd,
+}: SequenceComponentProps): JSX.Element {
   const [dragOver, setDragOver] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const sequenceRef = useRef<HTMLDivElement | null>(null);
+  const hasPointerPositionRef = useRef(false);
+
+  const sequenceId = isNestedInCBlock
+    ? `slot:${parentBlockId ?? 'root'}:${slotKey ?? 'default'}`
+    : 'main';
 
   const handleBlockChange = useCallback((index: number, updatedBlock: StackBlock) => {
     if (!onSequenceChange) return;
@@ -345,18 +615,34 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation(); // Prevent event bubbling to parent sequences
-    
+
     // Note: During dragover, dataTransfer.getData() may not work in all browsers
     // We'll set a default drop effect and handle the actual data parsing in drop
     e.dataTransfer.dropEffect = 'copy';
     setDragOver(true);
-    
+
     // Calculate drop position based on mouse position
     const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
     const blockHeight = 30; // Approximate block height
-    const dropIndex = Math.floor(y / blockHeight);
-    setDragOverIndex(Math.min(dropIndex, blocks.length));
+
+    if (!Number.isFinite(rect.height) || rect.height <= 0) {
+      setDragOverIndex(blocks.length);
+      hasPointerPositionRef.current = false;
+      return;
+    }
+
+    const offsetY = e.clientY - rect.top;
+
+    if (!Number.isFinite(offsetY)) {
+      setDragOverIndex(blocks.length);
+      hasPointerPositionRef.current = false;
+      return;
+    }
+
+    const dropIndex = Math.floor(offsetY / blockHeight);
+    const clampedIndex = Math.max(0, Math.min(dropIndex, blocks.length));
+    setDragOverIndex(clampedIndex);
+    hasPointerPositionRef.current = true;
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -367,64 +653,110 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent event bubbling to parent sequences
+  const processDrop = useCallback((event: DragEvent) => {
+    const dropEvent = event as DragEvent & { _stackDropHandled?: boolean };
+    if (dropEvent._stackDropHandled) {
+      return;
+    }
+
+    dropEvent._stackDropHandled = true;
+
+    event.preventDefault();
+    event.stopPropagation();
     setDragOver(false);
+    const currentIndex = dragOverIndex;
     setDragOverIndex(null);
 
+    const dataTransfer = event.dataTransfer;
+    if (!dataTransfer) {
+      return;
+    }
+
     try {
-      const dragDataString = e.dataTransfer.getData('application/json');
-      
-      if (!dragDataString) {
+      const dragDataString = dataTransfer.getData('application/json');
+      let dragData: DragContext | null = null;
+
+      if (dragDataString) {
+        try {
+          dragData = JSON.parse(dragDataString);
+        } catch (error) {
+          console.warn('Failed to parse drag data:', error);
+          return;
+        }
+      } else if (dragContext) {
+        dragData = dragContext;
+      } else {
         console.warn('No drag data found');
         return;
       }
-      
-      const dragData = JSON.parse(dragDataString);
-      
-      if (dragData.type === 'palette-block' && dragData.spec && onSequenceChange) {
-        // Create a new block from the palette spec
-        const newBlock = createBlockFromSpec(dragData.spec);
-        const insertIndex = dragOverIndex !== null ? dragOverIndex : blocks.length;
+
+      if (dragData?.type === 'palette-block' && dragData.spec && onSequenceChange) {
+        const hasExplicitIndex = hasPointerPositionRef.current && currentIndex !== null;
+        const insertIndex = clampIndex(
+          hasExplicitIndex ? currentIndex! : blocks.length,
+          blocks.length,
+        );
         const newBlocks = [...blocks];
-        newBlocks.splice(insertIndex, 0, newBlock);
+        newBlocks.splice(insertIndex, 0, createBlockFromSpec(dragData.spec));
         onSequenceChange(newBlocks);
-        
-      } else if (dragData.type === 'existing-block' && dragData.block && onSequenceChange) {
-        // Move an existing block to this sequence
-        const movedBlock = dragData.block;
-        
-        // Check if the block is already in this sequence
-        const existingIndex = blocks.findIndex(block => block.id === movedBlock.id);
-        
-        if (existingIndex !== -1) {
-          // Moving within the same sequence
+      } else if (dragData?.type === 'existing-block') {
+        const blockId = dragData.blockId ?? dragData.block?.id;
+        if (!blockId) {
+          console.warn('Missing block identifier for existing block drag');
+          return;
+        }
+
+        const hasExplicitIndex = hasPointerPositionRef.current && currentIndex !== null;
+        const insertIndex = clampIndex(
+          hasExplicitIndex ? currentIndex! : blocks.length,
+          blocks.length,
+        );
+        const existingIndex = blocks.findIndex(block => block.id === blockId);
+
+        if (existingIndex !== -1 && onSequenceChange) {
           const newBlocks = [...blocks];
           const [removedBlock] = newBlocks.splice(existingIndex, 1);
-          let insertIndex = dragOverIndex !== null ? dragOverIndex : blocks.length;
-          
-          // Adjust insert index if moving within the same sequence
-          if (insertIndex > existingIndex) {
-            insertIndex--;
+          let targetIndex = insertIndex;
+          if (targetIndex > existingIndex) {
+            targetIndex--;
           }
-          
-          newBlocks.splice(insertIndex, 0, removedBlock);
+          newBlocks.splice(targetIndex, 0, removedBlock);
           onSequenceChange(newBlocks);
-        } else {
-          // Moving from a different sequence
-          const insertIndex = dragOverIndex !== null ? dragOverIndex : blocks.length;
-          const newBlocks = [...blocks];
-          newBlocks.splice(insertIndex, 0, movedBlock);
-          onSequenceChange(newBlocks);
-          
-          // The block will be removed from its original location by the drag source
+        } else if (onExistingBlockDrop) {
+          onExistingBlockDrop({
+            blockId,
+            blockSnapshot: dragData.block ?? dragContext?.block,
+            sourceSequenceId: dragData.sourceSequenceId ?? dragContext?.sourceSequenceId,
+            targetSequenceId: sequenceId,
+            targetIndex: insertIndex,
+          });
         }
       }
-    } catch (error) {
-      console.warn('Failed to parse drag data:', error);
+    } finally {
+      hasPointerPositionRef.current = false;
+      if (onDragEnd) {
+        onDragEnd();
+      }
     }
+  }, [blocks, dragContext, dragOverIndex, onDragEnd, onExistingBlockDrop, onSequenceChange, sequenceId]);
+
+  const handleDrop = (e: React.DragEvent) => {
+    processDrop(e.nativeEvent);
   };
+
+  useEffect(() => {
+    const node = sequenceRef.current;
+    if (!node) return;
+
+    const listener = (event: DragEvent) => {
+      processDrop(event);
+    };
+
+    node.addEventListener('drop', listener);
+    return () => {
+      node.removeEventListener('drop', listener);
+    };
+  }, [processDrop]);
 
   const sequenceStyle: React.CSSProperties = {
     minHeight: isNestedInCBlock ? '24px' : '40px',
@@ -453,10 +785,6 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
     );
   };
 
-  const sequenceId = isNestedInCBlock
-    ? `slot:${parentBlockId ?? 'root'}:${slotKey ?? 'default'}`
-    : 'main';
-
   return (
     <div
       data-sequence-id={sequenceId}
@@ -464,6 +792,7 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      ref={sequenceRef}
     >
       {renderDropIndicator(0)}
       
@@ -478,13 +807,24 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
         return (
           <React.Fragment key={block.id}>
             <div style={{ marginBottom: '2px' }}>
-              <BlockComponent 
-                block={block} 
+              <BlockComponent
+                block={block}
                 spec={spec}
                 registry={registry}
                 onBlockChange={(updatedBlock) => handleBlockChange(index, updatedBlock)}
                 onBlockMove={handleBlockMove}
                 isDraggable={true}
+                sequenceId={sequenceId}
+                onDragContextStart={
+                  onBlockDragStart
+                    ? (info) => onBlockDragStart({ block: info.block, sequenceId })
+                    : undefined
+                }
+                onDragContextEnd={onDragEnd}
+                dragContext={dragContext}
+                onExistingBlockDrop={onExistingBlockDrop}
+                onNestedBlockDragStart={onBlockDragStart}
+                onNestedDragEnd={onDragEnd}
               />
             </div>
             {renderDropIndicator(index + 1)}
@@ -513,6 +853,8 @@ function SequenceComponent({ blocks, onSequenceChange, onBlockMove, registry, pa
 interface PaletteProps {
   registry: StackRegistry;
   onBlockCreate?: (block: StackBlock) => void;
+  onBlockDragStart?: (spec: StackBlockSpec) => void;
+  onBlockDragEnd?: () => void;
 }
 
 /**
@@ -522,9 +864,11 @@ interface PaletteBlockProps {
   spec: StackBlockSpec;
   onDragStart?: (spec: StackBlockSpec) => void;
   onClick?: (spec: StackBlockSpec) => void;
+  onDragContextStart?: (spec: StackBlockSpec) => void;
+  onDragContextEnd?: () => void;
 }
 
-function PaletteBlock({ spec, onDragStart, onClick }: PaletteBlockProps): JSX.Element {
+function PaletteBlock({ spec, onDragStart, onClick, onDragContextStart, onDragContextEnd }: PaletteBlockProps): JSX.Element {
   const handleDragStart = (e: React.DragEvent) => {
     // Store the block spec in the drag data
     e.dataTransfer.setData('application/json', JSON.stringify({
@@ -532,9 +876,19 @@ function PaletteBlock({ spec, onDragStart, onClick }: PaletteBlockProps): JSX.El
       spec: spec
     }));
     e.dataTransfer.effectAllowed = 'copy';
-    
+
     if (onDragStart) {
       onDragStart(spec);
+    }
+
+    if (onDragContextStart) {
+      onDragContextStart(spec);
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (onDragContextEnd) {
+      onDragContextEnd();
     }
   };
 
@@ -545,14 +899,16 @@ function PaletteBlock({ spec, onDragStart, onClick }: PaletteBlockProps): JSX.El
   };
 
   return (
-    <div 
+    <div
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={handleClick}
       style={{
         marginBottom: '4px',
         cursor: 'grab'
       }}
+      data-palette-kind={spec.kind}
       onMouseDown={(e) => {
         // Change cursor to grabbing when mouse is down
         (e.currentTarget as HTMLElement).style.cursor = 'grabbing';
@@ -571,7 +927,7 @@ function PaletteBlock({ spec, onDragStart, onClick }: PaletteBlockProps): JSX.El
   );
 }
 
-function Palette({ registry, onBlockCreate }: PaletteProps): JSX.Element {
+function Palette({ registry, onBlockCreate, onBlockDragStart, onBlockDragEnd }: PaletteProps): JSX.Element {
   const allSpecs = registry.getAll();
 
   const handleBlockClick = (spec: StackBlockSpec) => {
@@ -579,11 +935,6 @@ function Palette({ registry, onBlockCreate }: PaletteProps): JSX.Element {
       const newBlock = createBlockFromSpec(spec);
       onBlockCreate(newBlock);
     }
-  };
-
-  const handleDragStart = (spec: StackBlockSpec) => {
-    // Optional: Add visual feedback when drag starts
-    console.log(`Started dragging block: ${spec.kind}`);
   };
 
   return (
@@ -603,8 +954,9 @@ function Palette({ registry, onBlockCreate }: PaletteProps): JSX.Element {
         <PaletteBlock
           key={spec.kind}
           spec={spec}
-          onDragStart={handleDragStart}
           onClick={handleBlockClick}
+          onDragContextStart={onBlockDragStart}
+          onDragContextEnd={onBlockDragEnd}
         />
       ))}
     </div>
@@ -614,10 +966,10 @@ function Palette({ registry, onBlockCreate }: PaletteProps): JSX.Element {
 /**
  * Main StackEditor component providing visual programming interface
  */
-export function StackEditor({ 
-  registry, 
-  program: initialProgram, 
-  onChange, 
+export function StackEditor({
+  registry,
+  program: initialProgram,
+  onChange,
   onExecute,
   onSave,
   onLoad
@@ -626,6 +978,7 @@ export function StackEditor({
   const [program, setProgram] = useState<StackProgram>(
     initialProgram || { blocks: [] }
   );
+  const [dragContext, setDragContext] = useState<DragContext | null>(null);
 
   // Update internal state when external program prop changes
   useEffect(() => {
@@ -633,6 +986,54 @@ export function StackEditor({
       setProgram(initialProgram);
     }
   }, [initialProgram]);
+
+  useEffect(() => {
+    const handleNativeDragStart = (event: DragEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const blockElement = target.closest<HTMLElement>('[data-block-id]');
+      if (blockElement) {
+        const blockId = blockElement.getAttribute('data-block-id');
+        if (!blockId) return;
+        const found = findBlockInProgram(program, blockId);
+        if (found) {
+          setDragContext({
+            type: 'existing-block',
+            blockId,
+            block: found.block,
+            sourceSequenceId: found.sequenceId,
+          });
+        }
+        return;
+      }
+
+      const paletteElement = target.closest<HTMLElement>('[data-palette-kind]');
+      if (paletteElement) {
+        const kind = paletteElement.getAttribute('data-palette-kind');
+        if (!kind) return;
+        const spec = registry.get(kind);
+        if (spec) {
+          setDragContext({
+            type: 'palette-block',
+            spec,
+          });
+        }
+      }
+    };
+
+    const handleNativeDragEnd = () => {
+      setDragContext(null);
+    };
+
+    window.addEventListener('dragstart', handleNativeDragStart, true);
+    window.addEventListener('dragend', handleNativeDragEnd, true);
+
+    return () => {
+      window.removeEventListener('dragstart', handleNativeDragStart, true);
+      window.removeEventListener('dragend', handleNativeDragEnd, true);
+    };
+  }, [program, registry]);
 
   // Update program and notify parent
   const updateProgram = useCallback((newProgram: StackProgram) => {
@@ -651,6 +1052,25 @@ export function StackEditor({
     updateProgram(newProgram);
   }, [program, updateProgram]);
 
+  const handleExistingBlockDrop = useCallback((request: ExistingBlockDropRequest) => {
+    const { program: programWithoutBlock, removedBlock } = removeBlockFromProgram(program, request.blockId);
+    const blockToInsert = removedBlock ?? request.blockSnapshot;
+
+    if (!blockToInsert) {
+      console.warn(`Block ${request.blockId} not found for move operation`);
+      return;
+    }
+
+    const updatedProgram = insertBlockIntoProgram(
+      programWithoutBlock,
+      blockToInsert,
+      request.targetSequenceId,
+      request.targetIndex,
+    );
+
+    updateProgram(updatedProgram);
+  }, [program, updateProgram]);
+
   // Handle changes to the main sequence
   const handleSequenceChange = useCallback((newBlocks: StackBlock[]) => {
     const newProgram = {
@@ -666,6 +1086,26 @@ export function StackEditor({
     // The block has already been removed from its source sequence
     // We don't need to do anything here for the main sequence
     // as the removal is handled by the sequence component itself
+  }, []);
+
+  const handleBlockDragStart = useCallback((info: { block: StackBlock; sequenceId: string }) => {
+    setDragContext({
+      type: 'existing-block',
+      blockId: info.block.id,
+      block: info.block,
+      sourceSequenceId: info.sequenceId,
+    });
+  }, []);
+
+  const handlePaletteDragStart = useCallback((spec: StackBlockSpec) => {
+    setDragContext({
+      type: 'palette-block',
+      spec,
+    });
+  }, []);
+
+  const clearDragContext = useCallback(() => {
+    setDragContext(null);
   }, []);
 
   // Handle execute button click
@@ -702,9 +1142,11 @@ export function StackEditor({
       fontFamily: 'Arial, sans-serif'
     }}>
       {/* Block Palette */}
-      <Palette 
-        registry={registry} 
+      <Palette
+        registry={registry}
         onBlockCreate={handleBlockCreate}
+        onBlockDragStart={handlePaletteDragStart}
+        onBlockDragEnd={clearDragContext}
       />
       
       {/* Main Editor Area */}
@@ -774,11 +1216,15 @@ export function StackEditor({
         </div>
         
         {/* Main sequence of blocks */}
-        <SequenceComponent 
+        <SequenceComponent
           blocks={program.blocks}
           registry={registry}
           onSequenceChange={handleSequenceChange}
           onBlockMove={handleBlockMove}
+          dragContext={dragContext}
+          onExistingBlockDrop={handleExistingBlockDrop}
+          onBlockDragStart={handleBlockDragStart}
+          onDragEnd={clearDragContext}
         />
         
         {program.blocks.length === 0 && (

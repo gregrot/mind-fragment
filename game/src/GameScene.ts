@@ -8,8 +8,8 @@ export class GameScene extends Phaser.Scene {
 
   preload() {
     // Load sprite assets
-    this.load.image("scrap", "/assets/scrap.svg");
-    this.load.image("bot", "/assets/bot.svg");
+    this.load.image("scrap", "assets/scrap.svg");
+    this.load.image("bot", "assets/bot.svg");
   }
 
   create() {

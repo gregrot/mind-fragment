@@ -42,6 +42,8 @@ This feature implements comprehensive testing for the BlockKit TS library, which
 3. WHEN component props are tested THEN the system SHALL validate proper handling of registry, height, program, and onChange props
 4. WHEN component state changes are tested THEN the system SHALL verify proper updates and callbacks
 5. WHEN component error boundaries are tested THEN the system SHALL ensure graceful handling of invalid props or state
+6. WHEN drag-and-drop operations are tested THEN the system SHALL verify that stack-based implementation allows moves that graph-based implementation restricts
+7. WHEN block reordering is tested THEN the system SHALL validate that moving blocks between valid positions works correctly in stack editor
 
 ### Requirement 4
 
@@ -69,6 +71,19 @@ This feature implements comprehensive testing for the BlockKit TS library, which
 
 ### Requirement 6
 
+**User Story:** As a library developer, I want comprehensive drag-and-drop behavior tests, so that I can ensure the stack-based implementation correctly enforces movement restrictions and handles valid drag-and-drop operations.
+
+#### Acceptance Criteria
+
+1. WHEN testing block movement within the same control structure THEN the system SHALL verify that moving a block between valid positions in a stack works correctly
+2. WHEN testing the specific scenario of moving the first "say hello" block after "wait 1 second" THEN the system SHALL validate this operation is properly restricted with "Cannot move block after itself or its descendants"
+3. WHEN testing movement restrictions THEN the system SHALL verify that operations blocked by descendant relationships are consistently prevented in stack implementation
+4. WHEN testing complex nested structures THEN the system SHALL validate drag-and-drop operations within and between different control blocks
+5. WHEN testing edge cases THEN the system SHALL verify proper handling of invalid drop targets and boundary conditions
+6. WHEN testing program integrity THEN the system SHALL ensure drag-and-drop operations maintain program correctness and execution order
+
+### Requirement 7
+
 **User Story:** As a library developer, I want automated test infrastructure, so that I can run tests efficiently and integrate with CI/CD pipelines.
 
 #### Acceptance Criteria
@@ -77,4 +92,4 @@ This feature implements comprehensive testing for the BlockKit TS library, which
 2. WHEN test scripts are configured THEN the system SHALL provide npm scripts for running tests, coverage, and watch mode
 3. WHEN test utilities are created THEN the system SHALL provide helper functions for creating test data and mocking components
 4. WHEN coverage reporting is configured THEN the system SHALL generate comprehensive coverage reports for all modules
-5. WHEN CI integration is prepared THEN the system SHALL ensure tests can run in automated environments without external dependencies
+5. WHEN test execution is configured THEN the system SHALL ensure tests can run reliably in development environments

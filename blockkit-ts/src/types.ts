@@ -1,65 +1,81 @@
-import { z } from "zod";
+/**
+ * Core type definitions for the simplified stack blocks library
+ */
 
-export type PortDirection = "in" | "out";
-export type ValueType = "number" | "string" | "boolean" | "any" | { union: ValueType[] };
+/**
+ * The visual form/shape of a block
+ */
+export type StackForm = "hat" | "statement" | "c" | "reporter" | "predicate";
 
-export interface PortSpec {
-  key: string;
-  label?: string;
-  type?: ValueType;
-  // Optional default for inputs
-  defaultValue?: unknown;
+/**
+ * Input value can be either a literal value or reference to another block
+ */
+export type InputValue = { literal: unknown } | { blockId: string };
+
+/**
+ * Execution context passed to block execute functions
+ */
+export interface ExecCtx<C = any> {
+  /** Get the value of an input (resolves block references) */
+  getInput(key: string): Promise<unknown>;
+  /** Execute blocks in a slot */
+  executeSlot(key: string): Promise<void>;
+  /** Block's configuration data */
+  config?: C;
+  /** Current block being executed */
+  block: StackBlock<C>;
 }
 
-export interface BlockSpec<C = unknown> {
-  kind: string;               // unique within registry
+/**
+ * Result of block execution
+ */
+export interface ExecResult {
+  /** Return value for reporter/predicate blocks */
+  value?: unknown;
+  /** Whether to continue execution (for control blocks) */
+  continue?: boolean;
+}
+
+/**
+ * Specification for a block type
+ */
+export interface StackBlockSpec<C = any> {
+  /** Unique identifier for this block type */
+  kind: string;
+  /** Display label for the block */
   label: string;
-  inputs?: PortSpec[];
-  outputs?: PortSpec[];
-  // Optional UI hints
-  color?: string;
-  icon?: React.ReactNode;
-  // Optional config per node instance
-  configSchema?: z.ZodType<C>;
-  // Runtime function: given resolved input values + config, produce outputs
-  evaluate?: (ctx: { inputs: Record<string, unknown>; config: C }) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  /** Visual form of the block */
+  form: StackForm;
+  /** Input definitions */
+  inputs?: { key: string; type?: "number" | "string" | "boolean" | "any" }[];
+  /** Slot definitions for C-blocks */
+  slots?: { key: string; label?: string }[];
+  /** Execution function */
+  execute?: (ctx: ExecCtx<C>) => Promise<ExecResult> | ExecResult;
 }
 
-export type NodeId = string;
-export type PortId = string; // `${nodeId}:${portKey}`
-
-export interface NodeInstance<C = any> {
-  id: NodeId;
-  kind: string; // BlockSpec.kind
-  x: number;    // canvas position
-  y: number;
+/**
+ * A block instance in a program
+ */
+export interface StackBlock<C = any> {
+  /** Unique identifier for this block instance */
+  id: string;
+  /** Block type identifier */
+  kind: string;
+  /** Visual form of the block */
+  form: StackForm;
+  /** Input values */
+  inputs?: Record<string, InputValue>;
+  /** Child blocks in slots (for C-blocks) */
+  slots?: Record<string, StackBlock[]>;
+  /** Block-specific configuration */
   config?: C;
 }
 
-export interface LinkEdge {
-  id: string;
-  from: { nodeId: NodeId; portKey: string }; // out
-  to: { nodeId: NodeId; portKey: string };   // in
+/**
+ * A complete program consisting of a list of top-level blocks
+ */
+export interface StackProgram {
+  /** Top-level blocks in the program */
+  blocks: StackBlock[];
 }
-
-export interface GraphData {
-  nodes: NodeInstance[];
-  links: LinkEdge[];
-}
-
-export const GraphSchema = z.object({
-  nodes: z.array(z.object({
-    id: z.string(),
-    kind: z.string(),
-    x: z.number(),
-    y: z.number(),
-    config: z.any().optional()
-  })),
-  links: z.array(z.object({
-    id: z.string(),
-    from: z.object({ nodeId: z.string(), portKey: z.string() }),
-    to: z.object({ nodeId: z.string(), portKey: z.string() })
-  }))
-});
-
-export type GraphValidation = z.infer<typeof GraphSchema>;

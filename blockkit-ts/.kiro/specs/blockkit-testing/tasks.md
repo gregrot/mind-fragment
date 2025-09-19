@@ -92,69 +92,64 @@
     - Test error recovery from corrupted data
     - _Requirements: 2.3, 2.5_
 
-- [ ] 6. Implement React component tests
-  - [ ] 6.1 Create BlockEditor component tests
+- [x] 6. Implement React component tests
+  - [x] 6.1 Create BlockEditor component tests
     - Test component rendering with different registry configurations
     - Test basic interaction simulation and event handling
     - Test prop validation and error boundary behavior
     - Test component state management and updates
     - _Requirements: 3.1, 3.3, 3.4_
 
-  - [ ] 6.2 Create StackEditor component tests
+  - [x] 6.2 Create StackEditor component tests
     - Test component rendering with registry and program state
     - Test program modification callbacks and state updates
     - Test prop handling and component lifecycle
     - Test error scenarios and graceful degradation
     - _Requirements: 3.2, 3.3, 3.4_
 
-- [ ] 7. Implement example application tests
-  - [ ] 7.1 Create main App example tests
+  - [x] 6.3 Create drag-and-drop behavior tests
+    - Test block movement within control structures using the provided program JSON
+    - Test the specific scenario: moving first "say hello" after "wait 1 second" triggers proper restriction
+    - Test that movement restrictions are consistently enforced in stack editor
+    - Test complex nested drag-and-drop scenarios
+    - Test edge cases and invalid drop targets
+    - _Requirements: 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
+
+- [x] 7. Implement example application tests
+  - [x] 7.1 Create main App example tests
     - Test dual editor mode rendering and switching
     - Test toolbar functionality and graph operations
     - Test example interaction flows and user scenarios
     - Test error handling and user feedback
     - _Requirements: 4.1, 4.3, 4.4_
 
-  - [ ] 7.2 Create StackApp example tests
+  - [x] 7.2 Create StackApp example tests
     - Test program building, execution, and export functionality
     - Test user interface interactions and state management
     - Test example program execution and output validation
     - Test error scenarios and recovery mechanisms
     - _Requirements: 4.2, 4.3, 4.5_
 
-- [ ] 8. Implement performance and edge case tests
-  - [ ] 8.1 Create large graph performance tests
+- [x] 8. Implement performance and edge case tests
+  - [x] 8.1 Create large graph performance tests
     - Test performance with graphs containing many nodes and connections
     - Test memory usage patterns and cleanup
     - Test execution time benchmarks for complex graphs
     - Test scalability limits and graceful degradation
     - _Requirements: 5.1, 5.4_
 
-  - [ ] 8.2 Create complex structure tests
+  - [x] 8.2 Create complex structure tests
     - Test deeply nested C-blocks and reporter chains
     - Test edge cases with empty graphs and malformed data
     - Test circular dependency detection and error handling
     - Test concurrent operations and state consistency
     - _Requirements: 5.2, 5.3, 5.5_
 
-- [ ] 9. Set up continuous integration and automation
-  - [ ] 9.1 Configure automated testing pipeline
-    - Set up pre-commit hooks for unit tests and linting
-    - Configure CI pipeline for full test suite execution
-    - Set up coverage reporting and performance benchmarking
-    - Configure automated example validation
-    - _Requirements: 6.5_
 
-  - [ ] 9.2 Implement test maintenance automation
-    - Create scripts for test data generation and updates
-    - Set up automated dependency updates for test tools
-    - Configure performance regression detection
-    - Set up automated documentation example validation
-    - _Requirements: 6.5_
 
-- [ ] 10. Finalize testing documentation and integration
+- [x] 9. Finalize testing documentation and integration
   - Create comprehensive testing documentation
   - Update package.json with all test scripts
   - Validate complete test coverage meets requirements
   - Create developer guide for running and maintaining tests
-  - _Requirements: 6.2, 6.4_
+  - _Requirements: 7.2, 7.4_

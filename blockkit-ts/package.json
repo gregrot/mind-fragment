@@ -1,7 +1,7 @@
 {
-  "name": "blockkit-ts",
+  "name": "simplified-stack-blocks",
   "version": "0.1.0",
-  "description": "Pluggable visual blocks editor + runtime for React (TypeScript)",
+  "description": "Minimal visual programming library with Scratch-style stack blocks for React",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.esm.js",
@@ -15,32 +15,22 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && vite build --config vite.lib.config.ts",
-    "build:example": "vite build --config vite.example.config.ts",
     "dev": "vite --config vite.example.config.ts --open",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest --run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --run --coverage",
-    "test:coverage:watch": "vitest --coverage"
+    "test": "vitest --run"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
   },
   "dependencies": {
-    "nanoid": "^5.0.7",
-    "zod": "^3.23.8",
-    "zustand": "^4.5.3"
+    "nanoid": "^5.0.7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
-    "@vitest/coverage-v8": "^3.2.4",
-    "@vitest/ui": "^3.2.4",
     "jsdom": "^27.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.8",

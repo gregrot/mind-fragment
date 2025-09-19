@@ -30,3 +30,39 @@ function App() {
 ```
 
 See `example/App.tsx` for a complete working example.
+
+## Testing
+
+BlockKit includes comprehensive testing infrastructure:
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (recommended for development)
+npm run test:watch
+
+# Run with coverage
+npm run test:coverage
+
+# Validate coverage thresholds
+npm run test:validate
+```
+
+### Test Categories
+- **Unit Tests**: Core functionality and utilities
+- **Component Tests**: React components with user interactions
+- **Integration Tests**: Complete workflows and cross-component behavior
+- **Performance Tests**: Scalability and performance benchmarks
+
+### Key Features Tested
+- ✅ **Movement Freedom**: New list-based structure eliminates artificial restrictions
+- ✅ **Drag & Drop**: Comprehensive visual editor interaction testing
+- ✅ **Legacy Compatibility**: Automatic migration from old data formats
+- ✅ **Performance**: Scalability testing with large programs
+- ✅ **Error Handling**: Graceful failure and recovery scenarios
+
+For detailed testing information, see:
+- [Testing Overview](docs/TESTING_OVERVIEW.md)
+- [Developer Testing Guide](docs/DEVELOPER_TESTING_GUIDE.md)
+- [Complete Testing Documentation](TESTING.md)

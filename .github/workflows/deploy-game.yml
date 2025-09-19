@@ -31,6 +31,9 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Build blockkit-ts dependency
+        run: npm run build --workspace=blockkit-ts
+
       - name: Build game
         run: npm run build --workspace=game
 

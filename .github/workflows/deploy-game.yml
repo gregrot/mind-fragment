@@ -1,4 +1,4 @@
-name: Deploy game to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -34,13 +34,23 @@ jobs:
       - name: Build blockkit-ts dependency
         run: npm run build --workspace=blockkit-ts
 
+      - name: Build blockkit-ts examples
+        run: npm run build:example --workspace=blockkit-ts
+
       - name: Build game
         run: npm run build --workspace=game
+
+      - name: Create combined site structure
+        run: |
+          mkdir -p combined-site
+          cp -r game/dist/* combined-site/
+          mkdir -p combined-site/blockkit
+          cp -r blockkit-ts/dist-example/* combined-site/blockkit/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: game/dist
+          path: combined-site
 
   deploy:
     needs: build

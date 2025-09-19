@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && vite build --config vite.lib.config.ts",
+    "build:example": "vite build --config vite.example.config.ts",
     "dev": "vite --config vite.example.config.ts --open",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run",

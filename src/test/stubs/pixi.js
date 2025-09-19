@@ -1,14 +1,18 @@
 export class Application {
-  constructor() {
-    this.renderer = { width: 0, height: 0, events: {} };
+  constructor(options = {}) {
+    this.renderer = {
+      width: 0,
+      height: 0,
+      events: {},
+      generateTexture: () => ({ destroy: () => {} }),
+    };
     this.ticker = { add: () => {}, remove: () => {} };
-    this.stage = { addChild: () => {} };
-    this.canvas = {};
+    this.stage = { addChild: () => {}, destroy: () => {} };
+    this.view = { remove: () => {} };
+    this.resizeTo = options.resizeTo ?? null;
   }
 
-  async init() {
-    return this;
-  }
+  render() {}
 
   destroy() {}
 }

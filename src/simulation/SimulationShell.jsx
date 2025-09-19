@@ -15,21 +15,34 @@ function SimulationShell() {
     let disposed = false;
     let cleanupResize;
 
-    const init = () => {
-      app = new Application({
-        backgroundAlpha: 0,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-        resizeTo: containerRef.current,
-      });
-
-      if (!containerRef.current || disposed) {
-        app.destroy(true, { children: true });
+    const init = async () => {
+      const container = containerRef.current;
+      if (!container || disposed) {
         return;
       }
 
-      containerRef.current.appendChild(app.view);
+      const instance = new Application();
+      try {
+        await instance.init({
+          backgroundAlpha: 0,
+          antialias: true,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+          resizeTo: container,
+        });
+      } catch (error) {
+        console.error('Failed to initialise simulation shell', error);
+        instance.destroy(true, { children: true });
+        return;
+      }
+
+      if (!containerRef.current || disposed) {
+        instance.destroy(true, { children: true });
+        return;
+      }
+
+      app = instance;
+      containerRef.current.appendChild(app.canvas ?? app.view);
       rootScene = new RootScene(app);
       rootScene.resize(app.renderer.width, app.renderer.height);
 
@@ -51,7 +64,7 @@ function SimulationShell() {
       cleanupResize?.();
       rootScene?.destroy();
       if (app) {
-        const view = app.view;
+        const view = app.canvas ?? app.view;
         view?.remove?.();
         app.destroy(true, { children: true });
       }

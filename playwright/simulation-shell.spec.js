@@ -18,6 +18,10 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
   await expect(page.getByRole('heading', { name: 'Simulation Shell' })).toBeVisible();
   await expect(page.locator('.simulation-shell canvas')).toHaveCount(1);
 
+  await page.mouse.move(10, 10);
+  await page.mouse.move(200, 150);
+  await page.mouse.move(350, 220);
+
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });

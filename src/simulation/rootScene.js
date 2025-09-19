@@ -57,7 +57,7 @@ export class RootScene {
     const layer = new Container();
 
     const grid = new Graphics();
-    grid.lineStyle({ width: 1, color: 0x2c3e50, alpha: 0.35 });
+    grid.setStrokeStyle({ width: 1, color: 0x2c3e50, alpha: 0.35 });
     for (let x = -GRID_EXTENT; x <= GRID_EXTENT; x += GRID_SPACING) {
       grid.moveTo(x, -GRID_EXTENT);
       grid.lineTo(x, GRID_EXTENT);
@@ -66,13 +66,15 @@ export class RootScene {
       grid.moveTo(-GRID_EXTENT, y);
       grid.lineTo(GRID_EXTENT, y);
     }
+    grid.stroke();
 
     const axes = new Graphics();
-    axes.lineStyle({ width: 2, color: 0xff6b6b, alpha: 0.75 });
+    axes.setStrokeStyle({ width: 2, color: 0xff6b6b, alpha: 0.75 });
     axes.moveTo(-GRID_EXTENT, 0);
     axes.lineTo(GRID_EXTENT, 0);
     axes.moveTo(0, -GRID_EXTENT);
     axes.lineTo(0, GRID_EXTENT);
+    axes.stroke();
 
     layer.addChild(grid);
     layer.addChild(axes);

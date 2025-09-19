@@ -1,9 +1,13 @@
+import { Position, Sprite, Velocity } from "./components";
 import { world } from "./world";
 
 export function motionSystem(dt: number) {
-  for (const e of world.all()) {
-    if (e.vx == null || e.vy == null || e.x == null || e.y == null) continue;
-    e.x += e.vx * dt; e.y += e.vy * dt;
-    e.sprite?.setPosition(e.x, e.y);
+  for (const id of world.with(Position, Velocity)) {
+    const pos = world.get(id, Position)!;
+    const vel = world.get(id, Velocity)!;
+    pos.x += vel.vx * dt;
+    pos.y += vel.vy * dt;
+    const sprite = world.get(id, Sprite);
+    sprite?.sprite.setPosition(pos.x, pos.y);
   }
 }

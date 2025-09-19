@@ -52,16 +52,18 @@ export const assetService = new AssetService();
 assetService.defineVectorAsset('robot/chassis', ({ radius = 28, fill = 0x4ecdc4, stroke = 0x1a535c } = {}) => {
   const graphic = new Graphics();
 
-  graphic.beginFill(fill, 0.92);
-  graphic.lineStyle({ width: 4, color: stroke, alpha: 1 });
-  graphic.drawCircle(0, 0, radius);
-  graphic.endFill();
+  graphic.circle(0, 0, radius);
+  graphic.fill({ color: fill, alpha: 0.92 });
+  graphic.setStrokeStyle({ width: 4, color: stroke, alpha: 1 });
+  graphic.stroke();
 
-  graphic.lineStyle({ width: 2, color: 0xffffff, alpha: 0.65 });
+  graphic.beginPath();
+  graphic.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.65 });
   graphic.moveTo(-radius * 0.6, 0);
   graphic.lineTo(radius * 0.6, 0);
   graphic.moveTo(0, -radius * 0.6);
   graphic.lineTo(0, radius * 0.6);
+  graphic.stroke();
 
   return graphic;
 });

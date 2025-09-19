@@ -1,0 +1,80 @@
+# Block Programming Plan
+
+This document outlines how the block-based programming pillar should function within Mind Fragment, aligning the editor, runtime, and progression systems with the narrative beats captured in the steering notes.
+
+## Reset Context
+- **Carry-over:** The player-facing goals, block families, and debugging beats were inherited from the previous prototype and should frame any rebuild work.
+- **New Work:** Define concrete schema details, UI chrome, and runtime behaviours so we can implement the editor before other systems return.
+- **Dependencies:** Cross-reference the steering documents as you elaborate features to ensure the narrative beats still land.
+
+## Goals
+- Deliver approachable visual programming that still rewards mastery through optimisation and custom tactics.
+- Express the protagonist’s personality via tooling: the editor should feel like borrowing the Mind Fragment’s brilliance, not a sterile IDE.
+- Tie block access directly to in-world hardware modules and ethical choices, reinforcing the “means vs ends” tension.
+
+## Design Pillars
+1. **Legible Feedback** — Players must see cause, effect, and failure conditions quickly. Heat levels, execution traces, and audio barks reinforce learning loops.
+2. **Contextual Palette** — The available blocks adapt to the active chassis, installed modules, and stance (Fast vs Discreet). Players should never wade through irrelevant options.
+3. **Field-first Iteration** — Programmes are expected to be written, tested, and tweaked while robots operate. Hotfixing carries heat risks; full compiles are safe but slower.
+4. **Shareable Expertise** — Programmes can be saved as “cards” and swapped between robots or players, encouraging community problem-solving.
+
+## Player Flow
+1. **Unlock Module → Receive Block Family** — e.g., Motor Mk1 unlocks motion primitives, as listed in the [experience direction notes](../steering/experience.md#modules--blocks-you-unlock-examples).
+2. **Author Programme in Editor** — Player arranges blocks, guided by tooltips and contextual hints (e.g., “Avoid disturbing nests to maintain Discretion”).
+3. **Deploy & Observe** — Robot executes programme; telemetry bubbles show current block, sensor readings, and heat.
+4. **React** — Player either hotfixes on the spot or bookmarks the scenario for a deeper compile later.
+
+## System Architecture
+
+### Editor Layer
+- Built on the BlockKit-style canvas with additional chrome for heat, signal strength, and ethical stance indicators.
+- Supports palette filtering by module tags, environment context (e.g., weather), and saved templates.
+- Offers quick actions: “Insert Failsafe”, “Add Debug Beacon Here”, “Request Programme Card”.
+
+### Runtime Layer
+- Each robot ticks its programme on a shared scheduler; frame budget determined by chassis tier.
+- Heat accumulation is tracked per block. Excess heat triggers warnings, then auto-throttling or failsafe handover.
+- Failsafe routines are authored via a constrained palette unlocked early; they run when signal drops or heat caps out.
+
+### Content Layer
+- Story arcs introduce unique block modifiers (e.g., Nomads grant `MoveTo` → `AvoidBiome(type)`).
+- Ethical decisions adjust available modifiers and mission scripting, aligning with the Discretion/Impact axis.
+
+## Module → Block Families
+| Module | Primary Blocks | Modifiers & Notes |
+| --- | --- | --- |
+| **Motor Mk1** | `MoveTo`, `TryStep`, `Orbit(target,radius)`, `Follow(entity)` | Pathfinding heuristics unlock through ruins (“Programming-as-Loot”). |
+| **Scanner Mk1** | `Scan(filter)`, `LineOfSight`, `TagRead`, `Detect(Hazard|Nest|Enemy)` | Filter presets respond to ethical stance (Fast emphasises efficiency, Discreet emphasises avoidance). |
+| **Manipulator Mk1** | `Collect`, `Deposit`, `Build(blueprint)`, `Repair(target)` | Extended reach and finesse modifiers appear after first Uplink objective. |
+| **Comms Mk1** | `Broadcast(topic,payload)`, `Subscribe(topic)`, `Request("Haul", payload)` | Enables pipeline automation: Worker A publishes, Mule B subscribes. |
+| **Logic Core Mk1** | `If`, `Repeat(n)`, `Wait(t)`, `Remember(key,val)`, `Recall(key)` | Memory blocks consume RAM; higher-tier chassis expand capacity. |
+| **Shield/Weapon Mk1** | `ThreatResponse(mode)`, `Stun`, `Guard(radius)` | Defensive modifiers emphasise non-lethal control to maintain Discretion. |
+
+## Debugging & Feedback
+- **Debug Beacons**: Temporary zones that slow execution, visualise variable states, and allow step-through for 20 seconds.
+- **Heat & Signal Indicators**: Inline widgets show per-block heat contribution and signal strength relative to the Mind Fragment.
+- **Ethics Prompts**: When a programme risks harming locals, UI surfaces alternative block suggestions (“Reroute Around Nest”).
+- **Logbook**: Automatically records recent block transitions and failure events for later review.
+
+## Progression Hooks
+- Completing starter quests (“Spark the Bay”, “Paths of Least Harm”, etc.) awards new block modifiers or RAM upgrades.
+- Rival encounters introduce “Bossy Puzzles” where reading enemy programmes teaches counter-blocks.
+- Collectable “Insight Shards” occasionally unlock global editor upgrades (additional palette filters, advanced search, voiceover hints).
+
+## Implementation Roadmap
+1. **Define Schema** — Enumerate all block types, ports, and payload structures; align with BlockKit registry expectations.
+2. **Prototype Editor Skin** — Implement contextual palette, heat meter, and ethical stance banner.
+3. **Runtime Simulation** — Build a lightweight scheduler prototype that can run sample programmes and report heat/signal metrics.
+4. **Failsafe Toolkit** — Craft constrained block set for out-of-range behaviour and ensure it integrates with the Discretion/Impact system.
+5. **Template Library** — Seed the game with a handful of programme cards (“Gentle Harvester”, “Relay Scout”, “Sentry Chill”).
+6. **Telemetry & Logs** — Instrument runtime with events feeding both UI overlays and post-run logbook.
+
+## Open Questions
+- How granular should heat budgeting be (per block vs per block family)?
+- What penalties, if any, should repeated hotfixing apply beyond heat (e.g., temporary instability, snarky dialogue)?
+- How do we communicate ethical consequences before the player finalises a programme?
+
+## Immediate Next Steps
+- Finalise the block schema draft and review against the BlockKit capabilities.
+- Mock up the editor HUD showing heat, signal, and ethical warnings.
+- Draft voice lines to accompany key editor actions using the [voice & tone sheet](../steering/voice-and-tone.md).

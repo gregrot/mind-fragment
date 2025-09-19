@@ -1,6 +1,8 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService.js';
+import { RobotChassis } from './robot/index.js';
+import { DemoSpinModule } from './robot/modules/demoSpinModule.js';
 
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
@@ -31,6 +33,9 @@ export class RootScene {
 
     this.rootLayer = new Container();
     this.viewport.addChild(this.rootLayer);
+
+    this.robotCore = new RobotChassis();
+    this.robotCore.attachModule(new DemoSpinModule());
 
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler);
@@ -88,8 +93,14 @@ export class RootScene {
     const stepSeconds = stepMs / 1000;
     this.viewport.update(stepSeconds * 60);
 
-    if (this.robot) {
-      this.robot.rotation += 0.15 * stepSeconds;
+    if (this.robotCore) {
+      this.robotCore.tick(stepSeconds);
+    }
+
+    if (this.robot && this.robotCore) {
+      const state = this.robotCore.getStateSnapshot();
+      this.robot.rotation = state.orientation;
+      this.robot.position.set(state.position.x, state.position.y);
     }
   }
 
@@ -100,6 +111,13 @@ export class RootScene {
   destroy() {
     this.app.ticker.remove(this.tickHandler);
     this.viewport.destroy({ children: true, texture: false, baseTexture: false });
+    if (this.robotCore) {
+      const modules = [...this.robotCore.moduleStack.list()].reverse();
+      for (const module of modules) {
+        this.robotCore.detachModule(module.definition.id);
+      }
+      this.robotCore = null;
+    }
     assetService.disposeAll();
   }
 }

@@ -3,6 +3,12 @@ import { BLOCK_MAP } from '../blocks/library.js';
 
 const PAYLOAD_MIME = 'application/json';
 
+const formatSlotLabel = (slotName) =>
+  slotName
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .toUpperCase();
+
 function BlockView({ block, path, onDrop }) {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
@@ -77,9 +83,11 @@ function SlotView({ owner, slotName, blocks, path, onDrop }) {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  const slotLabel = formatSlotLabel(slotName);
+
   return (
     <section className="block-slot" data-testid={`slot-${slotName}`}>
-      <header className="slot-label">{slotName.toUpperCase()}</header>
+      <header className="slot-label">{slotLabel}</header>
       <div
         className="slot-body"
         data-testid={`slot-${slotName}-dropzone`}

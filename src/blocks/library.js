@@ -2,6 +2,13 @@ let blockCounter = 0;
 
 export const BLOCK_LIBRARY = [
   {
+    id: 'start',
+    label: 'When Started',
+    category: 'event',
+    slots: ['do'],
+    summary: 'Entry point that fires once when the scene begins.'
+  },
+  {
     id: 'move',
     label: 'Move Forward',
     category: 'action',
@@ -14,11 +21,31 @@ export const BLOCK_LIBRARY = [
     summary: 'Rotate the actor 90° counter-clockwise.'
   },
   {
+    id: 'wait',
+    label: 'Wait',
+    category: 'action',
+    summary: 'Pause the routine for a single beat.'
+  },
+  {
     id: 'repeat',
     label: 'Repeat',
     category: 'c',
     slots: ['do'],
     summary: 'Run the enclosed blocks a number of times.'
+  },
+  {
+    id: 'forever',
+    label: 'Forever',
+    category: 'c',
+    slots: ['do'],
+    summary: 'Loop the enclosed blocks without end.'
+  },
+  {
+    id: 'parallel',
+    label: 'Parallel',
+    category: 'c',
+    slots: ['branchA', 'branchB'],
+    summary: 'Execute the A and B branches side by side.'
   },
   {
     id: 'if',

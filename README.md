@@ -24,6 +24,7 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 - Live React workspace under `src/` organised with Vite for quick iteration.
 - Install dependencies with `npm install`, then launch the playground via `npm run dev` to explore block behaviours.
 - Run the drag-and-drop regression pack with `npm test`; it covers palette drops, slot placement, and lateral moves.
+- Palette now includes event anchors (When Started) and multi-branch control blocks (Parallel, Forever) so you can prototype branching flows quickly.
 - The components mirror the schema described in [Block Programming Plan](docs/planning/block-programming.md), keeping DO / THEN / ELSE slots visible for planning discussions.
 
 ## Current Priorities

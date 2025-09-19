@@ -1,5 +1,18 @@
 import Phaser from "phaser";
-import type { Entity } from "./world/components";
+import type { EntityId } from "./world/components";
+import {
+  Energy,
+  Identity,
+  Inventory,
+  Modules,
+  Position,
+  Program as ProgramComponent,
+  Requirements,
+  Role,
+  Sprite,
+  Tags,
+  Velocity
+} from "./world/components";
 import { world } from "./world/world";
 import { motionSystem } from "./world/systems";
 import { startProgram } from "./runtime/programRuntime";
@@ -18,9 +31,9 @@ export class GameScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text;
   private progressText!: Phaser.GameObjects.Text;
   private energyText!: Phaser.GameObjects.Text;
-  private mind!: Entity;
-  private assembler!: Entity;
-  private robot!: Entity;
+  private mind!: EntityId;
+  private assembler!: EntityId;
+  private robot!: EntityId;
 
   constructor() { super("game"); }
 
@@ -59,90 +72,87 @@ export class GameScene extends Phaser.Scene {
       const sprite = this.add.sprite(x, y, "scrap");
       sprite.setTint(0x8b4513);
       sprite.setScale(4);
-      world.create({ x, y, sprite, tags: ["scrap"], role: "scrap" });
+      const scrap = world.create();
+      world.add(scrap, Position, { x, y });
+      world.add(scrap, Sprite, { sprite });
+      world.add(scrap, Tags, ["scrap"]);
+      world.add(scrap, Role, "scrap");
     }
 
     const mindSprite = this.add.sprite(520, 300, "bot");
     mindSprite.setTint(0xffe27a);
     mindSprite.setScale(6.5);
-    this.mind = world.create({
-      name: "Mind Fragment",
-      x: mindSprite.x,
-      y: mindSprite.y,
-      sprite: mindSprite,
-      role: "mind",
-      tags: ["mind"],
-      cur: 1,
-      cap: 6,
-      items: {}
-    });
+    this.mind = world.create();
+    world.add(this.mind, Identity, { name: "Mind Fragment" });
+    world.add(this.mind, Position, { x: mindSprite.x, y: mindSprite.y });
+    world.add(this.mind, Sprite, { sprite: mindSprite });
+    world.add(this.mind, Role, "mind");
+    world.add(this.mind, Tags, ["mind"]);
+    world.add(this.mind, Energy, { cur: 1, cap: 6 });
+    world.add(this.mind, Inventory, {});
 
     const assemblerSprite = this.add.sprite(520, 380, "scrap");
     assemblerSprite.setTint(0x6c6c6c);
     assemblerSprite.setScale(5.5);
-    this.assembler = world.create({
-      name: "Assembler Bay",
-      x: assemblerSprite.x,
-      y: assemblerSprite.y,
-      sprite: assemblerSprite,
-      role: "assembler",
-      tags: ["structure"],
-      requires: { scrap: this.quest.targetScrap },
-      items: {}
-    });
+    this.assembler = world.create();
+    world.add(this.assembler, Identity, { name: "Assembler Bay" });
+    world.add(this.assembler, Position, { x: assemblerSprite.x, y: assemblerSprite.y });
+    world.add(this.assembler, Sprite, { sprite: assemblerSprite });
+    world.add(this.assembler, Role, "assembler");
+    world.add(this.assembler, Tags, ["structure"]);
+    world.add(this.assembler, Requirements, { scrap: this.quest.targetScrap });
+    world.add(this.assembler, Inventory, {});
 
     const botSprite = this.add.sprite(180, 320, "bot");
     botSprite.setTint(0x4169e1);
     botSprite.setScale(6);
-    this.robot = world.create({
-      name: "Harvester 1",
-      x: botSprite.x,
-      y: botSprite.y,
-      vx: 0,
-      vy: 0,
-      max: 60,
-      sprite: botSprite,
-      list: ["motor", "scanner", "manip"],
-      items: {},
-      running: false,
-      ast: null,
-      role: "robot",
-      tags: ["robot"]
-    });
+    this.robot = world.create();
+    world.add(this.robot, Identity, { name: "Harvester 1" });
+    world.add(this.robot, Position, { x: botSprite.x, y: botSprite.y });
+    world.add(this.robot, Velocity, { vx: 0, vy: 0, max: 60 });
+    world.add(this.robot, Sprite, { sprite: botSprite });
+    world.add(this.robot, Modules, { list: ["motor", "scanner", "manip"] });
+    world.add(this.robot, Inventory, {});
+    world.add(this.robot, ProgramComponent, { ast: null, running: false, budget: 0 });
+    world.add(this.robot, Role, "robot");
+    world.add(this.robot, Tags, ["robot"]);
 
-    this.robot.ast = {
-      heads: ["h"],
-      nodes: {
-        h: { id: "h", kind: "event.whenStarted", form: "hat", slotHeads: { DO: "loop" } },
-        loop: { id: "loop", kind: "control.repeat", form: "c", config: { times: 9999 }, slotHeads: { DO: "find" } },
-        find: { id: "find", kind: "sense.findNearest", form: "statement", next: "moveScrap", config: { tag: "scrap" } },
-        moveScrap: {
-          id: "moveScrap",
-          kind: "motion.moveTo",
-          form: "statement",
-          next: "pickup",
-          inputs: { target: { blockId: "last" } }
-        },
-        last: { id: "last", kind: "sense.lastResult", form: "reporter" },
-        pickup: { id: "pickup", kind: "manip.pickup", form: "statement", next: "moveAssembler" },
-        moveAssembler: {
-          id: "moveAssembler",
-          kind: "motion.moveTo",
-          form: "statement",
-          next: "deposit",
-          config: { targetRole: "assembler" }
-        },
-        deposit: {
-          id: "deposit",
-          kind: "manip.deposit",
-          form: "statement",
-          config: { targetRole: "assembler" },
-          next: "find"
+    const program = world.get(this.robot, ProgramComponent);
+    if (program) {
+      program.ast = {
+        heads: ["h"],
+        nodes: {
+          h: { id: "h", kind: "event.whenStarted", form: "hat", slotHeads: { DO: "loop" } },
+          loop: { id: "loop", kind: "control.repeat", form: "c", config: { times: 9999 }, slotHeads: { DO: "find" } },
+          find: { id: "find", kind: "sense.findNearest", form: "statement", next: "moveScrap", config: { tag: "scrap" } },
+          moveScrap: {
+            id: "moveScrap",
+            kind: "motion.moveTo",
+            form: "statement",
+            next: "pickup",
+            inputs: { target: { blockId: "last" } }
+          },
+          last: { id: "last", kind: "sense.lastResult", form: "reporter" },
+          pickup: { id: "pickup", kind: "manip.pickup", form: "statement", next: "moveAssembler" },
+          moveAssembler: {
+            id: "moveAssembler",
+            kind: "motion.moveTo",
+            form: "statement",
+            next: "deposit",
+            config: { targetRole: "assembler" }
+          },
+          deposit: {
+            id: "deposit",
+            kind: "manip.deposit",
+            form: "statement",
+            config: { targetRole: "assembler" },
+            next: "find"
+          }
         }
-      }
-    };
+      };
+      startProgram(this.robot, program.ast as any);
+    }
 
-    startProgram(this.robot, this.robot.ast as any);
     this.updateQuestTexts();
   }
 
@@ -154,7 +164,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private advanceQuestState() {
-    const remaining = this.assembler.requires?.scrap ?? this.quest.targetScrap;
+    const remaining = world.get(this.assembler, Requirements)?.scrap ?? this.quest.targetScrap;
     const delivered = this.quest.targetScrap - remaining;
     this.quest.delivered = Math.max(0, delivered);
 
@@ -166,32 +176,37 @@ export class GameScene extends Phaser.Scene {
       this.quest.stage = "assembler_online";
       if (!this.quest.recharged) {
         const gain = 3;
-        if (typeof this.mind.cur === "number") {
-          const cap = this.mind.cap ?? this.mind.cur;
-          this.mind.cur = Math.min(cap, this.mind.cur + gain);
+        const energy = world.get(this.mind, Energy);
+        if (energy) {
+          const cap = energy.cap ?? energy.cur;
+          energy.cur = Math.min(cap, energy.cur + gain);
         }
         this.quest.recharged = true;
-        this.assembler.sprite?.setTint(0x66ff99);
-        this.tweens.add({
-          targets: this.assembler.sprite,
-          duration: 400,
-          ease: "Sine.easeInOut",
-          yoyo: true,
-          repeat: 2,
-          scaleX: 6,
-          scaleY: 6
-        });
+        const assemblerSprite = world.get(this.assembler, Sprite)?.sprite;
+        assemblerSprite?.setTint(0x66ff99);
+        if (assemblerSprite) {
+          this.tweens.add({
+            targets: assemblerSprite,
+            duration: 400,
+            ease: "Sine.easeInOut",
+            yoyo: true,
+            repeat: 2,
+            scaleX: 6,
+            scaleY: 6
+          });
+        }
       }
     }
   }
 
   private updateQuestTexts() {
     this.promptText.setText(this.promptForStage());
-    const remaining = this.assembler.requires?.scrap ?? this.quest.targetScrap;
+    const remaining = world.get(this.assembler, Requirements)?.scrap ?? this.quest.targetScrap;
     const delivered = Math.min(this.quest.targetScrap, this.quest.targetScrap - remaining);
     this.progressText.setText(`Assembler intake: ${delivered}/${this.quest.targetScrap} scrap`);
-    const cur = this.mind.cur ?? 0;
-    const cap = this.mind.cap ?? cur;
+    const energy = world.get(this.mind, Energy);
+    const cur = energy?.cur ?? 0;
+    const cap = energy?.cap ?? cur;
     this.energyText.setText(`Mind power: ${cur}/${cap}`);
   }
 

@@ -1,20 +1,27 @@
-# Mind Fragment Design Reset
+# Mind Fragment — Rebuild Planning Set
 
-This repository now serves as the documentation hub for the Mind Fragment project reboot. All non-Markdown assets from the earlier Phaser prototype have been retired so we can focus on steering the concept and planning the block-based programming systems.
+This repository is the stripped-back planning space for rebooting Mind Fragment from the ground up. Only the design knowledge we want to carry forward survives here, rewritten where needed so it can guide the next playable version—starting with the block-based programming pillar.
 
-## How to Navigate
-- **Project conventions:** See [AGENTS.md](AGENTS.md) for documentation structure and writing guidance.
-- **Steering notes:**
-  - [Core Experience Steering Notes](docs/steering/core-loop.md) — opening sequence, layered loops, and key systems.
-  - [Dialogue Tone & Sample Barks](docs/steering/dialogue-tone.md) — voice direction with ready-to-use lines.
-- **Planning:**
-  - [Block Programming Plan](docs/planning/block-programming.md) — goals, architecture, and roadmap for the visual programming pillar.
-- **Reference:**
-  - [BlockKit Starter Capabilities](docs/reference/blockkit-starter.md) — summary of the previous editor technology and how it informs the reboot.
+## Using This Repository
+- Start with the documents below to understand what we are keeping from the previous prototype and what still needs to be invented.
+- Treat each document as living guidance; edit in place rather than scattering side notes so the history remains coherent.
+- When you introduce a new idea, flag whether it is **Carry-over** (rooted in the old build) or **New Work** so we can see the evolution at a glance.
 
-## Current Focus
-1. Finalise the block schema and runtime expectations described in the planning document.
-2. Draft mock-ups of the editor HUD and debugging tools inspired by the steering notes.
-3. Continue capturing tone and narrative beats while systems are in flux.
+## Document Map
 
-Each document is intended to evolve as we iterate. Update the README when new guides are added so it remains the single source of truth for the project’s documentation map.
+### Steering
+- [Experience & Loop Direction](docs/steering/experience.md) — Narrative framing, opening sequence, and the layered play loops we are preserving as the north star.
+- [Voice & Tone Sheet](docs/steering/voice-and-tone.md) — Dialogue direction and sample barks that keep the Mind Fragment’s personality intact while we rebuild systems.
+
+### Planning
+- [Block Programming Plan](docs/planning/block-programming.md) — Architectural goals, player flow, and implementation priorities for the editor and runtime we need to recreate first.
+
+### Reference
+- [Legacy BlockKit Notes](docs/reference/legacy-blockkit.md) — Snapshot of the prior technical stack that informs what we reuse, replace, or redesign.
+
+## Current Priorities
+1. Finalise the block schema and runtime contract outlined in the planning document, keeping legacy capabilities in mind.
+2. Sketch the rebuilt editor HUD and debugging affordances that support the experience beats in the steering notes.
+3. Capture any additional narrative or systems guidance directly within the steering documents rather than spinning up new files.
+
+Everything else from the old project has been retired on purpose. As we add code back in, keep this documentation alongside it so we can trace intent to implementation.

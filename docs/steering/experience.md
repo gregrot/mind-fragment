@@ -1,6 +1,11 @@
-# Core Experience Steering Notes
+# Experience & Loop Direction
 
-These notes capture the intended flow for the opening act and the layered play loops of the Mind Fragment project. They condense the earlier brainstorm into an ordered reference for narrative, mechanical, and pacing beats.
+These notes preserve the player experience we want to carry forward into the rebuilt Mind Fragment. Treat everything below as the north star while we reimplement systems, calling out where the fresh block-programming work must support the beats we care about.
+
+## Reset Context
+- **Carry-over:** The crash landing, layered loops, and quest beats originate from the previous prototype and should remain emotionally intact even as we rebuild the tech.
+- **New Work:** Thread the revamped block editor, runtime heat mechanics, and ethical stance feedback directly into these sequences.
+- **Open Questions:** Flag any beat that now demands new assets, UI, or AI support in-line so we can prioritise it in the rebuild roadmap.
 
 ## Opening Sequence — “Crash, Boot, Consequence”
 

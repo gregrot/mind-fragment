@@ -1,6 +1,11 @@
-# Dialogue Tone & Sample Barks
+# Voice & Tone Sheet
 
-This steering sheet sets the vocal direction for the Mind Fragment’s personality: cutting, vain, morally flexible, yet disarmingly funny. Lines are grouped by situation so writers and designers can lift them directly into prototypes or adapt the cadence.
+This sheet keeps the Mind Fragment’s personality sharp while we rebuild systems around it. Use it to anchor new copy and to sanity-check that tooling or UI changes still support the sardonic narrator we established previously.
+
+## Reset Context
+- **Carry-over:** Most sample lines below come directly from the earlier build; keep their intent even if scenarios shift.
+- **New Work:** Add fresh lines or revise existing ones when new mechanics (e.g., heat management, failsafes) demand bespoke reactions.
+- **Usage:** Drop quotes into prototypes verbatim or adapt them, but annotate edits so we know which beats evolved during the rebuild.
 
 ## Opening & Boot
 

@@ -2,6 +2,11 @@
 
 This document outlines how the block-based programming pillar should function within Mind Fragment, aligning the editor, runtime, and progression systems with the narrative beats captured in the steering notes.
 
+## Reset Context
+- **Carry-over:** The player-facing goals, block families, and debugging beats were inherited from the previous prototype and should frame any rebuild work.
+- **New Work:** Define concrete schema details, UI chrome, and runtime behaviours so we can implement the editor before other systems return.
+- **Dependencies:** Cross-reference the steering documents as you elaborate features to ensure the narrative beats still land.
+
 ## Goals
 - Deliver approachable visual programming that still rewards mastery through optimisation and custom tactics.
 - Express the protagonist’s personality via tooling: the editor should feel like borrowing the Mind Fragment’s brilliance, not a sterile IDE.
@@ -14,7 +19,7 @@ This document outlines how the block-based programming pillar should function wi
 4. **Shareable Expertise** — Programmes can be saved as “cards” and swapped between robots or players, encouraging community problem-solving.
 
 ## Player Flow
-1. **Unlock Module → Receive Block Family** — e.g., Motor Mk1 unlocks motion primitives, as listed in the [core experience steering notes](../steering/core-loop.md#modules--blocks-you-unlock-examples).
+1. **Unlock Module → Receive Block Family** — e.g., Motor Mk1 unlocks motion primitives, as listed in the [experience direction notes](../steering/experience.md#modules--blocks-you-unlock-examples).
 2. **Author Programme in Editor** — Player arranges blocks, guided by tooltips and contextual hints (e.g., “Avoid disturbing nests to maintain Discretion”).
 3. **Deploy & Observe** — Robot executes programme; telemetry bubbles show current block, sensor readings, and heat.
 4. **React** — Player either hotfixes on the spot or bookmarks the scenario for a deeper compile later.
@@ -72,4 +77,4 @@ This document outlines how the block-based programming pillar should function wi
 ## Immediate Next Steps
 - Finalise the block schema draft and review against the BlockKit capabilities.
 - Mock up the editor HUD showing heat, signal, and ethical warnings.
-- Draft voice lines to accompany key editor actions using the [dialogue tone sheet](../steering/dialogue-tone.md).
+- Draft voice lines to accompany key editor actions using the [voice & tone sheet](../steering/voice-and-tone.md).

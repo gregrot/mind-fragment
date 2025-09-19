@@ -15,9 +15,8 @@ function SimulationShell() {
     let disposed = false;
     let cleanupResize;
 
-    const init = async () => {
-      app = new Application();
-      await app.init({
+    const init = () => {
+      app = new Application({
         backgroundAlpha: 0,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
@@ -30,7 +29,7 @@ function SimulationShell() {
         return;
       }
 
-      containerRef.current.appendChild(app.canvas);
+      containerRef.current.appendChild(app.view);
       rootScene = new RootScene(app);
       rootScene.resize(app.renderer.width, app.renderer.height);
 
@@ -52,7 +51,7 @@ function SimulationShell() {
       cleanupResize?.();
       rootScene?.destroy();
       if (app) {
-        const view = app.canvas;
+        const view = app.view;
         view?.remove?.();
         app.destroy(true, { children: true });
       }

@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { configDefaults } from 'vitest/config';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const pixiTestAliases = {
@@ -23,6 +24,7 @@ export default defineConfig(() => {
       setupFiles: './src/test/setup.js',
       css: false,
       alias: pixiTestAliases,
+      exclude: [...configDefaults.exclude, 'playwright/**'],
     },
   };
 });

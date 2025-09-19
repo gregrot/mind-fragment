@@ -14,19 +14,18 @@ vi.mock('pixi.js', () => {
       this.width = 0;
       this.height = 0;
       this.events = {};
+      this.generateTexture = vi.fn(() => ({ destroy: vi.fn() }));
     }
   }
 
   class MockApplication {
-    constructor() {
+    constructor(options = {}) {
       this.ticker = new MockTicker();
       this.renderer = new MockRenderer();
-      this.stage = { addChild: vi.fn() };
-      this.canvas = {};
-    }
-
-    async init() {
-      return this;
+      this.stage = { addChild: vi.fn(), destroy: vi.fn() };
+      this.view = { remove: vi.fn() };
+      this.resizeTo = options.resizeTo ?? null;
+      this.render = vi.fn();
     }
 
     destroy() {}

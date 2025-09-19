@@ -8,7 +8,7 @@ This task list sets out the minimum work required to stand up a controllable, mo
 - **New Work:** Introduce a stackable module system so the robot’s capabilities derive from the attached modules and can expand over time without rewriting the core chassis.
 
 ## Milestone Overview
-1. **Simulation Shell:** Prepare the project structure, dependencies, and PixiJS scene graph needed to host the robot and sandbox environment.
+1. **Simulation Shell (Complete):** Prepare the project structure, dependencies, and PixiJS scene graph needed to host the robot and sandbox environment.
 2. **Robot Core Systems:** Model the robot chassis, module stack, sensors, and actuators with a data contract that the block runtime can consume.
 3. **Module Library & Inventory:** Deliver the initial set of stackable modules that expose programmable parameters and blocks.
 4. **Programmable Interface:** Deliver a pared-down block palette and execution pipeline that lets users compose and deploy behaviours.
@@ -18,9 +18,12 @@ This task list sets out the minimum work required to stand up a controllable, mo
 ## Detailed Tasks
 
 ### 1. Simulation Shell
-- Initialise the Vite workspace (reuse existing configuration where possible) and add PixiJS as a dependency.
-- Create a root scene with viewport controls, deterministic timestep handling, and a placeholder tilemap or grid background.
-- Wire a lightweight service layer for loading assets (temporary vector sprites or simple shapes suffice for the MVP).
+**Status:** Complete
+
+- **Workspace scaffold:** Extended the existing Vite/React workspace with PixiJS (v7) and `pixi-viewport` so the simulation can run alongside the block builder without bespoke build scripts.
+- **Scene setup:** Implemented a `RootScene` wrapper that adds camera controls, locks updates to a fixed 16.67 ms simulation step, and renders a procedural grid with axis overlays plus a placeholder chassis sprite for spatial reference.
+- **Asset service:** Introduced a lightweight asset service that caches textures, generates vector placeholders at runtime, and wraps PixiJS's loader so designers can swap art without touching the simulation loop.
+- **Follow-up notes:** Defer dedicated lighting, parallax layering, and telemetry instrumentation to later milestones once module and feedback systems inform the visual language.
 
 ### 2. Robot Core Systems
 - Define a robot entity model covering position, orientation, velocity, and energy/heat values in line with the Block Programming Plan.

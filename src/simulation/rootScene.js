@@ -1,0 +1,105 @@
+import { Container, Graphics, Sprite } from 'pixi.js';
+import { Viewport } from 'pixi-viewport';
+import { assetService } from './assetService.js';
+
+const STEP_MS = 1000 / 60;
+const GRID_EXTENT = 2000;
+const GRID_SPACING = 80;
+
+export class RootScene {
+  constructor(app) {
+    this.app = app;
+    this.accumulator = 0;
+
+    this.viewport = new Viewport({
+      screenWidth: app.renderer.width,
+      screenHeight: app.renderer.height,
+      events: app.renderer.events,
+      disableOnContextMenu: true,
+    });
+
+    this.viewport
+      .drag({ clampWheel: true })
+      .wheel({ percent: 0.1 })
+      .pinch()
+      .decelerate({ friction: 0.85 });
+
+    app.stage.addChild(this.viewport);
+
+    this.backgroundLayer = this.createGridLayer();
+    this.viewport.addChild(this.backgroundLayer);
+
+    this.rootLayer = new Container();
+    this.viewport.addChild(this.rootLayer);
+
+    this.tickHandler = this.tick.bind(this);
+    app.ticker.add(this.tickHandler);
+
+    this.initPlaceholderActors();
+  }
+
+  async initPlaceholderActors() {
+    const texture = await assetService.loadTexture('robot/chassis', this.app.renderer);
+    const robot = new Sprite(texture);
+    robot.anchor.set(0.5);
+    robot.position.set(0, 0);
+    this.rootLayer.addChild(robot);
+
+    this.robot = robot;
+  }
+
+  createGridLayer() {
+    const layer = new Container();
+
+    const grid = new Graphics();
+    grid.lineStyle({ width: 1, color: 0x2c3e50, alpha: 0.35 });
+    for (let x = -GRID_EXTENT; x <= GRID_EXTENT; x += GRID_SPACING) {
+      grid.moveTo(x, -GRID_EXTENT);
+      grid.lineTo(x, GRID_EXTENT);
+    }
+    for (let y = -GRID_EXTENT; y <= GRID_EXTENT; y += GRID_SPACING) {
+      grid.moveTo(-GRID_EXTENT, y);
+      grid.lineTo(GRID_EXTENT, y);
+    }
+
+    const axes = new Graphics();
+    axes.lineStyle({ width: 2, color: 0xff6b6b, alpha: 0.75 });
+    axes.moveTo(-GRID_EXTENT, 0);
+    axes.lineTo(GRID_EXTENT, 0);
+    axes.moveTo(0, -GRID_EXTENT);
+    axes.lineTo(0, GRID_EXTENT);
+
+    layer.addChild(grid);
+    layer.addChild(axes);
+
+    return layer;
+  }
+
+  tick({ deltaMS }) {
+    this.accumulator += deltaMS;
+
+    while (this.accumulator >= STEP_MS) {
+      this.step(STEP_MS);
+      this.accumulator -= STEP_MS;
+    }
+  }
+
+  step(stepMs) {
+    const stepSeconds = stepMs / 1000;
+    this.viewport.update(stepSeconds * 60);
+
+    if (this.robot) {
+      this.robot.rotation += 0.15 * stepSeconds;
+    }
+  }
+
+  resize(width, height) {
+    this.viewport.resize(width, height, width, height);
+  }
+
+  destroy() {
+    this.app.ticker.remove(this.tickHandler);
+    this.viewport.destroy({ children: true, texture: false, baseTexture: false });
+    assetService.disposeAll();
+  }
+}

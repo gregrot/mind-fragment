@@ -1,59 +1,20 @@
-# BlockKit Game - Phaser + TypeScript Game Skeleton
+# Mind Fragment Design Reset
 
-This is a minimal game skeleton implementing the Phaser + TypeScript integration from the BlockKit TS starter package documentation.
+This repository now serves as the documentation hub for the Mind Fragment project reboot. All non-Markdown assets from the earlier Phaser prototype have been retired so we can focus on steering the concept and planning the block-based programming systems.
 
-## Features
+## How to Navigate
+- **Project conventions:** See [AGENTS.md](AGENTS.md) for documentation structure and writing guidance.
+- **Steering notes:**
+  - [Core Experience Steering Notes](docs/steering/core-loop.md) — opening sequence, layered loops, and key systems.
+  - [Dialogue Tone & Sample Barks](docs/steering/dialogue-tone.md) — voice direction with ready-to-use lines.
+- **Planning:**
+  - [Block Programming Plan](docs/planning/block-programming.md) — goals, architecture, and roadmap for the visual programming pillar.
+- **Reference:**
+  - [BlockKit Starter Capabilities](docs/reference/blockkit-starter.md) — summary of the previous editor technology and how it informs the reboot.
 
-- **Phaser 3** game engine with TypeScript
-- **Entity-Component System** with world management
-- **Block-based programming runtime** integration
-- **Modular system** for unlocking block types
-- **Simple AI behavior** with scrap collection example
+## Current Focus
+1. Finalise the block schema and runtime expectations described in the planning document.
+2. Draft mock-ups of the editor HUD and debugging tools inspired by the steering notes.
+3. Continue capturing tone and narrative beats while systems are in flux.
 
-## Structure
-
-```
-game/
-├── src/
-│   ├── main.ts                    # Phaser game entry point
-│   ├── GameScene.ts               # Main game scene
-│   ├── world/
-│   │   ├── components.ts          # Entity component definitions
-│   │   ├── world.ts               # World database and entity management
-│   │   ├── systems.ts             # Game systems (motion, etc.)
-│   │   └── worldApi.ts            # World interaction API
-│   ├── content/
-│   │   ├── modules.ts             # Module definitions and unlocks
-│   │   └── blocksCatalog.ts       # Available block types
-│   └── runtime/
-│       └── programRuntime.ts      # Block program execution runtime
-├── index.html                     # Game HTML container
-└── package.json                   # Dependencies and scripts
-```
-
-## Running the Game
-
-```bash
-npm install
-npm run dev
-```
-
-The game will start at `http://localhost:3001` and show:
-- A blue robot that can collect brown scrap pieces
-- Simple AI behavior using block-based programming
-- Entity-component system with motion and inventory
-
-## Game Mechanics
-
-- **Robot**: Blue sprite with motor, scanner, and manipulator modules
-- **Scrap**: Brown collectible items scattered around the world
-- **AI Program**: Block-based program that finds nearest scrap, moves to it, and picks it up
-- **Modules**: Determine which block types the robot can use
-
-## Next Steps
-
-- Implement proper block program stepping with frame budgets
-- Add visual block editor integration
-- Create more complex AI behaviors
-- Add more entity types and interactions
-- Implement proper sprite assets
+Each document is intended to evolve as we iterate. Update the README when new guides are added so it remains the single source of truth for the project’s documentation map.

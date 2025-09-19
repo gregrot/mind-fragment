@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 const workspaceDropzone = '[data-testid="workspace-dropzone"]';
 
-async function performDragAndDrop(page, sourceSelector, targetSelector) {
+async function performDragAndDrop(page: Page, sourceSelector: string, targetSelector: string): Promise<void> {
   await page.evaluate(({ sourceSelector, targetSelector }) => {
     const source = document.querySelector(sourceSelector);
     const target = document.querySelector(targetSelector);
@@ -22,11 +22,11 @@ async function performDragAndDrop(page, sourceSelector, targetSelector) {
   }, { sourceSelector, targetSelector });
 }
 
-async function dragPaletteBlock(page, blockId, targetSelector) {
+async function dragPaletteBlock(page: Page, blockId: string, targetSelector: string): Promise<void> {
   await performDragAndDrop(page, `[data-testid="palette-${blockId}"]`, targetSelector);
 }
 
-async function dragWorkspaceBlock(page, blockId, targetSelector) {
+async function dragWorkspaceBlock(page: Page, blockId: string, targetSelector: string): Promise<void> {
   await performDragAndDrop(page, `[data-testid="block-${blockId}"]`, targetSelector);
 }
 

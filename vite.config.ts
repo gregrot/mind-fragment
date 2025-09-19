@@ -5,9 +5,9 @@ import react from '@vitejs/plugin-react';
 import { configDefaults } from 'vitest/config';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
-const pixiTestAliases = {
-  'pixi.js': resolve(rootDir, 'src/test/stubs/pixi.js'),
-  'pixi-viewport': resolve(rootDir, 'src/test/stubs/pixi-viewport.js'),
+const pixiTestAliases: Record<string, string> = {
+  'pixi.js': resolve(rootDir, 'src/test/stubs/pixi.ts'),
+  'pixi-viewport': resolve(rootDir, 'src/test/stubs/pixi-viewport.ts'),
 };
 
 export default defineConfig(() => {
@@ -21,7 +21,7 @@ export default defineConfig(() => {
     plugins: [react()],
     test: {
       environment: 'jsdom',
-      setupFiles: './src/test/setup.js',
+      setupFiles: './src/test/setup.ts',
       css: false,
       alias: pixiTestAliases,
       exclude: [...configDefaults.exclude, 'playwright/**'],

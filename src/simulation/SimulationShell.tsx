@@ -1,19 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { Application } from 'pixi.js';
-import { RootScene } from './rootScene.js';
+import { RootScene } from './rootScene';
 
-function SimulationShell() {
-  const containerRef = useRef(null);
+const SimulationShell = (): JSX.Element => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent))) {
       return () => {};
     }
 
-    let app;
-    let rootScene;
+    let app: Application | null = null;
+    let rootScene: RootScene | null = null;
     let disposed = false;
-    let cleanupResize;
+    let cleanupResize: (() => void) | undefined;
 
     const init = async () => {
       const container = containerRef.current;
@@ -42,15 +42,17 @@ function SimulationShell() {
       }
 
       app = instance;
-      containerRef.current.appendChild(app.canvas ?? app.view);
-      rootScene = new RootScene(app);
-      rootScene.resize(app.renderer.width, app.renderer.height);
+      const activeApp = app;
+      const view = (activeApp as Application & { canvas?: HTMLCanvasElement }).canvas ?? activeApp.view;
+      containerRef.current.appendChild(view as HTMLElement);
+      rootScene = new RootScene(activeApp);
+      rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
 
       const handleResize = () => {
         if (!rootScene || disposed) {
           return;
         }
-        rootScene.resize(app.renderer.width, app.renderer.height);
+        rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
       };
 
       window.addEventListener('resize', handleResize);
@@ -62,20 +64,23 @@ function SimulationShell() {
     const cleanup = () => {
       disposed = true;
       cleanupResize?.();
-      rootScene?.destroy();
-      if (app) {
-        const view = app.canvas ?? app.view;
-        view?.remove?.();
-        app.destroy(true, { children: true });
+      if (rootScene) {
+        rootScene.destroy();
+        rootScene = null;
+      }
+      const activeApp = app;
+      if (activeApp) {
+        const view = (activeApp as Application & { canvas?: HTMLCanvasElement }).canvas ?? activeApp.view;
+        (view as HTMLElement | undefined)?.remove?.();
+        activeApp.destroy(true, { children: true });
+        app = null;
       }
     };
 
     return cleanup;
   }, []);
 
-  return (
-    <section className="simulation-shell" ref={containerRef} aria-label="Simulation shell" />
-  );
-}
+  return <section className="simulation-shell" ref={containerRef} aria-label="Simulation shell" />;
+};
 
 export default SimulationShell;

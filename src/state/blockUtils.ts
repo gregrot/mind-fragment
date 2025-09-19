@@ -1,4 +1,6 @@
-const clampIndex = (index, length) => {
+import type { BlockInstance, DropTarget } from '../types/blocks';
+
+const clampIndex = (index: number | undefined, length: number): number => {
   const upper = typeof index === 'number' ? index : length;
   if (Number.isNaN(upper)) {
     return length;
@@ -6,18 +8,16 @@ const clampIndex = (index, length) => {
   return Math.max(0, Math.min(upper, length));
 };
 
-export function removeBlock(blocks, instanceId) {
-  const result = removeFromBlocks(blocks, instanceId);
-  return {
-    blocks: result.changed ? result.blocks : blocks,
-    removed: result.removed
-  };
+interface RemoveResult {
+  blocks: BlockInstance[];
+  removed: BlockInstance | null;
+  changed: boolean;
 }
 
-function removeFromBlocks(blocks, instanceId) {
-  let removed = null;
+const removeFromBlocks = (blocks: BlockInstance[], instanceId: string): RemoveResult => {
+  let removed: BlockInstance | null = null;
   let changed = false;
-  const nextBlocks = [];
+  const nextBlocks: BlockInstance[] = [];
 
   for (const block of blocks) {
     if (removed) {
@@ -32,7 +32,7 @@ function removeFromBlocks(blocks, instanceId) {
     }
 
     if (block.slots) {
-      const nextSlots = {};
+      const nextSlots: Record<string, BlockInstance[]> = {};
       let slotChanged = false;
 
       for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
@@ -57,17 +57,29 @@ function removeFromBlocks(blocks, instanceId) {
   }
 
   return { blocks: nextBlocks, removed, changed };
-}
+};
 
-export function insertBlock(blocks, target, blockToInsert) {
-  const result = insertIntoBlocks(blocks, target, blockToInsert);
+export const removeBlock = (
+  blocks: BlockInstance[],
+  instanceId: string,
+): { blocks: BlockInstance[]; removed: BlockInstance | null } => {
+  const result = removeFromBlocks(blocks, instanceId);
   return {
-    blocks: result.inserted ? result.blocks : blocks,
-    inserted: result.inserted
+    blocks: result.changed ? result.blocks : blocks,
+    removed: result.removed,
   };
+};
+
+interface InsertResult {
+  blocks: BlockInstance[];
+  inserted: boolean;
 }
 
-function insertIntoBlocks(blocks, target, blockToInsert) {
+const insertIntoBlocks = (
+  blocks: BlockInstance[],
+  target: DropTarget,
+  blockToInsert: BlockInstance,
+): InsertResult => {
   if (target.kind === 'workspace') {
     const nextBlocks = [...blocks];
     const insertionIndex = clampIndex(target.position, nextBlocks.length);
@@ -76,7 +88,7 @@ function insertIntoBlocks(blocks, target, blockToInsert) {
   }
 
   let inserted = false;
-  const nextBlocks = [];
+  const nextBlocks: BlockInstance[] = [];
 
   for (const block of blocks) {
     if (inserted) {
@@ -89,12 +101,12 @@ function insertIntoBlocks(blocks, target, blockToInsert) {
       const insertionIndex = clampIndex(target.position, slotBlocks.length);
       const updatedSlotBlocks = [...slotBlocks];
       updatedSlotBlocks.splice(insertionIndex, 0, blockToInsert);
-      const updatedBlock = {
+      const updatedBlock: BlockInstance = {
         ...block,
         slots: {
-          ...block.slots,
-          [target.slotName]: updatedSlotBlocks
-        }
+          ...(block.slots ?? {}),
+          [target.slotName]: updatedSlotBlocks,
+        },
       };
       nextBlocks.push(updatedBlock);
       inserted = true;
@@ -106,7 +118,7 @@ function insertIntoBlocks(blocks, target, blockToInsert) {
       continue;
     }
 
-    const nextSlots = {};
+    const nextSlots: Record<string, BlockInstance[]> = {};
     let slotChanged = false;
 
     for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
@@ -137,4 +149,16 @@ function insertIntoBlocks(blocks, target, blockToInsert) {
   }
 
   return { blocks, inserted: false };
-}
+};
+
+export const insertBlock = (
+  blocks: BlockInstance[],
+  target: DropTarget,
+  blockToInsert: BlockInstance,
+): { blocks: BlockInstance[]; inserted: boolean } => {
+  const result = insertIntoBlocks(blocks, target, blockToInsert);
+  return {
+    blocks: result.inserted ? result.blocks : blocks,
+    inserted: result.inserted,
+  };
+};

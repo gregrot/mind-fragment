@@ -1,8 +1,8 @@
 const TWO_PI = Math.PI * 2;
 
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
 
-const normaliseAngle = (angle) => {
+const normaliseAngle = (angle: number): number => {
   if (!Number.isFinite(angle)) {
     return 0;
   }
@@ -16,14 +16,55 @@ const normaliseAngle = (angle) => {
   return result;
 };
 
+export interface Vector2 {
+  x: number;
+  y: number;
+}
+
+export interface ResourcePool {
+  current: number;
+  max: number;
+}
+
+export interface RobotStateSnapshot {
+  position: Vector2;
+  orientation: number;
+  velocity: {
+    linear: Vector2;
+    angular: number;
+  };
+  energy: ResourcePool;
+  heat: ResourcePool;
+}
+
+export interface RobotStateOptions {
+  position?: Partial<Vector2>;
+  orientation?: number;
+  velocity?: {
+    linear?: Partial<Vector2>;
+    angular?: number;
+  };
+  energy?: Partial<ResourcePool>;
+  heat?: Partial<ResourcePool>;
+}
+
 export class RobotState {
+  private readonly position: Vector2;
+  private orientation: number;
+  private readonly velocity: {
+    linear: Vector2;
+    angular: number;
+  };
+  private readonly energy: ResourcePool;
+  private readonly heat: ResourcePool;
+
   constructor({
     position = { x: 0, y: 0 },
     orientation = 0,
     velocity = { linear: { x: 0, y: 0 }, angular: 0 },
     energy = { current: 100, max: 100 },
     heat = { current: 0, max: 100 },
-  } = {}) {
+  }: RobotStateOptions = {}) {
     this.position = { x: position.x ?? 0, y: position.y ?? 0 };
     this.orientation = normaliseAngle(orientation ?? 0);
     this.velocity = {
@@ -43,32 +84,32 @@ export class RobotState {
     };
   }
 
-  setLinearVelocity(x, y) {
+  setLinearVelocity(x: number, y: number): void {
     this.velocity.linear.x = Number.isFinite(x) ? x : 0;
     this.velocity.linear.y = Number.isFinite(y) ? y : 0;
   }
 
-  setAngularVelocity(value) {
+  setAngularVelocity(value: number): void {
     this.velocity.angular = Number.isFinite(value) ? value : 0;
   }
 
-  applyEnergy(delta) {
+  applyEnergy(delta: number): void {
     const next = this.energy.current + delta;
     this.energy.current = clamp(next, 0, this.energy.max);
   }
 
-  applyHeat(delta) {
+  applyHeat(delta: number): void {
     const next = this.heat.current + delta;
     this.heat.current = clamp(next, 0, this.heat.max);
   }
 
-  integrate(stepSeconds) {
+  integrate(stepSeconds: number): void {
     this.position.x += this.velocity.linear.x * stepSeconds;
     this.position.y += this.velocity.linear.y * stepSeconds;
     this.orientation = normaliseAngle(this.orientation + this.velocity.angular * stepSeconds);
   }
 
-  getSnapshot() {
+  getSnapshot(): RobotStateSnapshot {
     return {
       position: { ...this.position },
       orientation: this.orientation,

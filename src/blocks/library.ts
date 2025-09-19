@@ -1,6 +1,8 @@
+import type { BlockDefinition, BlockInstance } from '../types/blocks';
+
 let blockCounter = 0;
 
-export const BLOCK_LIBRARY = [
+export const BLOCK_LIBRARY: BlockDefinition[] = [
   {
     id: 'start',
     label: 'When Started',
@@ -56,28 +58,34 @@ export const BLOCK_LIBRARY = [
   }
 ];
 
-export const BLOCK_MAP = BLOCK_LIBRARY.reduce((acc, block) => {
-  acc[block.id] = block;
-  return acc;
-}, {});
+export const BLOCK_MAP: Record<string, BlockDefinition> = BLOCK_LIBRARY.reduce(
+  (accumulator, block) => {
+    accumulator[block.id] = block;
+    return accumulator;
+  },
+  {} as Record<string, BlockDefinition>,
+);
 
-export function createBlockInstance(blockType) {
+export function createBlockInstance(blockType: string): BlockInstance {
   const definition = BLOCK_MAP[blockType];
   if (!definition) {
     throw new Error(`Unknown block type: ${blockType}`);
   }
 
   blockCounter += 1;
-  const instance = {
+  const instance: BlockInstance = {
     instanceId: `block-${blockCounter}`,
-    type: definition.id
+    type: definition.id,
   };
 
   if (definition.slots) {
-    instance.slots = definition.slots.reduce((slots, slotName) => {
-      slots[slotName] = [];
-      return slots;
-    }, {});
+    instance.slots = definition.slots.reduce<Record<string, BlockInstance[]>>(
+      (slots, slotName) => {
+        slots[slotName] = [];
+        return slots;
+      },
+      {},
+    );
   }
 
   return instance;

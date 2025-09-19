@@ -1,15 +1,28 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Application, Renderer, Container, Graphics, Sprite, Ticker } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
-import { assetService } from './assetService.js';
-import { RobotChassis } from './robot/index.js';
-import { DemoSpinModule } from './robot/modules/demoSpinModule.js';
+import { assetService } from './assetService';
+import { RobotChassis } from './robot';
+import { DemoSpinModule } from './robot/modules/demoSpinModule';
+
+interface TickPayload {
+  deltaMS: number;
+}
 
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
 
 export class RootScene {
-  constructor(app) {
+  private readonly app: Application;
+  private readonly viewport: Viewport;
+  private readonly backgroundLayer: Container;
+  private readonly rootLayer: Container;
+  private robotCore: RobotChassis | null;
+  private robot: Sprite | null;
+  private accumulator: number;
+  private readonly tickHandler: (payload: TickPayload) => void;
+
+  constructor(app: Application) {
     this.app = app;
     this.accumulator = 0;
 
@@ -37,13 +50,14 @@ export class RootScene {
     this.robotCore = new RobotChassis();
     this.robotCore.attachModule(new DemoSpinModule());
 
+    this.robot = null;
     this.tickHandler = this.tick.bind(this);
-    app.ticker.add(this.tickHandler);
+    app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
-    this.initPlaceholderActors();
+    void this.initPlaceholderActors();
   }
 
-  async initPlaceholderActors() {
+  private async initPlaceholderActors(): Promise<void> {
     const texture = await assetService.loadTexture('robot/chassis', this.app.renderer);
     const robot = new Sprite(texture);
     robot.anchor.set(0.5);
@@ -53,7 +67,7 @@ export class RootScene {
     this.robot = robot;
   }
 
-  createGridLayer() {
+  private createGridLayer(): Container {
     const layer = new Container();
 
     const grid = new Graphics();
@@ -82,7 +96,7 @@ export class RootScene {
     return layer;
   }
 
-  tick({ deltaMS }) {
+  private tick({ deltaMS }: TickPayload): void {
     this.accumulator += deltaMS;
 
     while (this.accumulator >= STEP_MS) {
@@ -91,7 +105,7 @@ export class RootScene {
     }
   }
 
-  step(stepMs) {
+  private step(stepMs: number): void {
     const stepSeconds = stepMs / 1000;
     this.viewport.update(stepSeconds * 60);
 
@@ -106,13 +120,13 @@ export class RootScene {
     }
   }
 
-  resize(width, height) {
+  resize(width: number, height: number): void {
     this.viewport.resize(width, height, width, height);
   }
 
-  destroy() {
-    this.app.ticker.remove(this.tickHandler);
-    this.viewport.destroy({ children: true, texture: false, baseTexture: false });
+  destroy(): void {
+    this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
+    this.viewport.destroy({ children: true, texture: false });
     if (this.robotCore) {
       const modules = [...this.robotCore.moduleStack.list()].reverse();
       for (const module of modules) {
@@ -120,6 +134,8 @@ export class RootScene {
       }
       this.robotCore = null;
     }
+    this.robot?.destroy({ children: true });
+    this.robot = null;
     assetService.disposeAll();
   }
 }

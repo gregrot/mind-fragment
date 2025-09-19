@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { RobotChassis } from '../RobotChassis.js';
-import { RobotModule } from '../RobotModule.js';
+import { RobotChassis, type ModuleActionContext, type ModuleUpdateContext } from '../RobotChassis';
+import { RobotModule } from '../RobotModule';
+import type { ModulePort } from '../moduleBus';
+
+interface LinearMovementOptions {
+  id: string;
+  index: number;
+  priority: number;
+  velocityX: number;
+}
 
 class PowerCoreModule extends RobotModule {
   constructor() {
@@ -14,7 +22,10 @@ class PowerCoreModule extends RobotModule {
 }
 
 class LinearMovementModule extends RobotModule {
-  constructor({ id, index, priority, velocityX }) {
+  private readonly priority: number;
+  private readonly velocityX: number;
+
+  constructor({ id, index, priority, velocityX }: LinearMovementOptions) {
     super({
       id,
       title: `Linear Movement ${id}`,
@@ -26,7 +37,7 @@ class LinearMovementModule extends RobotModule {
     this.velocityX = velocityX;
   }
 
-  update({ port }) {
+  override update({ port }: ModuleUpdateContext): void {
     port.requestActuator(
       'movement.linear',
       { x: this.velocityX, y: 0 },
@@ -36,6 +47,8 @@ class LinearMovementModule extends RobotModule {
 }
 
 class TelemetryCoolingModule extends RobotModule {
+  private port: ModulePort | null = null;
+
   constructor() {
     super({
       id: 'support.cooling',
@@ -46,17 +59,23 @@ class TelemetryCoolingModule extends RobotModule {
     });
   }
 
-  onAttach(port) {
+  override onAttach(port: ModulePort): void {
     this.port = port;
     port.publishValue('temperature', 5, { unit: 'celsius' });
     port.registerAction('cool', (payload, context) => {
-      const amount = Number.isFinite(payload?.amount) ? payload.amount : 1;
-      const current = this.port.getValue('temperature') ?? 0;
+      const typedPayload = payload as { amount?: number } | undefined;
+      const typedContext = context as ModuleActionContext;
+      const amount = Number.isFinite(typedPayload?.amount) ? typedPayload!.amount! : 1;
+      const current = this.port?.getValue<number>('temperature') ?? 0;
       const nextValue = Math.max(0, current - amount);
-      this.port.updateValue('temperature', nextValue);
-      context.requestActuator('movement.angular', { value: amount * 0.1 }, 5);
+      this.port?.updateValue('temperature', nextValue);
+      typedContext.requestActuator('movement.angular', { value: amount * 0.1 }, 5);
       return nextValue;
     }, { label: 'Coolant purge' });
+  }
+
+  override onDetach(): void {
+    this.port = null;
   }
 }
 

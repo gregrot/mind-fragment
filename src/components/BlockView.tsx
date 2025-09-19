@@ -1,25 +1,32 @@
-import React, { useCallback } from 'react';
-import { BLOCK_MAP } from '../blocks/library.js';
+import { useCallback } from 'react';
+import { BLOCK_MAP } from '../blocks/library';
+import type { BlockInstance, DropTarget } from '../types/blocks';
 
 const PAYLOAD_MIME = 'application/json';
 
-const formatSlotLabel = (slotName) =>
+const formatSlotLabel = (slotName: string): string =>
   slotName
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[-_]/g, ' ')
     .toUpperCase();
 
-function BlockView({ block, path, onDrop }) {
+interface BlockViewProps {
+  block: BlockInstance;
+  path: string[];
+  onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+}
+
+const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
     return null;
   }
 
   const handleDragStart = useCallback(
-    (event) => {
+    (event: React.DragEvent<HTMLDivElement>) => {
       const payload = {
-        source: 'workspace',
-        instanceId: block.instanceId
+        source: 'workspace' as const,
+        instanceId: block.instanceId,
       };
 
       event.stopPropagation();
@@ -28,7 +35,7 @@ function BlockView({ block, path, onDrop }) {
       event.dataTransfer.setData(PAYLOAD_MIME, JSON.stringify(payload));
       event.dataTransfer.setData('text/plain', definition.label);
     },
-    [block.instanceId, definition?.label]
+    [block.instanceId, definition.label],
   );
 
   const slotPath = [...path, block.instanceId];
@@ -62,23 +69,31 @@ function BlockView({ block, path, onDrop }) {
       ) : null}
     </div>
   );
+};
+
+interface SlotViewProps {
+  owner: BlockInstance;
+  slotName: string;
+  blocks: BlockInstance[];
+  path: string[];
+  onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
 }
 
-function SlotView({ owner, slotName, blocks, path, onDrop }) {
+const SlotView = ({ owner, slotName, blocks, path, onDrop }: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
-    (event) => {
+    (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
         kind: 'slot',
         ownerId: owner.instanceId,
         slotName,
         position: blocks.length,
-        ancestorIds: path
+        ancestorIds: path,
       });
     },
-    [blocks.length, onDrop, owner.instanceId, path, slotName]
+    [blocks.length, onDrop, owner.instanceId, path, slotName],
   );
 
-  const handleDragOver = useCallback((event) => {
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
@@ -94,20 +109,13 @@ function SlotView({ owner, slotName, blocks, path, onDrop }) {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {blocks.length === 0 ? (
-          <div className="slot-placeholder">Drop blocks here</div>
-        ) : null}
+        {blocks.length === 0 ? <div className="slot-placeholder">Drop blocks here</div> : null}
         {blocks.map((childBlock) => (
-          <BlockView
-            key={childBlock.instanceId}
-            block={childBlock}
-            path={path}
-            onDrop={onDrop}
-          />
+          <BlockView key={childBlock.instanceId} block={childBlock} path={path} onDrop={onDrop} />
         ))}
       </div>
     </section>
   );
-}
+};
 
 export default BlockView;

@@ -1,9 +1,14 @@
-import React from 'react';
+import type { DragEvent } from 'react';
+import type { BlockDefinition } from '../types/blocks';
 
 const PAYLOAD_MIME = 'application/json';
 
-function BlockPalette({ blocks }) {
-  const handleDragStart = (definition) => (event) => {
+interface BlockPaletteProps {
+  blocks: BlockDefinition[];
+}
+
+const BlockPalette = ({ blocks }: BlockPaletteProps): JSX.Element => {
+  const handleDragStart = (definition: BlockDefinition) => (event: DragEvent<HTMLDivElement>) => {
     const payload = {
       source: 'palette',
       blockType: definition.id
@@ -27,13 +32,11 @@ function BlockPalette({ blocks }) {
           data-testid={`palette-${definition.id}`}
         >
           <span className="palette-label">{definition.label}</span>
-          {definition.summary ? (
-            <small className="palette-summary">{definition.summary}</small>
-          ) : null}
+          {definition.summary ? <small className="palette-summary">{definition.summary}</small> : null}
         </div>
       ))}
     </div>
   );
-}
+};
 
 export default BlockPalette;

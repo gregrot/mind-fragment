@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import App from './App.jsx';
+import App from './App';
 
-const createDataTransfer = () => {
-  const store = new Map();
+const createDataTransfer = (): DataTransfer => {
+  const store = new Map<string, string>();
   return {
     dropEffect: 'move',
     effectAllowed: 'all',
-    files: [],
-    types: [],
-    setData: (format, value) => {
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: [] as string[],
+    setData: (format: string, value: string) => {
       store.set(format, value);
     },
-    getData: (format) => store.get(format) ?? '',
+    getData: (format: string) => store.get(format) ?? '',
     clearData: () => store.clear(),
-    setDragImage: () => {}
-  };
+    setDragImage: () => {},
+  } as unknown as DataTransfer;
 };
 
-const getWorkspaceDropzone = () => {
+const getWorkspaceDropzone = (): HTMLElement => {
   const zones = screen.getAllByTestId('workspace-dropzone');
   return zones[zones.length - 1];
 };

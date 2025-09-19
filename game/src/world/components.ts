@@ -12,7 +12,20 @@ export interface Program { ast: any | null; running: boolean; budget: number; }
 
 export interface SpriteRef { sprite: Phaser.GameObjects.Sprite }
 
-export interface Entity extends Partial<Position & Velocity & Energy & Inventory & Modules & Tags & Program & SpriteRef> {
+export type EntityRole = "mind" | "assembler" | "scrap" | "robot" | string;
+
+export interface Entity extends Partial<
+  Position &
+  Velocity &
+  Energy &
+  Inventory &
+  Modules &
+  Tags &
+  Program &
+  SpriteRef
+> {
   id: EntityId;
   name?: string;
+  role?: EntityRole;
+  requires?: Record<string, number>;
 }

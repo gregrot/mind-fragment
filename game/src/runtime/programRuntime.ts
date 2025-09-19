@@ -2,7 +2,7 @@ import { StackInterpreter } from "../../../blockkit-ts/src/scratch/StackInterpre
 import type { StackProgram } from "../../../blockkit-ts/src/scratch/stackTypes";
 import { world } from "../world/world";
 import { worldApi } from "../world/worldApi";
-import type { Entity } from "../world/components";
+import type { Entity, EntityRole } from "../world/components";
 
 // Attach a lightweight adapter so block kinds call into worldApi
 export function makeInterpreter() {
@@ -26,9 +26,12 @@ export function makeInterpreter() {
 
   (rt as any).register?.("motion.moveTo", async (ctx: any) => {
     const ent: Entity = ctx.state.entity;
-    const target = ctx.config?.targetTag
-      ? world.byTag(ctx.config.targetTag)[0]
-      : ctx.getInput("target");
+    const role: EntityRole | undefined = ctx.config?.targetRole;
+    const target = role
+      ? world.firstByRole(role)
+      : ctx.config?.targetTag
+        ? world.byTag(ctx.config.targetTag)[0]
+        : ctx.getInput("target");
     if (!target) return;
     const pos = (target as any).x != null ? target : { x: (target as any).x, y: (target as any).y };
     worldApi.moveTo(ent, (pos as any).x, (pos as any).y);
@@ -39,6 +42,12 @@ export function makeInterpreter() {
   });
   (rt as any).register?.("manip.drop", (ctx: any) => {
     const ent: Entity = ctx.state.entity; worldApi.drop(ent);
+  });
+  (rt as any).register?.("manip.deposit", (ctx: any) => {
+    const ent: Entity = ctx.state.entity;
+    const role: EntityRole | undefined = ctx.config?.targetRole;
+    if (!role) return;
+    worldApi.depositTo(ent, role);
   });
 
   return rt;

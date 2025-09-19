@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [-] 1. Set up enhanced test infrastructure for advanced drag-and-drop
+- [x] 1. Set up enhanced test infrastructure for advanced drag-and-drop
   - Create enhanced mock DataTransfer with position simulation capabilities
   - Add test utilities for creating complex program structures with C-blocks and nested sequences
   - Create assertion helpers for validating program state changes after drag operations

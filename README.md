@@ -20,6 +20,12 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 ### Reference
 - [Legacy BlockKit Notes](docs/reference/legacy-blockkit.md) — Snapshot of the prior technical stack that informs what we reuse, replace, or redesign.
 
+## Block Builder Prototype
+- Live React workspace under `src/` organised with Vite for quick iteration.
+- Install dependencies with `npm install`, then launch the playground via `npm run dev` to explore block behaviours.
+- Run the drag-and-drop regression pack with `npm test`; it covers palette drops, slot placement, and lateral moves.
+- The components mirror the schema described in [Block Programming Plan](docs/planning/block-programming.md), keeping DO / THEN / ELSE slots visible for planning discussions.
+
 ## Current Priorities
 1. Finalise the block schema and runtime contract outlined in the planning document, keeping legacy capabilities in mind.
 2. Sketch the rebuilt editor HUD and debugging affordances that support the experience beats in the steering notes.

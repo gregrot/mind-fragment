@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 test('simulation shell initialises without runtime errors', async ({ page }) => {
-  const pageErrors = [];
-  const consoleErrors = [];
+  const pageErrors: unknown[] = [];
+  const consoleErrors: string[] = [];
 
   page.on('pageerror', (error) => {
     pageErrors.push(error);

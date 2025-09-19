@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "pixi-viewport": "^6.0.3",
@@ -23,7 +24,12 @@
     "@testing-library/user-event": "^14.5.3",
     "@vitejs/plugin-react": "^5.0.3",
     "jsdom": "^24.0.0",
+    "typescript": "^5.6.3",
     "vite": "^7.1.6",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0"
   }
 }

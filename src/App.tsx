@@ -1,11 +1,10 @@
-import React from 'react';
-import BlockPalette from './components/BlockPalette.jsx';
-import Workspace from './components/Workspace.jsx';
-import SimulationShell from './simulation/SimulationShell.jsx';
-import { BLOCK_LIBRARY } from './blocks/library.js';
-import { useBlockWorkspace } from './hooks/useBlockWorkspace.js';
+import BlockPalette from './components/BlockPalette';
+import Workspace from './components/Workspace';
+import SimulationShell from './simulation/SimulationShell';
+import { BLOCK_LIBRARY } from './blocks/library';
+import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 
-function App() {
+function App(): JSX.Element {
   const { workspace, handleDrop } = useBlockWorkspace();
 
   return (

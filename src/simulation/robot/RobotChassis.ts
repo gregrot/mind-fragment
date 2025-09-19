@@ -1,56 +1,92 @@
-import { ModuleStack } from './moduleStack.js';
-import { ModuleBus } from './moduleBus.js';
-import { RobotState, robotStateUtils } from './robotState.js';
+import { ModuleStack, type ModuleMetadata, type ModuleSnapshot } from './moduleStack';
+import { ModuleBus, ModulePort } from './moduleBus';
+import { RobotState, type RobotStateSnapshot, type RobotStateOptions, robotStateUtils } from './robotState';
+import type { RobotModule } from './RobotModule';
 
 const DEFAULT_CAPACITY = 6;
 
-const clone = (value) => JSON.parse(JSON.stringify(value));
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+interface RobotChassisOptions {
+  capacity?: number;
+  state?: RobotStateOptions;
+}
+
+interface ActuatorRequest {
+  moduleId: string;
+  payload: unknown;
+  priority: number;
+  order: number;
+}
+
+interface ActuatorResolutionContext {
+  channel: string;
+  request: ActuatorRequest;
+  allRequests: ActuatorRequest[];
+  state: RobotState;
+}
+
+type ActuatorHandler = (context: ActuatorResolutionContext) => void;
+
+export interface ModuleUpdateContext {
+  stepSeconds: number;
+  state: RobotStateSnapshot;
+  port: ModulePort;
+}
+
+export interface ModuleActionContext {
+  state: RobotStateSnapshot;
+  port: ModulePort;
+  requestActuator: (channel: string, args: unknown, priority?: number) => void;
+  utilities: { robotStateUtils: typeof robotStateUtils };
+}
 
 export class RobotChassis {
-  constructor({
-    capacity = DEFAULT_CAPACITY,
-    state = {},
-  } = {}) {
+  readonly state: RobotState;
+  readonly moduleStack: ModuleStack;
+  private readonly bus: ModuleBus;
+  private readonly actuatorHandlers = new Map<string, ActuatorHandler>();
+  private readonly pendingActuators = new Map<string, ActuatorRequest[]>();
+  private tickCounter = 0;
+
+  constructor({ capacity = DEFAULT_CAPACITY, state = {} }: RobotChassisOptions = {}) {
     this.state = new RobotState(state);
     this.moduleStack = new ModuleStack({ capacity });
     this.bus = new ModuleBus();
-    this.actuatorHandlers = new Map();
-    this.pendingActuators = new Map();
-    this.tickCounter = 0;
 
     this.registerActuatorHandler('movement.linear', ({ request }) => {
-      const { x = 0, y = 0 } = request.payload ?? {};
+      const payload = request.payload as { x?: number; y?: number } | undefined;
+      const { x = 0, y = 0 } = payload ?? {};
       this.state.setLinearVelocity(x, y);
     });
 
     this.registerActuatorHandler('movement.angular', ({ request }) => {
-      const value = Number.isFinite(request.payload?.value)
-        ? request.payload.value
-        : 0;
+      const payload = request.payload as { value?: number } | undefined;
+      const value = Number.isFinite(payload?.value) ? payload!.value! : 0;
       this.state.setAngularVelocity(value);
     });
   }
 
-  getStateSnapshot() {
+  getStateSnapshot(): RobotStateSnapshot {
     return this.state.getSnapshot();
   }
 
-  getModuleStackSnapshot() {
+  getModuleStackSnapshot(): ModuleSnapshot[] {
     return this.moduleStack.getSnapshot();
   }
 
-  getTelemetrySnapshot() {
+  getTelemetrySnapshot(): { values: ReturnType<ModuleBus['getValuesSnapshot']>; actions: ReturnType<ModuleBus['getActionsSnapshot']> } {
     return {
       values: this.bus.getValuesSnapshot(),
       actions: this.bus.getActionsSnapshot(),
     };
   }
 
-  registerActuatorHandler(channel, handler) {
+  registerActuatorHandler(channel: string, handler: ActuatorHandler): void {
     this.actuatorHandlers.set(channel, handler);
   }
 
-  attachModule(module) {
+  attachModule(module: RobotModule): ModuleMetadata {
     const meta = this.moduleStack.attach(module);
     const port = this.bus.registerModule(module.definition.id, (moduleId, channel, payload, priority) =>
       this.queueActuatorRequest(moduleId, channel, payload, priority),
@@ -59,7 +95,7 @@ export class RobotChassis {
     return meta;
   }
 
-  detachModule(moduleId) {
+  detachModule(moduleId: string): RobotModule | null {
     const module = this.moduleStack.detach(moduleId);
     if (!module) {
       return null;
@@ -70,7 +106,7 @@ export class RobotChassis {
     return module;
   }
 
-  queueActuatorRequest(moduleId, channel, payload, priority = 0) {
+  queueActuatorRequest(moduleId: string, channel: string, payload: unknown, priority = 0): void {
     if (!this.moduleStack.getModule(moduleId)) {
       throw new Error(`Module ${moduleId} is not attached.`);
     }
@@ -79,15 +115,15 @@ export class RobotChassis {
     if (!this.pendingActuators.has(channel)) {
       this.pendingActuators.set(channel, []);
     }
-    this.pendingActuators.get(channel).push({
+    this.pendingActuators.get(channel)!.push({
       moduleId,
       payload: clone(payload ?? {}),
-      priority: Number.isFinite(priority) ? priority : 0,
+      priority: Number.isFinite(priority) ? (priority as number) : 0,
       order,
     });
   }
 
-  resolveActuatorRequests() {
+  private resolveActuatorRequests(): void {
     for (const [channel, requests] of this.pendingActuators.entries()) {
       if (requests.length === 0) {
         continue;
@@ -115,7 +151,7 @@ export class RobotChassis {
     this.pendingActuators.clear();
   }
 
-  tick(stepSeconds) {
+  tick(stepSeconds: number): void {
     this.tickCounter += 1;
     const modules = this.moduleStack.list();
     for (const module of modules) {
@@ -127,7 +163,7 @@ export class RobotChassis {
         stepSeconds,
         state: this.getStateSnapshot(),
         port,
-      });
+      } satisfies ModuleUpdateContext);
     }
 
     this.resolveActuatorRequests();
@@ -135,15 +171,16 @@ export class RobotChassis {
     this.applyPassiveCooling(stepSeconds);
   }
 
-  applyPassiveCooling(stepSeconds) {
-    if (this.state.heat.current <= 0) {
+  private applyPassiveCooling(stepSeconds: number): void {
+    const snapshot = this.state.getSnapshot();
+    if (snapshot.heat.current <= 0) {
       return;
     }
-    const dissipation = Math.min(stepSeconds * 5, this.state.heat.current);
+    const dissipation = Math.min(stepSeconds * 5, snapshot.heat.current);
     this.state.applyHeat(-dissipation);
   }
 
-  invokeAction(moduleId, actionName, payload = {}) {
+  invokeAction(moduleId: string, actionName: string, payload: unknown = {}): unknown {
     const action = this.bus.getAction(moduleId, actionName);
     if (!action) {
       throw new Error(`Action ${actionName} not found on module ${moduleId}.`);
@@ -153,7 +190,7 @@ export class RobotChassis {
       throw new Error(`Module ${moduleId} is not attached.`);
     }
 
-    const context = {
+    const context: ModuleActionContext = {
       state: this.getStateSnapshot(),
       port,
       requestActuator: (channel, args, priority = 0) =>

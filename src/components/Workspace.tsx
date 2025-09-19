@@ -1,19 +1,25 @@
-import React, { useCallback } from 'react';
-import BlockView from './BlockView.jsx';
+import { useCallback } from 'react';
+import BlockView from './BlockView';
+import type { BlockInstance, DropTarget } from '../types/blocks';
 
-function Workspace({ blocks, onDrop }) {
+interface WorkspaceProps {
+  blocks: BlockInstance[];
+  onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+}
+
+const Workspace = ({ blocks, onDrop }: WorkspaceProps): JSX.Element => {
   const handleRootDrop = useCallback(
-    (event) => {
+    (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
         kind: 'workspace',
         position: blocks.length,
-        ancestorIds: []
+        ancestorIds: [],
       });
     },
-    [blocks.length, onDrop]
+    [blocks.length, onDrop],
   );
 
-  const handleDragOver = useCallback((event) => {
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
@@ -26,15 +32,13 @@ function Workspace({ blocks, onDrop }) {
         onDragOver={handleDragOver}
         onDrop={handleRootDrop}
       >
-        {blocks.length === 0 ? (
-          <p className="workspace-empty">Drag blocks here to start building</p>
-        ) : null}
+        {blocks.length === 0 ? <p className="workspace-empty">Drag blocks here to start building</p> : null}
         {blocks.map((block) => (
           <BlockView key={block.instanceId} block={block} path={[]} onDrop={onDrop} />
         ))}
       </div>
     </div>
   );
-}
+};
 
 export default Workspace;

@@ -16,6 +16,7 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 
 ### Planning
 - [Block Programming Plan](docs/planning/block-programming.md) — Architectural goals, player flow, and implementation priorities for the editor and runtime we need to recreate first.
+- [Programmable Robot MVP Task List](docs/planning/programmable-robot-mvp.md) — Task breakdown for delivering a PixiJS-powered, modular robot sandbox that players can programme.
 
 ### Reference
 - [Legacy BlockKit Notes](docs/reference/legacy-blockkit.md) — Snapshot of the prior technical stack that informs what we reuse, replace, or redesign.

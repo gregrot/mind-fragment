@@ -8,6 +8,8 @@ import styles from './styles/App.module.css';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 
+const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+
 const App = (): JSX.Element => {
   const { workspace, handleDrop } = useBlockWorkspace();
   const { selectedRobotId, clearSelection } = useRobotSelection();
@@ -49,6 +51,62 @@ const App = (): JSX.Element => {
       setActiveTab('programming');
     }
   }, [selectedRobotId]);
+
+  useEffect(() => {
+    const isEditableElement = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      if (target.isContentEditable) {
+        return true;
+      }
+
+      return EDITABLE_TAGS.has(target.tagName);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        isEditableElement(event.target)
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === 'escape') {
+        handleOverlayClose();
+        return;
+      }
+
+      if (key === 'i') {
+        if (isOverlayOpen && activeTab === 'inventory') {
+          setOverlayOpen(false);
+        } else {
+          openOverlay('inventory');
+        }
+        return;
+      }
+
+      if (key === 'c') {
+        if (isOverlayOpen && activeTab === 'catalog') {
+          setOverlayOpen(false);
+        } else {
+          openOverlay('catalog');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeTab, handleOverlayClose, isOverlayOpen, openOverlay]);
 
   const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
 

@@ -198,6 +198,100 @@ body {
   gap: 0.75rem;
 }
 
+.runtime-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  border: 1px solid rgba(19, 33, 60, 0.08);
+  background: linear-gradient(135deg, rgba(33, 88, 160, 0.08), rgba(33, 88, 160, 0.02));
+}
+
+.runtime-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.runtime-button {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  padding: 0.55rem 1.35rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+}
+
+.runtime-button.primary {
+  background: linear-gradient(120deg, #2b5fe0, #3f7bff);
+  color: #f5f8ff;
+  box-shadow: 0 8px 16px rgba(43, 95, 224, 0.25);
+}
+
+.runtime-button.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.runtime-button.secondary {
+  background: #ffffff;
+  color: #1b2330;
+  border: 1px solid rgba(19, 33, 60, 0.12);
+}
+
+.runtime-button.secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.runtime-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(19, 33, 60, 0.18);
+}
+
+.runtime-status {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.78);
+}
+
+.runtime-diagnostics {
+  margin: 0;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.runtime-diagnostics li {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(19, 33, 60, 0.05);
+  border-left: 3px solid rgba(19, 33, 60, 0.2);
+}
+
+.runtime-diagnostics li[data-severity='warning'] {
+  border-left-color: #f57c00;
+  background: rgba(245, 124, 0, 0.12);
+}
+
+.runtime-diagnostic-icon {
+  font-size: 1rem;
+}
+
+.runtime-hint {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.6);
+  font-style: italic;
+}
+
 .module-inventory {
   margin-top: 1.5rem;
   padding: 1.1rem 1.25rem 1.35rem;

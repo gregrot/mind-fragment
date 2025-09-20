@@ -4,6 +4,7 @@ import SimulationShell from './simulation/SimulationShell';
 import ModuleInventory from './components/ModuleInventory';
 import { BLOCK_LIBRARY } from './blocks/library';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
+import RuntimeControls from './components/RuntimeControls';
 
 function App(): JSX.Element {
   const { workspace, handleDrop } = useBlockWorkspace();
@@ -24,7 +25,8 @@ function App(): JSX.Element {
           <Workspace blocks={workspace} onDrop={handleDrop} />
         </section>
         <section className="panel simulation-panel">
-          <h2>Simulation Shell</h2>
+          <h2>Simulation</h2>
+          <RuntimeControls workspace={workspace} />
           <SimulationShell />
           <ModuleInventory />
         </section>

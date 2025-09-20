@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application } from 'pixi.js';
 import { RootScene } from './rootScene';
+import { simulationRuntime } from '../state/simulationRuntime';
 
 const SimulationShell = (): JSX.Element => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -46,6 +47,7 @@ const SimulationShell = (): JSX.Element => {
       const view = (activeApp as Application & { canvas?: HTMLCanvasElement }).canvas ?? activeApp.view;
       containerRef.current.appendChild(view as HTMLElement);
       rootScene = new RootScene(activeApp);
+      simulationRuntime.registerScene(rootScene);
       rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
 
       const handleResize = () => {
@@ -65,6 +67,7 @@ const SimulationShell = (): JSX.Element => {
       disposed = true;
       cleanupResize?.();
       if (rootScene) {
+        simulationRuntime.unregisterScene(rootScene);
         rootScene.destroy();
         rootScene = null;
       }

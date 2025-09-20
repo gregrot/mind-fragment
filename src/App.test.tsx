@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import App from './App';
+import { simulationRuntime } from './state/simulationRuntime';
 
 const createDataTransfer = (): DataTransfer => {
   const store = new Map<string, string>();
@@ -190,5 +191,47 @@ describe('block workspace drag and drop', () => {
     const repeatBlocks = within(workspaceAfter).getAllByTestId('block-repeat');
     expect(repeatBlocks).toHaveLength(1);
     expect(within(repeatBlocks[0]).getByTestId('block-move')).toBeInTheDocument();
+  });
+
+  it('compiles and reports a routine when Run Program is pressed', () => {
+    render(<App />);
+
+    const [startPaletteItem] = screen.getAllByTestId('palette-start');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const startTransfer = createDataTransfer();
+
+    fireEvent.dragStart(startPaletteItem, { dataTransfer: startTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: startTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: startTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const startBlock = within(workspace).getByTestId('block-start');
+    const doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+
+    const [movePaletteItem] = screen.getAllByTestId('palette-move');
+    const moveTransfer = createDataTransfer();
+
+    fireEvent.dragStart(movePaletteItem, { dataTransfer: moveTransfer });
+    fireEvent.dragOver(doSlotDropzone, { dataTransfer: moveTransfer });
+    fireEvent.drop(doSlotDropzone, { dataTransfer: moveTransfer });
+
+    expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
+
+    const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
+    const runButtons = screen.getAllByTestId('run-program');
+    let matchedProgram: { instructions: unknown[] } | null = null;
+
+    for (const button of runButtons) {
+      runSpy.mockClear();
+      fireEvent.click(button);
+      const [program] = runSpy.mock.calls[0] ?? [];
+      if (program?.instructions?.length) {
+        matchedProgram = program;
+        break;
+      }
+    }
+
+    expect(matchedProgram?.instructions).toHaveLength(1);
+    runSpy.mockRestore();
   });
 });

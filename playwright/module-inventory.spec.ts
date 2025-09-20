@@ -3,6 +3,9 @@ import { test, expect } from '@playwright/test';
 test('module catalogue lists installed modules with hooks and telemetry', async ({ page }) => {
   await page.goto('/');
 
+  await page.getByRole('button', { name: 'Catalogue' }).click();
+  await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();
+
   await expect(page.getByRole('heading', { name: 'Module Catalogue' })).toBeVisible();
 
   const moduleIds = ['core.movement', 'arm.manipulator', 'fabricator.basic', 'sensor.survey'];

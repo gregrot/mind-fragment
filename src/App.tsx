@@ -1,9 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import SimulationShell from './simulation/SimulationShell';
-import ModuleInventory from './components/ModuleInventory';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
-import InventoryStatus from './components/InventoryStatus';
-import RobotProgrammingOverlay from './components/RobotProgrammingOverlay';
+import SimulationOverlay, { type OverlayTab } from './components/SimulationOverlay';
 import { useRobotSelection } from './hooks/useRobotSelection';
 import { simulationRuntime } from './state/simulationRuntime';
 import styles from './styles/App.module.css';
@@ -13,53 +11,87 @@ const DEFAULT_ROBOT_ID = 'MF-01';
 const App = (): JSX.Element => {
   const { workspace, handleDrop } = useBlockWorkspace();
   const { selectedRobotId, clearSelection } = useRobotSelection();
+  const [isOverlayOpen, setOverlayOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<OverlayTab>('inventory');
+
+  const openOverlay = useCallback((tab: OverlayTab) => {
+    setActiveTab(tab);
+    setOverlayOpen(true);
+  }, []);
+
+  const handleTabChange = useCallback(
+    (tab: OverlayTab) => {
+      if (tab === 'programming' && !selectedRobotId) {
+        simulationRuntime.setSelectedRobot(DEFAULT_ROBOT_ID);
+      }
+      setActiveTab(tab);
+    },
+    [selectedRobotId],
+  );
 
   const handleProgramRobot = useCallback(() => {
     simulationRuntime.setSelectedRobot(DEFAULT_ROBOT_ID);
-  }, []);
+    openOverlay('programming');
+  }, [openOverlay]);
+
+  const handleRobotSelect = useCallback(() => {
+    openOverlay('programming');
+  }, [openOverlay]);
 
   const handleOverlayClose = useCallback(() => {
+    setOverlayOpen(false);
     clearSelection();
   }, [clearSelection]);
 
+  useEffect(() => {
+    if (selectedRobotId) {
+      setOverlayOpen(true);
+      setActiveTab('programming');
+    }
+  }, [selectedRobotId]);
+
   const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
-  const isOverlayOpen = selectedRobotId !== null;
 
   return (
     <div className={styles.appShell}>
-      <SimulationShell />
-      <div className={styles.worldHud} role="region" aria-label="World interface HUD">
-        <header className={styles.worldHudHeader}>
-          <div>
-            <p className={styles.worldHudKicker}>Mind Fragment Simulation</p>
-            <h1 className={styles.worldHudTitle}>Field Prototype</h1>
-            <p className={styles.worldHudSubtitle}>
-              Monitor resources and open the block workspace to programme the selected chassis.
-            </p>
-          </div>
-          <button
-            type="button"
-            className={styles.worldHudPrimary}
-            onClick={handleProgramRobot}
-            data-testid="select-robot"
-          >
-            Program robot
-          </button>
-        </header>
-        <div className={styles.worldHudPanels}>
-          <InventoryStatus />
-          <ModuleInventory />
-        </div>
+      <SimulationShell onRobotSelect={handleRobotSelect} />
+      <div className={styles.controlBar} role="toolbar" aria-label="Simulation interface controls">
+        <button
+          type="button"
+          className={styles.controlButton}
+          onClick={() => openOverlay('inventory')}
+          data-active={isOverlayOpen && activeTab === 'inventory'}
+        >
+          Inventory
+        </button>
+        <button
+          type="button"
+          className={styles.controlButton}
+          onClick={() => openOverlay('catalog')}
+          data-active={isOverlayOpen && activeTab === 'catalog'}
+        >
+          Catalogue
+        </button>
+        <button
+          type="button"
+          className={`${styles.controlButton} ${styles.controlButtonPrimary}`}
+          onClick={handleProgramRobot}
+          data-active={isOverlayOpen && activeTab === 'programming'}
+          data-testid="select-robot"
+        >
+          Program robot
+        </button>
       </div>
-      {isOverlayOpen ? (
-        <RobotProgrammingOverlay
-          workspace={workspace}
-          onDrop={handleDrop}
-          onClose={handleOverlayClose}
-          onConfirm={handleOverlayClose}
-          robotId={activeRobotId}
-        />
-      ) : null}
+      <SimulationOverlay
+        isOpen={isOverlayOpen}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onClose={handleOverlayClose}
+        onConfirm={handleOverlayClose}
+        workspace={workspace}
+        onDrop={handleDrop}
+        robotId={activeRobotId}
+      />
     </div>
   );
 };

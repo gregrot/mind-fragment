@@ -25,6 +25,7 @@ export class RootScene {
   private readonly rootLayer: Container;
   private robotCore: RobotChassis | null;
   private robot: Sprite | null;
+  private hasPlayerPanned: boolean;
   private accumulator: number;
   private readonly tickHandler: (payload: TickPayload) => void;
   private programRunner: BlockProgramRunner | null;
@@ -51,6 +52,18 @@ export class RootScene {
       .decelerate({ friction: 0.85 });
 
     app.stage.addChild(this.viewport);
+
+    this.hasPlayerPanned = false;
+    this.viewport.on('moved', (event: { type: string }) => {
+      if (this.hasPlayerPanned) {
+        return;
+      }
+      if (event.type === 'drag' || event.type === 'pinch' || event.type === 'decelerate') {
+        this.hasPlayerPanned = true;
+      }
+    });
+
+    this.viewport.moveCenter(0, 0);
 
     this.backgroundLayer = this.createGridLayer();
     this.viewport.addChild(this.backgroundLayer);
@@ -96,6 +109,10 @@ export class RootScene {
     this.rootLayer.addChild(robot);
 
     this.robot = robot;
+
+    if (!this.hasPlayerPanned) {
+      this.viewport.moveCenter(robot.position.x, robot.position.y);
+    }
   }
 
   private createGridLayer(): Container {
@@ -157,6 +174,12 @@ export class RootScene {
 
   resize(width: number, height: number): void {
     this.viewport.resize(width, height, width, height);
+
+    if (!this.hasPlayerPanned) {
+      const targetX = this.robot?.position.x ?? 0;
+      const targetY = this.robot?.position.y ?? 0;
+      this.viewport.moveCenter(targetX, targetY);
+    }
   }
 
   runProgram(program: CompiledProgram): void {

@@ -1,39 +1,73 @@
-import BlockPalette from './components/BlockPalette';
-import Workspace from './components/Workspace';
 import SimulationShell from './simulation/SimulationShell';
 import ModuleInventory from './components/ModuleInventory';
-import { BLOCK_LIBRARY } from './blocks/library';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
-import RuntimeControls from './components/RuntimeControls';
 import InventoryStatus from './components/InventoryStatus';
+import RobotProgrammingOverlay from './components/RobotProgrammingOverlay';
+import {
+  RobotProgrammingOverlayProvider,
+  useRobotProgrammingOverlay,
+} from './state/RobotProgrammingOverlayContext';
 
-function App(): JSX.Element {
+const DEFAULT_ROBOT_ID = 'MF-01';
+
+const AppContent = (): JSX.Element => {
   const { workspace, handleDrop } = useBlockWorkspace();
+  const { isOpen, selectedRobotId, openOverlay, closeOverlay } = useRobotProgrammingOverlay();
+
+  const handleProgramRobot = () => {
+    openOverlay(DEFAULT_ROBOT_ID);
+  };
+
+  const handleOverlayClose = () => {
+    closeOverlay();
+  };
+
+  const activeRobotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <h1>Mind Fragment Block Builder</h1>
-        <p className="app-tagline">Assemble behaviours by combining blocks in the workspace.</p>
-      </header>
-      <main className="app-main">
-        <aside className="panel palette-panel">
-          <h2>Block Palette</h2>
-          <BlockPalette blocks={BLOCK_LIBRARY} />
-        </aside>
-        <section className="panel workspace-panel">
-          <h2>Workspace</h2>
-          <Workspace blocks={workspace} onDrop={handleDrop} />
-        </section>
-        <section className="panel simulation-panel">
-          <h2>Simulation</h2>
-          <RuntimeControls workspace={workspace} />
+      <SimulationShell onRobotSelect={handleProgramRobot} />
+      <div className="world-hud" role="region" aria-label="World interface HUD">
+        <header className="world-hud-header">
+          <div>
+            <p className="world-hud-kicker">Mind Fragment Simulation</p>
+            <h1>Field Prototype</h1>
+            <p className="world-hud-subtitle">
+              Monitor resources and open the block workspace to programme the selected chassis.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="world-hud-primary"
+            onClick={handleProgramRobot}
+            data-testid="select-robot"
+          >
+            Program robot
+          </button>
+        </header>
+        <div className="world-hud-panels">
           <InventoryStatus />
-          <SimulationShell />
           <ModuleInventory />
-        </section>
-      </main>
+        </div>
+      </div>
+      {isOpen ? (
+        <RobotProgrammingOverlay
+          workspace={workspace}
+          onDrop={handleDrop}
+          onClose={handleOverlayClose}
+          onConfirm={handleOverlayClose}
+          robotId={activeRobotId}
+        />
+      ) : null}
     </div>
+  );
+};
+
+function App(): JSX.Element {
+  return (
+    <RobotProgrammingOverlayProvider>
+      <AppContent />
+    </RobotProgrammingOverlayProvider>
   );
 }
 

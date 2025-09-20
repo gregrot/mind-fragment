@@ -3,7 +3,11 @@ import { Application } from 'pixi.js';
 import { RootScene } from './rootScene';
 import { simulationRuntime } from '../state/simulationRuntime';
 
-const SimulationShell = (): JSX.Element => {
+interface SimulationShellProps {
+  onRobotSelect?: () => void;
+}
+
+const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -83,7 +87,14 @@ const SimulationShell = (): JSX.Element => {
     return cleanup;
   }, []);
 
-  return <section className="simulation-shell" ref={containerRef} aria-label="Simulation shell" />;
+  return (
+    <section
+      className="simulation-shell"
+      ref={containerRef}
+      aria-label="Simulation shell"
+      onDoubleClick={onRobotSelect}
+    />
+  );
 };
 
 export default SimulationShell;

@@ -1,8 +1,10 @@
-import { Application, Renderer, Container, Graphics, Sprite, Ticker } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Ticker } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
 import { RobotChassis } from './robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from './robot/modules/moduleLibrary';
+import type { CompiledProgram } from './runtime/blockProgram';
+import { BlockProgramRunner, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 
 interface TickPayload {
   deltaMS: number;
@@ -21,6 +23,9 @@ export class RootScene {
   private robot: Sprite | null;
   private accumulator: number;
   private readonly tickHandler: (payload: TickPayload) => void;
+  private programRunner: BlockProgramRunner | null;
+  private programStatus: ProgramRunnerStatus;
+  private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
 
   constructor(app: Application) {
     this.app = app;
@@ -56,6 +61,12 @@ export class RootScene {
     this.robot = null;
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
+
+    this.programListeners = new Set();
+    this.programRunner = this.robotCore
+      ? new BlockProgramRunner(this.robotCore, (status) => this.handleProgramStatus(status))
+      : null;
+    this.programStatus = this.programRunner?.getStatus() ?? 'idle';
 
     void this.initPlaceholderActors();
   }
@@ -112,6 +123,10 @@ export class RootScene {
     const stepSeconds = stepMs / 1000;
     this.viewport.update(stepSeconds * 60);
 
+    if (this.programRunner) {
+      this.programRunner.update(stepSeconds);
+    }
+
     if (this.robotCore) {
       this.robotCore.tick(stepSeconds);
     }
@@ -127,9 +142,33 @@ export class RootScene {
     this.viewport.resize(width, height, width, height);
   }
 
+  runProgram(program: CompiledProgram): void {
+    this.programRunner?.load(program);
+  }
+
+  stopProgram(): void {
+    this.programRunner?.stop();
+  }
+
+  getProgramStatus(): ProgramRunnerStatus {
+    return this.programStatus;
+  }
+
+  subscribeProgramStatus(listener: (status: ProgramRunnerStatus) => void): () => void {
+    this.programListeners.add(listener);
+    listener(this.programStatus);
+    return () => {
+      this.programListeners.delete(listener);
+    };
+  }
+
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.viewport.destroy({ children: true, texture: false });
+    this.programRunner?.stop();
+    this.programRunner = null;
+    this.programListeners.clear();
+    this.programStatus = 'idle';
     if (this.robotCore) {
       const modules = [...this.robotCore.moduleStack.list()].reverse();
       for (const module of modules) {
@@ -140,5 +179,12 @@ export class RootScene {
     this.robot?.destroy({ children: true });
     this.robot = null;
     assetService.disposeAll();
+  }
+
+  private handleProgramStatus(status: ProgramRunnerStatus): void {
+    this.programStatus = status;
+    for (const listener of this.programListeners) {
+      listener(status);
+    }
   }
 }

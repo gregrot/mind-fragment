@@ -14,6 +14,9 @@ interface TickPayload {
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
+const DEFAULT_ROBOT_ID = 'MF-01';
+
+type RobotSelectionListener = (robotId: string | null) => void;
 
 export class RootScene {
   private readonly app: Application;
@@ -27,6 +30,8 @@ export class RootScene {
   private programRunner: BlockProgramRunner | null;
   private programStatus: ProgramRunnerStatus;
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
+  private readonly selectionListeners: Set<RobotSelectionListener>;
+  private selectedRobotId: string | null;
 
   constructor(app: Application) {
     this.app = app;
@@ -64,6 +69,8 @@ export class RootScene {
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
     this.programListeners = new Set();
+    this.selectionListeners = new Set();
+    this.selectedRobotId = null;
     this.programRunner = this.robotCore
       ? new BlockProgramRunner(this.robotCore, (status) => this.handleProgramStatus(status))
       : null;
@@ -77,6 +84,15 @@ export class RootScene {
     const robot = new Sprite(texture);
     robot.anchor.set(0.5);
     robot.position.set(0, 0);
+    robot.eventMode = 'static';
+    robot.interactive = true;
+    robot.cursor = 'pointer';
+    robot.on('pointerdown', () => {
+      this.notifyRobotSelected(DEFAULT_ROBOT_ID);
+    });
+    robot.on('pointertap', () => {
+      this.notifyRobotSelected(DEFAULT_ROBOT_ID);
+    });
     this.rootLayer.addChild(robot);
 
     this.robot = robot;
@@ -178,6 +194,26 @@ export class RootScene {
     };
   }
 
+  subscribeRobotSelection(listener: RobotSelectionListener): () => void {
+    this.selectionListeners.add(listener);
+    listener(this.selectedRobotId);
+    return () => {
+      this.selectionListeners.delete(listener);
+    };
+  }
+
+  selectRobot(robotId: string): void {
+    this.notifyRobotSelected(robotId);
+  }
+
+  clearRobotSelection(): void {
+    this.notifyRobotSelected(null);
+  }
+
+  getSelectedRobot(): string | null {
+    return this.selectedRobotId;
+  }
+
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.viewport.destroy({ children: true, texture: false });
@@ -185,6 +221,8 @@ export class RootScene {
     this.programRunner = null;
     this.programListeners.clear();
     this.programStatus = 'idle';
+    this.notifyRobotSelected(null);
+    this.selectionListeners.clear();
     if (this.robotCore) {
       const modules = [...this.robotCore.moduleStack.list()].reverse();
       for (const module of modules) {
@@ -201,6 +239,16 @@ export class RootScene {
     this.programStatus = status;
     for (const listener of this.programListeners) {
       listener(status);
+    }
+  }
+
+  private notifyRobotSelected(robotId: string | null): void {
+    if (this.selectedRobotId === robotId) {
+      return;
+    }
+    this.selectedRobotId = robotId;
+    for (const listener of this.selectionListeners) {
+      listener(robotId);
     }
   }
 }

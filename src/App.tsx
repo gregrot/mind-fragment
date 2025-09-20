@@ -1,32 +1,32 @@
+import { useCallback, useMemo } from 'react';
 import SimulationShell from './simulation/SimulationShell';
 import ModuleInventory from './components/ModuleInventory';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 import InventoryStatus from './components/InventoryStatus';
 import RobotProgrammingOverlay from './components/RobotProgrammingOverlay';
-import {
-  RobotProgrammingOverlayProvider,
-  useRobotProgrammingOverlay,
-} from './state/RobotProgrammingOverlayContext';
+import { useRobotSelection } from './hooks/useRobotSelection';
+import { simulationRuntime } from './state/simulationRuntime';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 
-const AppContent = (): JSX.Element => {
+const App = (): JSX.Element => {
   const { workspace, handleDrop } = useBlockWorkspace();
-  const { isOpen, selectedRobotId, openOverlay, closeOverlay } = useRobotProgrammingOverlay();
+  const { selectedRobotId, clearSelection } = useRobotSelection();
 
-  const handleProgramRobot = () => {
-    openOverlay(DEFAULT_ROBOT_ID);
-  };
+  const handleProgramRobot = useCallback(() => {
+    simulationRuntime.setSelectedRobot(DEFAULT_ROBOT_ID);
+  }, []);
 
-  const handleOverlayClose = () => {
-    closeOverlay();
-  };
+  const handleOverlayClose = useCallback(() => {
+    clearSelection();
+  }, [clearSelection]);
 
-  const activeRobotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
+  const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
+  const isOverlayOpen = selectedRobotId !== null;
 
   return (
     <div className="app-shell">
-      <SimulationShell onRobotSelect={handleProgramRobot} />
+      <SimulationShell />
       <div className="world-hud" role="region" aria-label="World interface HUD">
         <header className="world-hud-header">
           <div>
@@ -50,7 +50,7 @@ const AppContent = (): JSX.Element => {
           <ModuleInventory />
         </div>
       </div>
-      {isOpen ? (
+      {isOverlayOpen ? (
         <RobotProgrammingOverlay
           workspace={workspace}
           onDrop={handleDrop}
@@ -62,13 +62,5 @@ const AppContent = (): JSX.Element => {
     </div>
   );
 };
-
-function App(): JSX.Element {
-  return (
-    <RobotProgrammingOverlayProvider>
-      <AppContent />
-    </RobotProgrammingOverlayProvider>
-  );
-}
 
 export default App;

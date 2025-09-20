@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Application } from 'pixi.js';
 import { RootScene } from './rootScene';
 import { simulationRuntime } from '../state/simulationRuntime';
+import styles from '../styles/SimulationShell.module.css';
 
 interface SimulationShellProps {
   onRobotSelect?: () => void;
@@ -99,11 +100,7 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
   }, []);
 
   return (
-    <section
-      className="simulation-shell"
-      ref={containerRef}
-      aria-label="Simulation shell"
-    />
+    <section className={styles.shell} ref={containerRef} aria-label="Simulation shell" />
   );
 };
 

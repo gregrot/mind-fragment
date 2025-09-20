@@ -1,4 +1,5 @@
 import type { ModuleIconVariant } from '../simulation/robot/modules/moduleLibrary';
+import styles from '../styles/ModuleIcon.module.css';
 
 interface ModuleIconProps {
   variant: ModuleIconVariant;
@@ -16,13 +17,7 @@ const ModuleIcon = ({ variant }: ModuleIconProps): JSX.Element => {
   const palette = ICON_CONFIG[variant];
 
   return (
-    <svg
-      className={`module-icon module-icon-${variant}`}
-      viewBox="0 0 48 48"
-      role="presentation"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg className={styles.icon} viewBox="0 0 48 48" role="presentation" aria-hidden="true" focusable="false">
       <rect x="4" y="4" width="40" height="40" rx="12" fill={palette.primary} />
       {variant === 'movement' ? (
         <g>

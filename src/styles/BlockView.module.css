@@ -1,0 +1,80 @@
+.block {
+  background: var(--color-surface-glass);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-soft);
+  border-left: 4px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.blockAction {
+  border-left-color: var(--color-accent-cyan);
+}
+
+.blockControl {
+  border-left-color: var(--color-accent-purple);
+}
+
+.blockEvent {
+  border-left-color: var(--color-accent-amber);
+}
+
+.blockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.blockTitle {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-md);
+}
+
+.blockSummary {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.blockSlots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.blockSlot {
+  background: var(--color-slot-surface);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-slot-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.slotLabel {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-slot-text);
+}
+
+.slotBody {
+  min-height: 2.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.slotPlaceholder {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-slot-placeholder);
+  color: var(--color-slot-text);
+  font-size: var(--font-size-sm);
+}

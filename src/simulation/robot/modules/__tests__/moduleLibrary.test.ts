@@ -9,10 +9,11 @@ import {
 
 describe('module library definitions', () => {
   it('provides blueprint metadata for the MVP modules', () => {
-    expect(MODULE_LIBRARY).toHaveLength(4);
+    expect(MODULE_LIBRARY).toHaveLength(5);
     expect(DEFAULT_MODULE_LOADOUT).toEqual([
       'core.movement',
       'arm.manipulator',
+      'storage.cargo',
       'fabricator.basic',
       'sensor.survey',
     ]);
@@ -47,6 +48,12 @@ describe('module library definitions', () => {
     const gripStrength = manipulatorValues?.gripStrength.value as number;
     expect(gripStrength).toBeGreaterThan(0);
     expect(manipulatorActions?.grip.metadata.label).toBe('Grip target');
+
+    const cargoValues = telemetry.values['storage.cargo'];
+    const cargoActions = telemetry.actions['storage.cargo'];
+    const initialAvailable = cargoValues?.available.value as number;
+    expect(initialAvailable).toBeGreaterThan(0);
+    expect(cargoActions?.storeResource.metadata.label).toBe('Store resource');
 
     const fabricatorValues = telemetry.values['fabricator.basic'];
     const fabricatorActions = telemetry.actions['fabricator.basic'];
@@ -84,8 +91,29 @@ describe('module library definitions', () => {
     }) as { recipe: string; queueLength: number };
     expect(queueResult.queueLength).toBe(1);
 
-    const scanResult = chassis.invokeAction('sensor.survey', 'scan', {}) as Record<string, unknown>;
+    const scanResult = chassis.invokeAction('sensor.survey', 'scan', {
+      resourceType: 'ferrous-ore',
+    }) as {
+      status: string;
+      resources: { hits: Array<{ id: string; type: string }> };
+    };
     expect(scanResult.status).toBe('ok');
+    expect(scanResult.resources.hits.length).toBeGreaterThan(0);
+    const resourceHit = scanResult.resources.hits[0];
+    expect(resourceHit.type).toBe('ferrous-ore');
+
+    const gatherResult = chassis.invokeAction('arm.manipulator', 'gatherResource', {
+      nodeId: resourceHit.id,
+      amount: 10,
+    }) as {
+      status: string;
+      harvested: number;
+      type: string | null;
+      nodeId: string;
+    };
+    expect(['ok', 'depleted', 'partial']).toContain(gatherResult.status);
+    expect(gatherResult.harvested).toBeGreaterThan(0);
+    expect(gatherResult.type).toBe('ferrous-ore');
 
     chassis.tick(0.5);
     chassis.tick(0.5);
@@ -100,12 +128,28 @@ describe('module library definitions', () => {
 
     const manipulatorTelemetry = refreshedTelemetry.values['arm.manipulator'];
     expect(manipulatorTelemetry?.heldItem.value).toBe('glyph');
+    const totalHarvested = manipulatorTelemetry?.totalHarvested.value as number;
+    expect(totalHarvested).toBeGreaterThanOrEqual(gatherResult.harvested);
 
     const fabricatorTelemetry = refreshedTelemetry.values['fabricator.basic'];
     const remainingQueue = fabricatorTelemetry?.queueLength.value as number;
     expect(remainingQueue).toBe(0);
     const lastCompleted = fabricatorTelemetry?.lastCompleted.value as { recipe: string };
     expect(lastCompleted.recipe).toBe('alloy-ingot');
+
+    const cargoTelemetry = refreshedTelemetry.values['storage.cargo'];
+    const cargoContents = cargoTelemetry?.contents.value as Array<{ resource: string; quantity: number }>;
+    expect(Array.isArray(cargoContents)).toBe(true);
+    expect(
+      cargoContents.some((entry) => entry.resource === 'ferrous-ore' && entry.quantity >= gatherResult.harvested),
+    ).toBe(true);
+
+    const withdrawResult = chassis.invokeAction('storage.cargo', 'withdrawResource', {
+      resource: 'ferrous-ore',
+      amount: 2,
+    }) as { status: string; withdrawn: number };
+    expect(['emptied', 'partial', 'empty']).toContain(withdrawResult.status);
+    expect(withdrawResult.withdrawn).toBeGreaterThanOrEqual(0);
 
     const scannerTelemetry = refreshedTelemetry.values['sensor.survey'];
     expect(scannerTelemetry?.lastScan.value).not.toBeNull();

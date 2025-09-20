@@ -1,10 +1,11 @@
 import type { RobotModule } from '../RobotModule';
 import { MovementModule } from './movementModule';
 import { ManipulationModule } from './manipulationModule';
+import { CargoHoldModule } from './cargoHoldModule';
 import { CraftingModule } from './craftingModule';
 import { ScanningModule } from './scanningModule';
 
-export type ModuleIconVariant = 'movement' | 'manipulation' | 'crafting' | 'scanning';
+export type ModuleIconVariant = 'movement' | 'manipulation' | 'inventory' | 'crafting' | 'scanning';
 
 export interface ModuleParameterMetadata {
   key: string;
@@ -110,6 +111,11 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         label: 'Release',
         description: 'Disengage the manipulator and clear the held item.',
       },
+      {
+        name: 'gatherResource',
+        label: 'Gather resource',
+        description: 'Harvest a surveyed node and transfer it into cargo storage.',
+      },
     ],
     telemetry: [
       {
@@ -127,8 +133,87 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         label: 'Operations completed',
         description: 'Running count of successful grip cycles.',
       },
+      {
+        key: 'gatherRange',
+        label: 'Gather range',
+        description: 'Maximum distance for harvesting resource nodes.',
+      },
+      {
+        key: 'totalHarvested',
+        label: 'Total harvested',
+        description: 'Total resource units transferred into inventory.',
+      },
+      {
+        key: 'lastGather',
+        label: 'Last gather',
+        description: 'Result payload from the most recent harvesting attempt.',
+      },
     ],
     instantiate: () => new ManipulationModule(),
+  },
+  {
+    id: 'storage.cargo',
+    title: 'Modular Cargo Hold',
+    summary:
+      'Stackable cargo pods that aggregate resources for fabrication, research, and return-to-base quotas.',
+    icon: 'inventory',
+    attachment: { slot: 'core', index: 1 },
+    provides: ['inventory.storage'],
+    requires: [],
+    capacityCost: 1,
+    parameters: [
+      { key: 'capacity', label: 'Cargo capacity', unit: 'units' },
+    ],
+    actions: [
+      {
+        name: 'configureCapacity',
+        label: 'Configure hold capacity',
+        description: 'Override the cargo contribution provided by this module.',
+      },
+      {
+        name: 'storeResource',
+        label: 'Store resource',
+        description: 'Deposit a resource stack into the shared inventory.',
+      },
+      {
+        name: 'withdrawResource',
+        label: 'Withdraw resource',
+        description: 'Retrieve a stored resource stack for processing.',
+      },
+      {
+        name: 'clearInventory',
+        label: 'Clear inventory',
+        description: 'Dump the cargo hold contents when emergency venting is required.',
+      },
+    ],
+    telemetry: [
+      {
+        key: 'capacity',
+        label: 'Capacity',
+        description: 'Cargo capacity provided by this module.',
+      },
+      {
+        key: 'used',
+        label: 'Utilised capacity',
+        description: 'Total cargo space currently occupied by resources.',
+      },
+      {
+        key: 'available',
+        label: 'Available capacity',
+        description: 'Free cargo space remaining for new resources.',
+      },
+      {
+        key: 'contents',
+        label: 'Stored resources',
+        description: 'Manifest of the resources currently in inventory.',
+      },
+      {
+        key: 'lastTransaction',
+        label: 'Last transaction',
+        description: 'Summary of the most recent inventory change.',
+      },
+    ],
+    instantiate: () => new CargoHoldModule(),
   },
   {
     id: 'fabricator.basic',
@@ -192,7 +277,7 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
       {
         name: 'scan',
         label: 'Sweep area',
-        description: 'Trigger a survey sweep along the robot orientation.',
+        description: 'Trigger a survey sweep along the robot orientation with optional resource filtering.',
       },
     ],
     telemetry: [
@@ -216,7 +301,13 @@ const MODULE_LOOKUP = MODULE_LIBRARY.reduce<Record<string, ModuleBlueprint>>((ac
   return accumulator;
 }, {});
 
-export const DEFAULT_MODULE_LOADOUT = ['core.movement', 'arm.manipulator', 'fabricator.basic', 'sensor.survey'];
+export const DEFAULT_MODULE_LOADOUT = [
+  'core.movement',
+  'arm.manipulator',
+  'storage.cargo',
+  'fabricator.basic',
+  'sensor.survey',
+];
 
 export const getModuleBlueprint = (id: string): ModuleBlueprint | null => MODULE_LOOKUP[id] ?? null;
 

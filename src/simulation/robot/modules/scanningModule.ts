@@ -9,6 +9,7 @@ const roundTo = (value: number, decimals: number): number => {
 
 interface ScanPayload {
   rangeOverride?: number;
+  resourceType?: string;
 }
 
 export interface ScanningModuleOptions {
@@ -62,7 +63,10 @@ export class ScanningModule extends RobotModule {
       {
         label: 'Sweep area',
         summary: 'Emit a survey pulse and record the projected hit location.',
-        parameters: [{ key: 'rangeOverride', label: 'Range override', unit: 'units' }],
+        parameters: [
+          { key: 'rangeOverride', label: 'Range override', unit: 'units' },
+          { key: 'resourceType', label: 'Resource filter' },
+        ],
       },
     );
   }
@@ -104,6 +108,13 @@ export class ScanningModule extends RobotModule {
     const targetX = state.position.x + Math.cos(state.orientation) * range;
     const targetY = state.position.y + Math.sin(state.orientation) * range;
 
+    const resourceScan = typedContext.utilities.resourceField.scan({
+      origin: state.position,
+      orientation: state.orientation,
+      range,
+      resourceType: typedPayload.resourceType,
+    });
+
     this.scanSequence += 1;
     const result = {
       status: 'ok',
@@ -112,6 +123,18 @@ export class ScanningModule extends RobotModule {
       orientation: roundTo(state.orientation, 3),
       range: roundTo(range, 2),
       sequence: this.scanSequence,
+      filter: resourceScan.filter,
+      resources: {
+        filter: resourceScan.filter,
+        hits: resourceScan.hits.map((hit) => ({
+          id: hit.id,
+          type: hit.type,
+          position: { x: roundTo(hit.position.x, 2), y: roundTo(hit.position.y, 2) },
+          quantity: hit.quantity,
+          distance: roundTo(hit.distance, 2),
+        })),
+        total: resourceScan.total,
+      },
     };
 
     this.cooldownRemaining = this.port.getValue<number>('cooldownSeconds') ?? this.defaultCooldown;

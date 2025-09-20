@@ -48,7 +48,7 @@ export class RobotModule {
     };
   }
 
-  onAttach(_port?: unknown, _state?: unknown): void {
+  onAttach(_port?: unknown, _state?: unknown, _context?: unknown): void {
     // Subclasses can override to initialise their runtime state.
   }
 

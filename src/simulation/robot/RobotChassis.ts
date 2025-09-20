@@ -2,8 +2,10 @@ import { ModuleStack, type ModuleMetadata, type ModuleSnapshot } from './moduleS
 import { ModuleBus, ModulePort } from './moduleBus';
 import { RobotState, type RobotStateSnapshot, type RobotStateOptions, robotStateUtils } from './robotState';
 import type { RobotModule } from './RobotModule';
+import { InventoryStore } from './inventory';
+import { ResourceField, createDefaultResourceNodes } from '../resources/resourceField';
 
-const DEFAULT_CAPACITY = 6;
+const DEFAULT_CAPACITY = 8;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -38,12 +40,23 @@ export interface ModuleActionContext {
   state: RobotStateSnapshot;
   port: ModulePort;
   requestActuator: (channel: string, args: unknown, priority?: number) => void;
-  utilities: { robotStateUtils: typeof robotStateUtils };
+  utilities: {
+    robotStateUtils: typeof robotStateUtils;
+    inventory: InventoryStore;
+    resourceField: ResourceField;
+  };
+}
+
+export interface ModuleRuntimeContext {
+  inventory: InventoryStore;
+  resourceField: ResourceField;
 }
 
 export class RobotChassis {
   readonly state: RobotState;
   readonly moduleStack: ModuleStack;
+  readonly inventory: InventoryStore;
+  readonly resourceField: ResourceField;
   private readonly bus: ModuleBus;
   private readonly actuatorHandlers = new Map<string, ActuatorHandler>();
   private readonly pendingActuators = new Map<string, ActuatorRequest[]>();
@@ -53,6 +66,8 @@ export class RobotChassis {
     this.state = new RobotState(state);
     this.moduleStack = new ModuleStack({ capacity });
     this.bus = new ModuleBus();
+    this.inventory = new InventoryStore();
+    this.resourceField = new ResourceField(createDefaultResourceNodes());
 
     this.registerActuatorHandler('movement.linear', ({ request }) => {
       const payload = request.payload as { x?: number; y?: number } | undefined;
@@ -82,6 +97,10 @@ export class RobotChassis {
     };
   }
 
+  getInventorySnapshot(): ReturnType<InventoryStore['getSnapshot']> {
+    return this.inventory.getSnapshot();
+  }
+
   registerActuatorHandler(channel: string, handler: ActuatorHandler): void {
     this.actuatorHandlers.set(channel, handler);
   }
@@ -91,7 +110,14 @@ export class RobotChassis {
     const port = this.bus.registerModule(module.definition.id, (moduleId, channel, payload, priority) =>
       this.queueActuatorRequest(moduleId, channel, payload, priority),
     );
-    module.onAttach?.(port, this.getStateSnapshot());
+    module.onAttach?.(
+      port,
+      this.getStateSnapshot(),
+      {
+        inventory: this.inventory,
+        resourceField: this.resourceField,
+      } as ModuleRuntimeContext,
+    );
     return meta;
   }
 
@@ -195,7 +221,11 @@ export class RobotChassis {
       port,
       requestActuator: (channel, args, priority = 0) =>
         this.queueActuatorRequest(moduleId, channel, args, priority),
-      utilities: { robotStateUtils },
+      utilities: {
+        robotStateUtils,
+        inventory: this.inventory,
+        resourceField: this.resourceField,
+      },
     };
 
     return action.handler(payload, context);

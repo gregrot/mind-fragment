@@ -15,7 +15,7 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Simulation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Field Prototype' })).toBeVisible();
   await expect(page.getByLabel('Simulation shell')).toBeVisible();
   await expect(page.locator('.simulation-shell canvas')).toHaveCount(1);
 

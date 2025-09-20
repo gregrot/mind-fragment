@@ -25,9 +25,17 @@ const getWorkspaceDropzone = (): HTMLElement => {
   return zones[zones.length - 1];
 };
 
+const renderAppWithOverlay = () => {
+  render(<App />);
+  const programButtons = screen.getAllByTestId('select-robot');
+  const programButton = programButtons[programButtons.length - 1];
+  fireEvent.click(programButton);
+  expect(screen.getAllByTestId('robot-programming-overlay').length).toBeGreaterThan(0);
+};
+
 describe('block workspace drag and drop', () => {
   it('allows dragging a palette block into the workspace root', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -42,7 +50,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('supports dropping blocks into C-shaped slots', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -67,7 +75,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('moves existing blocks between containers', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -103,7 +111,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('allows event blocks to host starting behaviours', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -128,7 +136,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('populates both branches of a parallel block', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [parallelPaletteItem] = screen.getAllByTestId('palette-parallel');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -161,7 +169,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('prevents dropping a block into its own descendant', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -194,7 +202,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('compiles and reports a routine when Run Program is pressed', () => {
-    render(<App />);
+    renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();

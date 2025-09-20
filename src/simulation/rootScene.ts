@@ -5,6 +5,7 @@ import { RobotChassis } from './robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from './robot/modules/moduleLibrary';
 import type { CompiledProgram } from './runtime/blockProgram';
 import { BlockProgramRunner, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
+import type { InventorySnapshot } from './robot/inventory';
 
 interface TickPayload {
   deltaMS: number;
@@ -152,6 +153,21 @@ export class RootScene {
 
   getProgramStatus(): ProgramRunnerStatus {
     return this.programStatus;
+  }
+
+  getInventorySnapshot(): InventorySnapshot {
+    if (!this.robotCore) {
+      return { capacity: 0, used: 0, available: 0, entries: [] };
+    }
+    return this.robotCore.getInventorySnapshot();
+  }
+
+  subscribeInventory(listener: (snapshot: InventorySnapshot) => void): () => void {
+    if (!this.robotCore) {
+      listener({ capacity: 0, used: 0, available: 0, entries: [] });
+      return () => {};
+    }
+    return this.robotCore.inventory.subscribe(listener);
   }
 
   subscribeProgramStatus(listener: (status: ProgramRunnerStatus) => void): () => void {

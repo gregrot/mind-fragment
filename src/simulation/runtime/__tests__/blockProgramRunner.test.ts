@@ -83,4 +83,32 @@ describe('BlockProgramRunner', () => {
     const finalAngularPayload = finalAngularCommand?.[2] as { value?: number } | undefined;
     expect(finalAngularPayload?.value).toBeCloseTo(0);
   });
+
+  it('scans for resources and gathers them into inventory', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const program: CompiledProgram = {
+      instructions: [
+        { kind: 'scan', duration: 1, filter: null },
+        { kind: 'gather', duration: 1.5, target: 'auto' },
+      ],
+    };
+    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const initialInventory = robot.getInventorySnapshot();
+
+    runner.load(program);
+    runner.update(1);
+    robot.tick(1);
+    runner.update(2);
+    robot.tick(2);
+
+    const finalInventory = robot.getInventorySnapshot();
+    expect(finalInventory.used).toBeGreaterThan(initialInventory.used);
+    expect(actionSpy).toHaveBeenCalledWith('sensor.survey', 'scan', expect.any(Object));
+    expect(actionSpy).toHaveBeenCalledWith(
+      'arm.manipulator',
+      'gatherResource',
+      expect.objectContaining({ nodeId: expect.any(String) }),
+    );
+  });
 });

@@ -10,7 +10,9 @@ export interface Diagnostic {
 export type BlockInstruction =
   | { kind: 'move'; duration: number; speed: number }
   | { kind: 'turn'; duration: number; angularVelocity: number }
-  | { kind: 'wait'; duration: number };
+  | { kind: 'wait'; duration: number }
+  | { kind: 'scan'; duration: number; filter: string | null }
+  | { kind: 'gather'; duration: number; target: 'auto' };
 
 export interface CompiledProgram {
   instructions: BlockInstruction[];
@@ -24,6 +26,8 @@ export interface CompilationResult {
 const MOVE_SPEED = 80;
 const TURN_RATE = Math.PI / 2;
 const WAIT_DURATION = 1;
+const SCAN_DURATION = 1;
+const GATHER_DURATION = 1.5;
 const DEFAULT_REPEAT_COUNT = 3;
 
 interface CompilationContext {
@@ -64,6 +68,10 @@ const compileBlock = (
       return [{ kind: 'turn', duration: 1, angularVelocity: TURN_RATE }];
     case 'wait':
       return [{ kind: 'wait', duration: WAIT_DURATION }];
+    case 'scan-resources':
+      return [{ kind: 'scan', duration: SCAN_DURATION, filter: null }];
+    case 'gather-resource':
+      return [{ kind: 'gather', duration: GATHER_DURATION, target: 'auto' }];
     case 'repeat': {
       const inner = compileSequence(block.slots?.do, diagnostics, context);
       if (inner.length === 0) {

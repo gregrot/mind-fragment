@@ -292,6 +292,73 @@ body {
   font-style: italic;
 }
 
+.inventory-status {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(53, 91, 134, 0.12), rgba(23, 42, 74, 0.08));
+  border: 1px solid rgba(23, 42, 74, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inventory-status-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.inventory-status h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.inventory-status-capacity {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.7);
+  font-weight: 500;
+}
+
+.inventory-status-capacity strong {
+  font-size: 1.1rem;
+  color: #1e2a44;
+}
+
+.inventory-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inventory-status-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(30, 42, 68, 0.08);
+}
+
+.inventory-resource-name {
+  font-weight: 600;
+  color: #1e2a44;
+}
+
+.inventory-resource-quantity {
+  color: rgba(27, 35, 48, 0.65);
+}
+
+.inventory-status-empty {
+  margin: 0;
+  color: rgba(27, 35, 48, 0.6);
+  font-style: italic;
+}
+
 .module-inventory {
   margin-top: 1.5rem;
   padding: 1.1rem 1.25rem 1.35rem;

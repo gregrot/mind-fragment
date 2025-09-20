@@ -4,6 +4,7 @@ import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
 import { BLOCK_LIBRARY } from '../blocks/library';
 import type { WorkspaceState, DropTarget } from '../types/blocks';
+import styles from '../styles/RobotProgrammingOverlay.module.css';
 
 interface RobotProgrammingOverlayProps {
   workspace: WorkspaceState;
@@ -49,10 +50,10 @@ const RobotProgrammingOverlay = ({
   }, [onConfirm]);
 
   return (
-    <div className="robot-programming-overlay" data-testid="robot-programming-overlay">
-      <div className="robot-programming-backdrop" aria-hidden="true" />
+    <div className={styles.overlay} data-testid="robot-programming-overlay">
+      <div className={styles.backdrop} aria-hidden="true" />
       <div
-        className="robot-programming-dialog"
+        className={styles.dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="robot-programming-title"
@@ -60,36 +61,38 @@ const RobotProgrammingOverlay = ({
         ref={dialogRef}
         tabIndex={-1}
       >
-        <header className="robot-programming-header">
+        <header className={styles.header}>
           <div>
-            <p className="robot-programming-kicker">Selected robot</p>
-            <h2 id="robot-programming-title">Chassis {robotId}</h2>
-            <p id="robot-programming-description" className="robot-programming-description">
+            <p className={styles.kicker}>Selected robot</p>
+            <h2 id="robot-programming-title" className={styles.title}>
+              Chassis {robotId}
+            </h2>
+            <p id="robot-programming-description" className={styles.description}>
               Build or refine a routine by combining blocks from the palette. Deploy your changes to see the chassis respond in
               the world.
             </p>
           </div>
-          <button type="button" className="robot-programming-close" onClick={onClose}>
+          <button type="button" className={styles.close} onClick={onClose}>
             Close
           </button>
         </header>
-        <div className="robot-programming-content">
-          <aside className="robot-programming-palette">
+        <div className={styles.content}>
+          <aside className={styles.palette}>
             <h3>Block palette</h3>
             <BlockPalette blocks={BLOCK_LIBRARY} />
           </aside>
-          <section className="robot-programming-workspace">
+          <section className={styles.workspace}>
             <h3>Workspace</h3>
             <Workspace blocks={workspace} onDrop={onDrop} />
           </section>
         </div>
-        <footer className="robot-programming-footer">
+        <footer className={styles.footer}>
           <RuntimeControls workspace={workspace} />
-          <div className="robot-programming-actions">
-            <button type="button" className="robot-programming-secondary" onClick={onClose}>
+          <div className={styles.actions}>
+            <button type="button" className={styles.secondary} onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className="robot-programming-primary" onClick={handleConfirm}>
+            <button type="button" className={styles.primary} onClick={handleConfirm}>
               Deploy routine
             </button>
           </div>

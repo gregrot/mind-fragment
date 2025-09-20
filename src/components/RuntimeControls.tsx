@@ -3,6 +3,7 @@ import type { WorkspaceState } from '../types/blocks';
 import type { Diagnostic } from '../simulation/runtime/blockProgram';
 import { compileWorkspaceProgram } from '../simulation/runtime/blockProgram';
 import { useSimulationRuntime } from '../hooks/useSimulationRuntime';
+import styles from '../styles/RuntimeControls.module.css';
 
 interface RuntimeControlsProps {
   workspace: WorkspaceState;
@@ -43,13 +44,13 @@ const RuntimeControls = ({ workspace }: RuntimeControlsProps): JSX.Element => {
   const statusLabel = useMemo(() => formatStatus(status), [status]);
 
   return (
-    <div className="runtime-controls" data-testid="runtime-controls">
-      <div className="runtime-actions">
+    <div className={styles.controls} data-testid="runtime-controls">
+      <div className={styles.actions}>
         <button
           type="button"
           onClick={handleRun}
           disabled={status === 'running'}
-          className="runtime-button primary"
+          className={`${styles.button} ${styles.primary}`}
           data-testid="run-program"
         >
           {status === 'running' ? 'Running…' : 'Run Program'}
@@ -58,20 +59,24 @@ const RuntimeControls = ({ workspace }: RuntimeControlsProps): JSX.Element => {
           type="button"
           onClick={handleStop}
           disabled={status !== 'running'}
-          className="runtime-button secondary"
+          className={`${styles.button} ${styles.secondary}`}
           data-testid="stop-program"
         >
           Stop
         </button>
       </div>
-      <p className="runtime-status">
+      <p className={styles.status}>
         <strong>Status:</strong> {statusLabel}
       </p>
       {diagnostics.length > 0 ? (
-        <ul className="runtime-diagnostics">
+        <ul className={styles.diagnostics}>
           {diagnostics.map((diagnostic, index) => (
-            <li key={`${diagnostic.message}-${index}`} data-severity={diagnostic.severity}>
-              <span className="runtime-diagnostic-icon" aria-hidden="true">
+            <li
+              key={`${diagnostic.message}-${index}`}
+              className={styles.diagnosticItem}
+              data-severity={diagnostic.severity}
+            >
+              <span className={styles.diagnosticIcon} aria-hidden="true">
                 {diagnostic.severity === 'warning' ? '⚠️' : 'ℹ️'}
               </span>
               <span>{diagnostic.message}</span>
@@ -79,7 +84,7 @@ const RuntimeControls = ({ workspace }: RuntimeControlsProps): JSX.Element => {
           ))}
         </ul>
       ) : (
-        <p className="runtime-hint">Drag a "When Started" block into the workspace, add movement blocks, and press Run.</p>
+        <p className={styles.hint}>Drag a "When Started" block into the workspace, add movement blocks, and press Run.</p>
       )}
     </div>
   );

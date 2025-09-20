@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
 import type { BlockInstance, DropTarget } from '../types/blocks';
+import styles from '../styles/BlockView.module.css';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -40,21 +41,34 @@ const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null 
 
   const slotPath = [...path, block.instanceId];
 
+  const blockClassNames = [styles.block, 'block'];
+  switch (definition.category) {
+    case 'action':
+      blockClassNames.push(styles.blockAction);
+      break;
+    case 'c':
+      blockClassNames.push(styles.blockControl);
+      break;
+    case 'event':
+      blockClassNames.push(styles.blockEvent);
+      break;
+    default:
+      blockClassNames.push(styles.blockAction);
+      break;
+  }
+
+  const blockClassName = blockClassNames.join(' ');
+
   return (
-    <div
-      className={`block block-${definition.category} block-type-${definition.id}`}
-      draggable
-      onDragStart={handleDragStart}
-      data-testid={`block-${definition.id}`}
-    >
-      <header className="block-header">
-        <span className="block-title">{definition.label}</span>
+    <div className={blockClassName} draggable onDragStart={handleDragStart} data-testid={`block-${definition.id}`}>
+      <header className={styles.blockHeader}>
+        <span className={styles.blockTitle}>{definition.label}</span>
       </header>
       {definition.summary && definition.category !== 'action' ? (
-        <p className="block-summary">{definition.summary}</p>
+        <p className={styles.blockSummary}>{definition.summary}</p>
       ) : null}
       {definition.slots ? (
-        <div className="block-slots">
+        <div className={styles.blockSlots}>
           {definition.slots.map((slotName) => (
             <SlotView
               key={slotName}
@@ -101,15 +115,17 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop }: SlotViewProps): JSX
   const slotLabel = formatSlotLabel(slotName);
 
   return (
-    <section className="block-slot" data-testid={`slot-${slotName}`}>
-      <header className="slot-label">{slotLabel}</header>
+    <section className={styles.blockSlot} data-testid={`slot-${slotName}`}>
+      <header className={styles.slotLabel}>{slotLabel}</header>
       <div
-        className="slot-body"
+        className={styles.slotBody}
         data-testid={`slot-${slotName}-dropzone`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {blocks.length === 0 ? <div className="slot-placeholder">Drop blocks here</div> : null}
+        {blocks.length === 0 ? (
+          <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop blocks here</div>
+        ) : null}
         {blocks.map((childBlock) => (
           <BlockView key={childBlock.instanceId} block={childBlock} path={path} onDrop={onDrop} />
         ))}

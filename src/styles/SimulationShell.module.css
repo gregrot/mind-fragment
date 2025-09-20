@@ -1,0 +1,18 @@
+.shell {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  border-radius: 0;
+  background: var(--gradient-simulation);
+  overflow: hidden;
+  box-shadow: inset 0 0 120px var(--color-simulation-inner-shadow);
+  z-index: 0;
+}
+
+.shell canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

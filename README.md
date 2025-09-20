@@ -29,6 +29,17 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 - Palette now includes event anchors (When Started) and multi-branch control blocks (Parallel, Forever) so you can prototype branching flows quickly.
 - The components mirror the schema described in [Block Programming Plan](docs/planning/block-programming.md), keeping DO / THEN / ELSE slots visible for planning discussions.
 
+### Self-hosted font setup
+The sci-fi theme references Orbitron and Rajdhani via local `@font-face` rules, but the font binaries are intentionally left out of source control. To install them locally:
+
+1. Download Orbitron and Rajdhani from [Google Fonts](https://fonts.google.com/). Include the Regular (400) and Bold (700) weights for each family when exporting.
+2. Unzip the downloads and copy the `.ttf` files into `public/fonts/`, renaming them to match the expected filenames:
+   - `public/fonts/orbitron-400.ttf`
+   - `public/fonts/orbitron-700.ttf`
+   - `public/fonts/rajdhani-400.ttf`
+   - `public/fonts/rajdhani-700.ttf`
+3. Restart `npm run dev` so Vite picks up the new assets. The UI will fall back to system fonts if the files are absent, so you can still develop without them.
+
 ## Current Priorities
 1. Finalise the block schema and runtime contract outlined in the planning document, keeping legacy capabilities in mind.
 2. Sketch the rebuilt editor HUD and debugging affordances that support the experience beats in the steering notes.

@@ -29,6 +29,18 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     summary: 'Pause the routine for a single beat.'
   },
   {
+    id: 'scan-resources',
+    label: 'Scan Area',
+    category: 'action',
+    summary: 'Trigger the survey scanner to look for nearby resource nodes.'
+  },
+  {
+    id: 'gather-resource',
+    label: 'Gather Resource',
+    category: 'action',
+    summary: 'Harvest the closest detected resource node and store it in cargo.'
+  },
+  {
     id: 'repeat',
     label: 'Repeat',
     category: 'c',

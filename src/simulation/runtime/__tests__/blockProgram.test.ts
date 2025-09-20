@@ -27,6 +27,20 @@ describe('compileWorkspaceProgram', () => {
     expect(result.diagnostics).toHaveLength(0);
   });
 
+  it('emits scan and gather instructions', () => {
+    const start = createBlockInstance('start');
+    const scan = createBlockInstance('scan-resources');
+    const gather = createBlockInstance('gather-resource');
+    start.slots!.do = [scan, gather];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toEqual([
+      { kind: 'scan', duration: expect.any(Number), filter: null },
+      { kind: 'gather', duration: expect.any(Number), target: 'auto' },
+    ]);
+  });
+
   it('expands repeat blocks three times by default', () => {
     const start = createBlockInstance('start');
     const repeat = createBlockInstance('repeat');

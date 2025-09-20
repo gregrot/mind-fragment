@@ -25,5 +25,6 @@ These guidelines apply to the entire repository.
 ## Maintenance
 - Only Markdown files should live in the repository unless a task explicitly requires another format.
 - No automated tests are required for documentation-only updates.
+- Every non-documentation task must include appropriate automated coverage. Add or extend unit tests and Playwright scenarios alongside the feature work, and run `npm test`, `npm run typecheck`, and `npx playwright test` before concluding the task.
 - The codebase now uses TypeScript. Run `npm run typecheck` alongside existing checks when modifying source files, and prefer `npx tsx` for executing Node-based tooling.
 - Playwright UI checks run in CI. When setting up the environment locally, run `npx playwright install --with-deps` after installing npm packages so the browsers and system dependencies are present.

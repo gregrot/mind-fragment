@@ -15,9 +15,18 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Field Prototype' })).toBeVisible();
   await expect(page.getByLabel('Simulation shell')).toBeVisible();
   await expect(page.locator('.simulation-shell canvas')).toHaveCount(1);
+  const toolbar = page.getByRole('toolbar', { name: 'Simulation interface controls' });
+  await expect(toolbar).toBeVisible();
+  const programButton = toolbar.getByRole('button', { name: 'Program robot' });
+  await expect(programButton).toBeVisible();
+  await programButton.click();
+  const overlay = page.getByTestId('robot-programming-overlay');
+  await expect(overlay).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Programming' })).toHaveAttribute('aria-selected', 'true');
+  await overlay.getByRole('button', { name: 'Close' }).click();
+  await expect(overlay).toBeHidden();
 
   await page.mouse.move(10, 10);
   await page.mouse.move(200, 150);

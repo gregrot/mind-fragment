@@ -34,8 +34,6 @@ test.describe('resource scanning and gathering', () => {
   });
 
   test('player can scan the area and gather resources into cargo', async ({ page }) => {
-    await expect(page.getByTestId('inventory-status')).toBeVisible();
-
     await dragPaletteBlock(page, 'start', workspaceDropzone);
     await dragPaletteBlock(page, 'scan-resources', '[data-testid="slot-do-dropzone"]');
     await dragPaletteBlock(page, 'gather-resource', '[data-testid="slot-do-dropzone"]');
@@ -43,6 +41,8 @@ test.describe('resource scanning and gathering', () => {
     await page.getByTestId('run-program').click();
 
     await expect(page.getByText('Routine completed')).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('tab', { name: 'Inventory' }).click();
+    await expect(page.getByTestId('inventory-status')).toBeVisible();
     const contents = page.getByTestId('inventory-contents');
     await expect(contents).toBeVisible();
     await expect(contents).toContainText('Ferrous Ore');

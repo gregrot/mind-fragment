@@ -1,0 +1,108 @@
+.appShell {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  align-items: center;
+  padding: var(--space-12) var(--space-8) calc(var(--space-12) + var(--space-4));
+  overflow-x: hidden;
+}
+
+.worldHud {
+  position: relative;
+  z-index: 1;
+  width: min(100%, var(--layout-max-width));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.worldHudHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-glass-strong);
+  backdrop-filter: blur(var(--blur-strong));
+  border: 1px solid var(--color-panel-outline-strong);
+  box-shadow: var(--shadow-strong);
+}
+
+.worldHudKicker {
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.worldHudTitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-tight);
+}
+
+.worldHudSubtitle {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.worldHudPrimary {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-inverse);
+  background: var(--gradient-accent);
+  box-shadow: var(--shadow-glow-accent);
+  cursor: pointer;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.worldHudPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 26px 60px rgba(100, 249, 255, 0.45);
+}
+
+.worldHudPrimary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 30, 50, 0.85), 0 0 0 6px rgba(100, 249, 255, 0.45);
+}
+
+.worldHudPanels {
+  display: grid;
+  width: 100%;
+  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+@media (max-width: 960px) {
+  .worldHudHeader {
+    padding: var(--space-8);
+  }
+}
+
+@media (max-width: 720px) {
+  .appShell {
+    padding: var(--space-10) var(--space-6) calc(var(--space-12) + var(--space-2));
+  }
+
+  .worldHudHeader {
+    padding: var(--space-7);
+    border-radius: var(--radius-lg);
+  }
+
+  .worldHudPrimary {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}

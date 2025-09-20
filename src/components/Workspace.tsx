@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import BlockView from './BlockView';
 import type { BlockInstance, DropTarget } from '../types/blocks';
+import styles from '../styles/Workspace.module.css';
 
 interface WorkspaceProps {
   blocks: BlockInstance[];
@@ -25,14 +26,14 @@ const Workspace = ({ blocks, onDrop }: WorkspaceProps): JSX.Element => {
   }, []);
 
   return (
-    <div className="workspace" data-testid="workspace">
+    <div className={styles.workspace} data-testid="workspace">
       <div
-        className="workspace-dropzone"
+        className={styles.workspaceDropzone}
         data-testid="workspace-dropzone"
         onDragOver={handleDragOver}
         onDrop={handleRootDrop}
       >
-        {blocks.length === 0 ? <p className="workspace-empty">Drag blocks here to start building</p> : null}
+        {blocks.length === 0 ? <p className={styles.workspaceEmpty}>Drag blocks here to start building</p> : null}
         {blocks.map((block) => (
           <BlockView key={block.instanceId} block={block} path={[]} onDrop={onDrop} />
         ))}

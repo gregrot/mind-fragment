@@ -6,6 +6,7 @@ import InventoryStatus from './components/InventoryStatus';
 import RobotProgrammingOverlay from './components/RobotProgrammingOverlay';
 import { useRobotSelection } from './hooks/useRobotSelection';
 import { simulationRuntime } from './state/simulationRuntime';
+import styles from './styles/App.module.css';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 
@@ -25,27 +26,27 @@ const App = (): JSX.Element => {
   const isOverlayOpen = selectedRobotId !== null;
 
   return (
-    <div className="app-shell">
+    <div className={styles.appShell}>
       <SimulationShell />
-      <div className="world-hud" role="region" aria-label="World interface HUD">
-        <header className="world-hud-header">
+      <div className={styles.worldHud} role="region" aria-label="World interface HUD">
+        <header className={styles.worldHudHeader}>
           <div>
-            <p className="world-hud-kicker">Mind Fragment Simulation</p>
-            <h1>Field Prototype</h1>
-            <p className="world-hud-subtitle">
+            <p className={styles.worldHudKicker}>Mind Fragment Simulation</p>
+            <h1 className={styles.worldHudTitle}>Field Prototype</h1>
+            <p className={styles.worldHudSubtitle}>
               Monitor resources and open the block workspace to programme the selected chassis.
             </p>
           </div>
           <button
             type="button"
-            className="world-hud-primary"
+            className={styles.worldHudPrimary}
             onClick={handleProgramRobot}
             data-testid="select-robot"
           >
             Program robot
           </button>
         </header>
-        <div className="world-hud-panels">
+        <div className={styles.worldHudPanels}>
           <InventoryStatus />
           <ModuleInventory />
         </div>

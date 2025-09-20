@@ -1,4 +1,5 @@
 import useInventoryTelemetry from '../hooks/useInventoryTelemetry';
+import styles from '../styles/InventoryStatus.module.css';
 
 const formatResourceName = (resource: string): string =>
   resource
@@ -14,26 +15,28 @@ const InventoryStatus = (): JSX.Element => {
   const hasContents = snapshot.entries.length > 0;
 
   return (
-    <section className="inventory-status" aria-labelledby="inventory-status-heading" data-testid="inventory-status">
-      <header className="inventory-status-header">
-        <h3 id="inventory-status-heading">Cargo Inventory</h3>
-        <p className="inventory-status-capacity" data-testid="inventory-capacity">
-          <strong>{Math.round(snapshot.used)}</strong>
+    <section className={styles.inventory} aria-labelledby="inventory-status-heading" data-testid="inventory-status">
+      <header className={styles.header}>
+        <h3 id="inventory-status-heading" className={styles.title}>
+          Cargo Inventory
+        </h3>
+        <p className={styles.capacity} data-testid="inventory-capacity">
+          <strong className={styles.capacityValue}>{Math.round(snapshot.used)}</strong>
           <span aria-hidden="true"> / </span>
           {Math.round(snapshot.capacity)} units occupied
         </p>
       </header>
       {hasContents ? (
-        <ul className="inventory-status-list" data-testid="inventory-contents">
+        <ul className={styles.list} data-testid="inventory-contents">
           {snapshot.entries.map((entry) => (
-            <li key={entry.resource} className="inventory-status-entry">
-              <span className="inventory-resource-name">{formatResourceName(entry.resource)}</span>
-              <span className="inventory-resource-quantity">{formatUnits(entry.quantity)}</span>
+            <li key={entry.resource} className={styles.entry}>
+              <span className={styles.name}>{formatResourceName(entry.resource)}</span>
+              <span className={styles.quantity}>{formatUnits(entry.quantity)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="inventory-status-empty">No resources stored yet. Run a gather routine to collect materials.</p>
+        <p className={styles.empty}>No resources stored yet. Run a gather routine to collect materials.</p>
       )}
     </section>
   );

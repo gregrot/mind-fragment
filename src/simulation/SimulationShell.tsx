@@ -19,6 +19,7 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
     let rootScene: RootScene | null = null;
     let disposed = false;
     let cleanupResize: (() => void) | undefined;
+    let selectionCleanup: (() => void) | undefined;
 
     const init = async () => {
       const container = containerRef.current;
@@ -54,6 +55,15 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
       simulationRuntime.registerScene(rootScene);
       rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
 
+      selectionCleanup = rootScene.subscribeRobotSelection((robotId) => {
+        if (robotId) {
+          simulationRuntime.setSelectedRobot(robotId);
+          onRobotSelect?.();
+        } else {
+          simulationRuntime.clearSelectedRobot();
+        }
+      });
+
       const handleResize = () => {
         if (!rootScene || disposed) {
           return;
@@ -70,6 +80,7 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
     const cleanup = () => {
       disposed = true;
       cleanupResize?.();
+      selectionCleanup?.();
       if (rootScene) {
         simulationRuntime.unregisterScene(rootScene);
         rootScene.destroy();
@@ -92,7 +103,6 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
       className="simulation-shell"
       ref={containerRef}
       aria-label="Simulation shell"
-      onDoubleClick={onRobotSelect}
     />
   );
 };

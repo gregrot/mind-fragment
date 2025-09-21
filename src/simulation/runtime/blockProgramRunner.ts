@@ -21,15 +21,23 @@ interface ScanMemory {
   hits: ScanMemoryHit[];
 }
 
+type ExecutionFrameKind = 'sequence' | 'loop';
+
+interface ExecutionFrame {
+  kind: ExecutionFrameKind;
+  instructions: BlockInstruction[];
+  index: number;
+}
+
 export class BlockProgramRunner {
   private readonly robot: RobotChassis;
   private program: CompiledProgram | null = null;
   private currentInstruction: BlockInstruction | null = null;
-  private currentIndex = -1;
   private timeRemaining = 0;
   private status: ProgramRunnerStatus = 'idle';
   private statusListener: ((status: ProgramRunnerStatus) => void) | null = null;
   private scanMemory: ScanMemory | null = null;
+  private frames: ExecutionFrame[] = [];
 
   constructor(robot: RobotChassis, onStatusChange?: (status: ProgramRunnerStatus) => void) {
     this.robot = robot;
@@ -52,9 +60,9 @@ export class BlockProgramRunner {
   load(program: CompiledProgram): void {
     this.program = program;
     this.currentInstruction = null;
-    this.currentIndex = -1;
     this.timeRemaining = 0;
     this.scanMemory = null;
+    this.frames = [];
     this.resetMovement();
 
     if (!program.instructions || program.instructions.length === 0) {
@@ -62,6 +70,7 @@ export class BlockProgramRunner {
       return;
     }
 
+    this.frames.push({ kind: 'sequence', instructions: program.instructions, index: 0 });
     this.updateStatus('running');
     this.advanceInstruction();
   }
@@ -69,9 +78,9 @@ export class BlockProgramRunner {
   stop(): void {
     this.program = null;
     this.currentInstruction = null;
-    this.currentIndex = -1;
     this.timeRemaining = 0;
     this.scanMemory = null;
+    this.frames = [];
     this.resetMovement();
     this.updateStatus('idle');
   }
@@ -109,28 +118,57 @@ export class BlockProgramRunner {
       return;
     }
 
-    this.currentIndex += 1;
-    if (this.currentIndex >= this.program.instructions.length) {
-      this.finishProgram();
+    this.currentInstruction = null;
+
+    while (this.frames.length > 0) {
+      const frame = this.frames[this.frames.length - 1];
+
+      if (frame.index >= frame.instructions.length) {
+        if (frame.kind === 'loop') {
+          if (frame.instructions.length === 0) {
+            this.frames.pop();
+            continue;
+          }
+          frame.index = 0;
+          continue;
+        }
+
+        this.frames.pop();
+        continue;
+      }
+
+      const instruction = frame.instructions[frame.index];
+
+      if (instruction.kind === 'loop') {
+        frame.index += 1;
+        if (instruction.instructions.length === 0) {
+          continue;
+        }
+        this.frames.push({ kind: 'loop', instructions: instruction.instructions, index: 0 });
+        continue;
+      }
+
+      this.currentInstruction = instruction;
+      this.timeRemaining = Math.max(instruction.duration, 0);
+      frame.index += 1;
+      this.applyInstruction(instruction);
+
+      if (this.timeRemaining <= EPSILON) {
+        continue;
+      }
+
       return;
     }
 
-    const instruction = this.program.instructions[this.currentIndex];
-    this.currentInstruction = instruction;
-    this.timeRemaining = Math.max(instruction.duration, 0);
-    this.applyInstruction(instruction);
-
-    if (this.timeRemaining <= EPSILON) {
-      this.advanceInstruction();
-    }
+    this.finishProgram();
   }
 
   private finishProgram(): void {
     this.program = null;
     this.currentInstruction = null;
-    this.currentIndex = -1;
     this.timeRemaining = 0;
     this.resetMovement();
+    this.frames = [];
     this.updateStatus('completed');
   }
 
@@ -159,6 +197,10 @@ export class BlockProgramRunner {
         this.applyLinearVelocity(0, 0);
         this.applyAngularVelocity(0);
         this.executeGather();
+        break;
+      }
+      case 'loop': {
+        // Loops are handled via the execution stack when selecting instructions.
         break;
       }
       case 'wait':

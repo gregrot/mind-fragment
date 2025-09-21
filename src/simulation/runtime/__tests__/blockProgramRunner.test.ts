@@ -111,4 +111,69 @@ describe('BlockProgramRunner', () => {
       expect.objectContaining({ nodeId: expect.any(String) }),
     );
   });
+
+  it('loops gather instructions until the targeted node is depleted', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const availableNodes = robot.resourceField.list();
+    const robotState = robot.getStateSnapshot();
+    const targetNode = availableNodes.reduce((closest, node) => {
+      if (!closest) {
+        return node;
+      }
+      const dx = node.position.x - robotState.position.x;
+      const dy = node.position.y - robotState.position.y;
+      const distance = Math.hypot(dx, dy);
+      const closestDx = closest.position.x - robotState.position.x;
+      const closestDy = closest.position.y - robotState.position.y;
+      const closestDistance = Math.hypot(closestDx, closestDy);
+      return distance < closestDistance ? node : closest;
+    }, availableNodes[0]);
+
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'loop',
+          instructions: [{ kind: 'gather', duration: 1.5, target: 'auto' }],
+        },
+      ],
+    };
+
+    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    if (!targetNode) {
+      throw new Error('Expected at least one resource node for loop test.');
+    }
+
+    runner.load(program);
+
+    let safety = 0;
+    while (true) {
+      const quantity = robot.resourceField.list().find((node) => node.id === targetNode.id)?.quantity ?? 0;
+      if (quantity <= 0) {
+        break;
+      }
+      safety += 1;
+      runner.update(1.5);
+      robot.tick(1.5);
+      if (safety > 12) {
+        break;
+      }
+    }
+
+    const finalNode = robot.resourceField.list().find((node) => node.id === targetNode.id);
+    expect(finalNode?.quantity).toBe(0);
+
+    const gatherCallsWithIndex = actionSpy.mock.calls
+      .map((call, index) => ({ call, index }))
+      .filter((entry) => entry.call[1] === 'gatherResource');
+    expect(gatherCallsWithIndex.length).toBeGreaterThan(1);
+    const uniqueTargets = new Set(
+      gatherCallsWithIndex.map((entry) => ((entry.call[2] as { nodeId?: string }) ?? {}).nodeId),
+    );
+    expect(uniqueTargets).toEqual(new Set([targetNode.id]));
+
+    const finalGatherIndex = gatherCallsWithIndex.at(-1)?.index ?? -1;
+    const finalResult = actionSpy.mock.results[finalGatherIndex]?.value as { remaining?: number } | undefined;
+    expect(finalResult?.remaining).toBe(0);
+  });
 });

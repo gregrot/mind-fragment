@@ -1,4 +1,4 @@
-import { type DragEvent, useCallback, useState } from 'react';
+import { type Dispatch, type DragEvent, type SetStateAction, useCallback, useState } from 'react';
 import { createBlockInstance, BLOCK_MAP } from '../blocks/library';
 import { insertBlock, removeBlock } from '../state/blockUtils';
 import type { DragPayload, DropTarget, WorkspaceState } from '../types/blocks';
@@ -44,6 +44,7 @@ const parsePayload = (event: DragEvent<HTMLElement>): DragPayload | null => {
 export function useBlockWorkspace(): {
   workspace: WorkspaceState;
   handleDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
+  replaceWorkspace: Dispatch<SetStateAction<WorkspaceState>>;
 } {
   const [workspace, setWorkspace] = useState<WorkspaceState>([]);
 
@@ -89,5 +90,6 @@ export function useBlockWorkspace(): {
   return {
     workspace,
     handleDrop,
+    replaceWorkspace: setWorkspace,
   };
 }

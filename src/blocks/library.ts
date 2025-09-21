@@ -41,6 +41,18 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     summary: 'Harvest the closest detected resource node and store it in cargo.'
   },
   {
+    id: 'return-home',
+    label: 'Return to Core',
+    category: 'action',
+    summary: 'Navigate back to the Mind Fragment to offload gathered scrap.'
+  },
+  {
+    id: 'deposit-cargo',
+    label: 'Deposit Cargo',
+    category: 'action',
+    summary: 'Transfer stored resources into the assembler reserves.'
+  },
+  {
     id: 'repeat',
     label: 'Repeat',
     category: 'c',

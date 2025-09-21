@@ -14,6 +14,9 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
     }
   });
 
+  await page.addInitScript(() => {
+    window.localStorage.setItem('mf.skipOnboarding', '1');
+  });
   await page.goto('/');
   await expect(page.getByLabel('Simulation shell')).toBeVisible();
   await expect(page.locator('.simulation-shell canvas')).toHaveCount(1);

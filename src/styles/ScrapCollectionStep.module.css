@@ -1,0 +1,160 @@
+.scrapShell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+  gap: var(--space-8);
+  padding: var(--space-10);
+  background: radial-gradient(circle at 10% 10%, rgba(12, 22, 46, 0.92), rgba(4, 10, 22, 0.95));
+  color: var(--color-text-inverse);
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.card {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.kicker {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.title {
+  font-size: clamp(1.5rem, 1.8vw, 2.15rem);
+  font-weight: var(--font-weight-bold);
+  margin: 0;
+}
+
+.copy {
+  font-size: var(--font-size-md);
+  line-height: 1.6;
+}
+
+.progress {
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.field {
+  position: relative;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(120, 200, 255, 0.32);
+  background: linear-gradient(200deg, rgba(18, 48, 82, 0.6), rgba(6, 12, 26, 0.85));
+  box-shadow: 0 32px 100px rgba(4, 12, 28, 0.6);
+  overflow: hidden;
+}
+
+.fieldGlow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 60% 50%, rgba(90, 220, 255, 0.25), transparent 65%);
+  pointer-events: none;
+}
+
+.scrap {
+  position: absolute;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 1px solid rgba(140, 220, 255, 0.7);
+  background: rgba(18, 28, 50, 0.65);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+}
+
+.scrap:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+.scrap:not(:disabled):hover,
+.scrap:not(:disabled):focus-visible {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 0 24px rgba(120, 240, 255, 0.6);
+  outline: none;
+}
+
+.scrapCore {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(140, 220, 255, 0.65);
+  background: var(--color-accent-primary);
+}
+
+.scrapCore[data-kind='ferrous'] {
+  background: linear-gradient(180deg, rgba(255, 170, 110, 0.9), rgba(255, 110, 65, 0.95));
+  box-shadow: 0 0 18px rgba(255, 142, 94, 0.7);
+}
+
+.actions {
+  position: absolute;
+  left: var(--space-10);
+  bottom: var(--space-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.primary {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-accent);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-3) var(--space-6);
+  cursor: pointer;
+  box-shadow: var(--shadow-glow-accent);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
+}
+
+.primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.primary:not(:disabled):hover,
+.primary:not(:disabled):focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 80px rgba(100, 249, 255, 0.55);
+  outline: none;
+}
+
+.hint {
+  font-size: var(--font-size-sm);
+  color: rgba(220, 240, 255, 0.85);
+  max-width: 19rem;
+}
+
+@media (max-width: 960px) {
+  .scrapShell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    padding: var(--space-8);
+  }
+
+  .field {
+    min-height: 16rem;
+  }
+
+  .actions {
+    position: static;
+    padding-top: var(--space-4);
+  }
+}

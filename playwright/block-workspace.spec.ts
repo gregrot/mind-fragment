@@ -32,6 +32,9 @@ async function dragWorkspaceBlock(page: Page, blockId: string, targetSelector: s
 
 test.describe('block workspace drag-and-drop', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('mf.skipOnboarding', '1');
+    });
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
     await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();

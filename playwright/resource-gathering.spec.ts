@@ -28,6 +28,9 @@ async function dragPaletteBlock(page: Page, blockId: string, targetSelector: str
 
 test.describe('resource scanning and gathering', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('mf.skipOnboarding', '1');
+    });
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
     await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();

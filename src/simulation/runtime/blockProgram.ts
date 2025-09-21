@@ -12,7 +12,8 @@ export type BlockInstruction =
   | { kind: 'turn'; duration: number; angularVelocity: number }
   | { kind: 'wait'; duration: number }
   | { kind: 'scan'; duration: number; filter: string | null }
-  | { kind: 'gather'; duration: number; target: 'auto' };
+  | { kind: 'gather'; duration: number; target: 'auto' }
+  | { kind: 'loop'; instructions: BlockInstruction[] };
 
 export interface CompiledProgram {
   instructions: BlockInstruction[];
@@ -107,7 +108,17 @@ const compileBlock = (
       }
       return [...branchA, ...branchB];
     }
-    case 'forever':
+    case 'forever': {
+      const inner = compileSequence(block.slots?.do, diagnostics, context);
+      if (inner.length === 0) {
+        diagnostics.push({
+          severity: 'warning',
+          message: 'Forever blocks need actions inside them to have an effect.',
+        });
+        return [];
+      }
+      return [{ kind: 'loop', instructions: inner }];
+    }
     case 'if':
     default: {
       if (!context.unsupportedBlocks.has(block.type)) {

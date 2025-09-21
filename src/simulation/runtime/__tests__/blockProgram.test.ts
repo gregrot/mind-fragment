@@ -41,6 +41,25 @@ describe('compileWorkspaceProgram', () => {
     ]);
   });
 
+  it('wraps forever blocks in loop instructions so the runner can repeat them', () => {
+    const start = createBlockInstance('start');
+    const forever = createBlockInstance('forever');
+    const gather = createBlockInstance('gather-resource');
+    forever.slots!.do = [gather];
+    start.slots!.do = [forever];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(1);
+    expect(result.program.instructions[0]).toMatchObject({ kind: 'loop' });
+    const loop = result.program.instructions[0];
+    if (loop.kind !== 'loop') {
+      throw new Error('Expected a loop instruction to be emitted.');
+    }
+    expect(loop.instructions).toHaveLength(1);
+    expect(loop.instructions[0]).toMatchObject({ kind: 'gather', target: 'auto' });
+  });
+
   it('expands repeat blocks three times by default', () => {
     const start = createBlockInstance('start');
     const repeat = createBlockInstance('repeat');

@@ -129,7 +129,7 @@ const SimulationOverlay = ({
               role="tab"
               id={`simulation-overlay-tab-${tab}`}
               aria-selected={activeTab === tab}
-              aria-controls={`simulation-overlay-panel-${tab}`}
+              aria-controls={activeTab === tab ? `simulation-overlay-panel-${tab}` : undefined}
               tabIndex={activeTab === tab ? 0 : -1}
               className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`.trim()}
               data-variant={tab}
@@ -145,6 +145,8 @@ const SimulationOverlay = ({
             role="tabpanel"
             aria-labelledby="simulation-overlay-tab-inventory"
             hidden={activeTab !== 'inventory'}
+            aria-hidden={activeTab !== 'inventory'}
+            style={{ display: activeTab === 'inventory' ? undefined : 'none' }}
             className={styles.panel}
           >
             <InventoryStatus />
@@ -154,6 +156,8 @@ const SimulationOverlay = ({
             role="tabpanel"
             aria-labelledby="simulation-overlay-tab-catalog"
             hidden={activeTab !== 'catalog'}
+            aria-hidden={activeTab !== 'catalog'}
+            style={{ display: activeTab === 'catalog' ? undefined : 'none' }}
             className={styles.panel}
           >
             <ModuleInventory />
@@ -163,6 +167,8 @@ const SimulationOverlay = ({
             role="tabpanel"
             aria-labelledby="simulation-overlay-tab-programming"
             hidden={activeTab !== 'programming'}
+            aria-hidden={activeTab !== 'programming'}
+            style={{ display: activeTab === 'programming' ? undefined : 'none' }}
             className={`${styles.panel} ${styles.panelProgramming}`}
           >
             <RobotProgrammingPanel

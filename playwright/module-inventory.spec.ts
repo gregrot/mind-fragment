@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 test('module catalogue lists installed modules with hooks and telemetry', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('mf.skipOnboarding', '1');
+  });
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Catalogue' }).click();

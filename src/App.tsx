@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import SimulationShell from './simulation/SimulationShell';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 import SimulationOverlay, { type OverlayTab } from './components/SimulationOverlay';
+import OnboardingFlow from './onboarding/OnboardingFlow';
 import { useRobotSelection } from './hooks/useRobotSelection';
 import { simulationRuntime } from './state/simulationRuntime';
 import styles from './styles/App.module.css';
@@ -11,7 +12,7 @@ const DEFAULT_ROBOT_ID = 'MF-01';
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
 const App = (): JSX.Element => {
-  const { workspace, handleDrop } = useBlockWorkspace();
+  const { workspace, handleDrop, replaceWorkspace } = useBlockWorkspace();
   const { selectedRobotId, clearSelection } = useRobotSelection();
   const [isOverlayOpen, setOverlayOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<OverlayTab>('inventory');
@@ -150,6 +151,7 @@ const App = (): JSX.Element => {
         onDrop={handleDrop}
         robotId={activeRobotId}
       />
+      <OnboardingFlow replaceWorkspace={replaceWorkspace} openProgrammingOverlay={handleProgramRobot} />
     </div>
   );
 };

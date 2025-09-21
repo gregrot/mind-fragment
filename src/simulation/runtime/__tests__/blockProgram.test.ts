@@ -84,4 +84,21 @@ describe('compileWorkspaceProgram', () => {
     const result = compileWorkspaceProgram(buildWorkspace(start));
     expect(result.program.instructions.map((instruction) => instruction.kind)).toEqual(['move', 'turn']);
   });
+
+  it('compiles the THEN branch of conditionals with a placeholder diagnostic', () => {
+    const start = createBlockInstance('start');
+    const conditional = createBlockInstance('if');
+    const thenTurn = createBlockInstance('turn');
+    const elseMove = createBlockInstance('move');
+
+    conditional.slots!.then = [thenTurn];
+    conditional.slots!.else = [elseMove];
+    start.slots!.do = [conditional];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions.map((instruction) => instruction.kind)).toEqual(['turn']);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes('Conditionals'))).toBe(true);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes('Else branches'))).toBe(true);
+  });
 });

@@ -33,11 +33,15 @@ const DEFAULT_REPEAT_COUNT = 3;
 
 interface CompilationContext {
   repeatInfoIssued: boolean;
+  conditionalInfoIssued: boolean;
+  conditionalElseWarned: boolean;
   unsupportedBlocks: Set<string>;
 }
 
 const createContext = (): CompilationContext => ({
   repeatInfoIssued: false,
+  conditionalInfoIssued: false,
+  conditionalElseWarned: false,
   unsupportedBlocks: new Set<string>(),
 });
 
@@ -73,6 +77,10 @@ const compileBlock = (
       return [{ kind: 'scan', duration: SCAN_DURATION, filter: null }];
     case 'gather-resource':
       return [{ kind: 'gather', duration: GATHER_DURATION, target: 'auto' }];
+    case 'return-home':
+      return [{ kind: 'move', duration: 1, speed: MOVE_SPEED }];
+    case 'deposit-cargo':
+      return [{ kind: 'wait', duration: WAIT_DURATION }];
     case 'repeat': {
       const inner = compileSequence(block.slots?.do, diagnostics, context);
       if (inner.length === 0) {
@@ -119,7 +127,29 @@ const compileBlock = (
       }
       return [{ kind: 'loop', instructions: inner }];
     }
-    case 'if':
+    case 'if': {
+      const thenInstructions = compileSequence(block.slots?.then, diagnostics, context);
+      const elseInstructions = compileSequence(block.slots?.else, diagnostics, context);
+
+      if (!context.conditionalInfoIssued) {
+        diagnostics.push({
+          severity: 'info',
+          message:
+            'Conditionals are wired to always follow their THEN branch while sensor inputs are stubbed in this slice.',
+        });
+        context.conditionalInfoIssued = true;
+      }
+
+      if (elseInstructions.length > 0 && !context.conditionalElseWarned) {
+        diagnostics.push({
+          severity: 'warning',
+          message: 'Else branches are ignored for now; add recovery steps under THEN to handle hazards.',
+        });
+        context.conditionalElseWarned = true;
+      }
+
+      return thenInstructions;
+    }
     default: {
       if (!context.unsupportedBlocks.has(block.type)) {
         diagnostics.push({

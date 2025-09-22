@@ -1,4 +1,4 @@
-import { useCallback, type DragEvent } from 'react';
+import { useCallback, useLayoutEffect, useRef, type DragEvent } from 'react';
 import BlockPalette from './BlockPalette';
 import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
@@ -21,9 +21,18 @@ const RobotProgrammingPanel = ({
   onConfirm,
   robotId,
 }: RobotProgrammingPanelProps): JSX.Element => {
+  const paletteRef = useRef<HTMLDivElement | null>(null);
   const handleConfirm = useCallback(() => {
     onConfirm();
   }, [onConfirm]);
+
+  useLayoutEffect(() => {
+    const paletteList = paletteRef.current?.querySelector('[data-testid=\"block-palette-list\"]') as HTMLElement | null;
+    const target = paletteList ?? paletteRef.current;
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'start' });
+    }
+  }, [robotId]);
 
   return (
     <div className={styles.programming}>
@@ -35,7 +44,7 @@ const RobotProgrammingPanel = ({
         </p>
       </div>
       <div className={styles.layout} data-testid="programming-layout">
-        <aside className={styles.palette}>
+        <aside className={styles.palette} ref={paletteRef}>
           <h4>Block palette</h4>
           <BlockPalette blocks={BLOCK_LIBRARY} />
         </aside>

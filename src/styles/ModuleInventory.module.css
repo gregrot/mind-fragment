@@ -203,13 +203,54 @@
 @media (max-width: 520px) {
   .inventory {
     padding: var(--space-3) var(--space-3) var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .heading {
+    font-size: var(--font-size-md);
+  }
+
+  .summary {
+    font-size: var(--font-size-xs);
+  }
+
+  .list {
+    gap: var(--space-2);
   }
 
   .card {
-    padding: var(--space-3);
+    padding: var(--space-2) var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .cardTitle h4 {
+    font-size: var(--font-size-md);
+  }
+
+  .cardTitle p {
+    font-size: var(--font-size-xs);
+  }
+
+  .meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .status {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .details {
+    gap: var(--space-2);
+  }
+
+  .section {
+    gap: var(--space-1);
   }
 
   .section ul {
-    padding-left: 1rem;
+    padding-left: 0.9rem;
+    gap: var(--space-1);
   }
 }

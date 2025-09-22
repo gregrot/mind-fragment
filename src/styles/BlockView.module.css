@@ -111,3 +111,43 @@
     padding: var(--space-2);
   }
 }
+
+@media (max-width: 520px) {
+  .block {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+
+  .blockHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .blockTitle {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockSummary {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockSlots {
+    gap: var(--space-1);
+  }
+
+  .blockSlot {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+
+  .slotBody {
+    min-height: 2rem;
+    gap: var(--space-1);
+  }
+
+  .slotPlaceholder {
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+  }
+}

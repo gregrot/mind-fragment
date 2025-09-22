@@ -1,7 +1,8 @@
-import { useCallback, type MouseEvent } from 'react';
+import { useCallback, useRef, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
-import type { BlockInstance, DropTarget } from '../types/blocks';
+import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
+import { getDropTargetFromTouchEvent } from '../utils/dropTarget';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -15,14 +16,17 @@ interface BlockViewProps {
   block: BlockInstance;
   path: string[];
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 }
 
-const BlockView = ({ block, path, onDrop, onUpdateBlock }: BlockViewProps): JSX.Element | null => {
+const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
     return null;
   }
+
+  const touchPayloadRef = useRef<DragPayload | null>(null);
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -85,8 +89,54 @@ const BlockView = ({ block, path, onDrop, onUpdateBlock }: BlockViewProps): JSX.
     event.stopPropagation();
   }, []);
 
+  const handleStatusTouchStart = useCallback((event: ReactTouchEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  }, []);
+
+  const handleTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!onTouchDrop) {
+        return;
+      }
+
+      touchPayloadRef.current = { source: 'workspace', instanceId: block.instanceId };
+      event.stopPropagation();
+    },
+    [block.instanceId, onTouchDrop],
+  );
+
+  const handleTouchEnd = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!onTouchDrop || !touchPayloadRef.current) {
+        touchPayloadRef.current = null;
+        return;
+      }
+
+      const dropTarget = getDropTargetFromTouchEvent(event.nativeEvent);
+      if (dropTarget) {
+        onTouchDrop(touchPayloadRef.current, dropTarget);
+        event.preventDefault();
+      }
+
+      touchPayloadRef.current = null;
+    },
+    [onTouchDrop],
+  );
+
+  const handleTouchCancel = useCallback(() => {
+    touchPayloadRef.current = null;
+  }, []);
+
   return (
-    <div className={blockClassName} draggable onDragStart={handleDragStart} data-testid={`block-${definition.id}`}>
+    <div
+      className={blockClassName}
+      draggable
+      onDragStart={handleDragStart}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      data-testid={`block-${definition.id}`}
+    >
       <header className={styles.blockHeader}>
         <span className={styles.blockTitle}>{definition.label}</span>
       </header>
@@ -100,6 +150,7 @@ const BlockView = ({ block, path, onDrop, onUpdateBlock }: BlockViewProps): JSX.
             type="button"
             className={styles.blockToggle}
             onMouseDown={handleStatusMouseDown}
+            onTouchStart={handleStatusTouchStart}
             onClick={handleToggleStatusValue}
             data-testid={`block-${definition.id}-toggle`}
           >
@@ -117,6 +168,7 @@ const BlockView = ({ block, path, onDrop, onUpdateBlock }: BlockViewProps): JSX.
               blocks={block.slots?.[slotName] ?? []}
               path={slotPath}
               onDrop={onDrop}
+              onTouchDrop={onTouchDrop}
               onUpdateBlock={onUpdateBlock}
             />
           ))}
@@ -132,10 +184,11 @@ interface SlotViewProps {
   blocks: BlockInstance[];
   path: string[];
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 }
 
-const SlotView = ({ owner, slotName, blocks, path, onDrop, onUpdateBlock }: SlotViewProps): JSX.Element => {
+const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdateBlock }: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
@@ -162,6 +215,11 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onUpdateBlock }: Slot
       <div
         className={styles.slotBody}
         data-testid={`slot-${slotName}-dropzone`}
+        data-drop-target-kind="slot"
+        data-drop-target-owner-id={owner.instanceId}
+        data-drop-target-slot-name={slotName}
+        data-drop-target-position={blocks.length}
+        data-drop-target-ancestors={path.join(',')}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
@@ -174,6 +232,7 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onUpdateBlock }: Slot
             block={childBlock}
             path={path}
             onDrop={onDrop}
+            onTouchDrop={onTouchDrop}
             onUpdateBlock={onUpdateBlock}
           />
         ))}

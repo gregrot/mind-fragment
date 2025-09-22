@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, type DragEvent } from 'react';
 import InventoryStatus from './InventoryStatus';
 import ModuleInventory from './ModuleInventory';
 import RobotProgrammingPanel from './RobotProgrammingPanel';
-import type { WorkspaceState, DropTarget, BlockInstance } from '../types/blocks';
+import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
 import styles from '../styles/SimulationOverlay.module.css';
 
 export type OverlayTab = 'inventory' | 'catalog' | 'programming';
@@ -23,6 +23,7 @@ interface SimulationOverlayProps {
   onConfirm: () => void;
   workspace: WorkspaceState;
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
+  onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   robotId: string;
 }
@@ -35,6 +36,7 @@ const SimulationOverlay = ({
   onConfirm,
   workspace,
   onDrop,
+  onTouchDrop,
   onUpdateBlock,
   robotId,
 }: SimulationOverlayProps): JSX.Element | null => {
@@ -176,6 +178,7 @@ const SimulationOverlay = ({
             <RobotProgrammingPanel
               workspace={workspace}
               onDrop={onDrop}
+              onTouchDrop={onTouchDrop}
               onUpdateBlock={onUpdateBlock}
               onClose={onClose}
               onConfirm={onConfirm}

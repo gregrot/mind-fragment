@@ -3,12 +3,13 @@ import BlockPalette from './BlockPalette';
 import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
 import { BLOCK_LIBRARY } from '../blocks/library';
-import type { WorkspaceState, DropTarget, BlockInstance } from '../types/blocks';
+import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
 import styles from '../styles/RobotProgrammingPanel.module.css';
 
 interface RobotProgrammingPanelProps {
   workspace: WorkspaceState;
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
+  onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onClose: () => void;
   onConfirm: () => void;
@@ -18,6 +19,7 @@ interface RobotProgrammingPanelProps {
 const RobotProgrammingPanel = ({
   workspace,
   onDrop,
+  onTouchDrop,
   onUpdateBlock,
   onClose,
   onConfirm,
@@ -48,11 +50,16 @@ const RobotProgrammingPanel = ({
       <div className={styles.layout} data-testid="programming-layout">
         <aside className={styles.palette} ref={paletteRef}>
           <h4>Block palette</h4>
-          <BlockPalette blocks={BLOCK_LIBRARY} />
+          <BlockPalette blocks={BLOCK_LIBRARY} onTouchDrop={onTouchDrop} />
         </aside>
         <section className={styles.workspace}>
           <h4>Workspace</h4>
-          <Workspace blocks={workspace} onDrop={onDrop} onUpdateBlock={onUpdateBlock} />
+          <Workspace
+            blocks={workspace}
+            onDrop={onDrop}
+            onTouchDrop={onTouchDrop}
+            onUpdateBlock={onUpdateBlock}
+          />
         </section>
       </div>
       <footer className={styles.footer}>

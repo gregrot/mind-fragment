@@ -112,6 +112,37 @@ describe('BlockProgramRunner', () => {
     );
   });
 
+  it('drops carried resources when executing a deposit instruction', () => {
+    const robot = createRobot();
+    robot.inventory.store('ferrous-ore', 6);
+    robot.inventory.store('silicate-crystal', 3);
+
+    const runner = new BlockProgramRunner(robot);
+    const program: CompiledProgram = {
+      instructions: [{ kind: 'deposit', duration: 1 }],
+    };
+
+    runner.load(program);
+    runner.update(1);
+    robot.tick(1);
+
+    const inventoryAfter = robot.getInventorySnapshot();
+    expect(inventoryAfter.used).toBe(0);
+
+    const robotState = robot.getStateSnapshot();
+    const nodes = robot.resourceField.list();
+    const nearbyNodes = nodes.filter((node) => {
+      const dx = node.position.x - robotState.position.x;
+      const dy = node.position.y - robotState.position.y;
+      return Math.hypot(dx, dy) <= 1;
+    });
+    expect(nearbyNodes.length).toBeGreaterThanOrEqual(2);
+    const ferrousPile = nearbyNodes.find((node) => node.type === 'ferrous-ore');
+    const silicatePile = nearbyNodes.find((node) => node.type === 'silicate-crystal');
+    expect(ferrousPile?.quantity).toBeGreaterThanOrEqual(6);
+    expect(silicatePile?.quantity).toBeGreaterThanOrEqual(3);
+  });
+
   it('loops gather instructions until the targeted node is depleted', () => {
     const robot = createRobot();
     const runner = new BlockProgramRunner(robot);

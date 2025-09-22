@@ -137,6 +137,8 @@
 
 .panelProgramming {
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @media (max-width: 960px) {

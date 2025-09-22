@@ -41,9 +41,11 @@
 .layout {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(360px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-6);
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .palette,
@@ -58,6 +60,7 @@
   backdrop-filter: blur(var(--blur-soft));
   min-height: 0;
   overflow: hidden;
+  height: 100%;
 }
 
 .palette h4,
@@ -133,6 +136,7 @@
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
   }
 }
 

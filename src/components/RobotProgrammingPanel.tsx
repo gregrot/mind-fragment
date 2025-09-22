@@ -34,7 +34,7 @@ const RobotProgrammingPanel = ({
           Combine blocks from the palette and deploy updates to steer the prototype within the simulation.
         </p>
       </div>
-      <div className={styles.layout}>
+      <div className={styles.layout} data-testid="programming-layout">
         <aside className={styles.palette}>
           <h4>Block palette</h4>
           <BlockPalette blocks={BLOCK_LIBRARY} />

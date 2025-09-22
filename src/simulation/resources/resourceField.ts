@@ -72,36 +72,62 @@ export interface HarvestResult {
   distance: number;
 }
 
+export type ResourceFieldEvent =
+  | { type: 'added'; node: ResourceNode }
+  | { type: 'updated'; node: ResourceNode }
+  | { type: 'depleted'; node: ResourceNode }
+  | { type: 'restored'; node: ResourceNode }
+  | { type: 'removed'; nodeId: string };
+
+type ResourceFieldListener = (event: ResourceFieldEvent) => void;
+
 const DEFAULT_FIELD_OF_VIEW = Math.PI / 2;
 const DEFAULT_MAX_RESULTS = 6;
 const DEFAULT_MAX_DISTANCE = 200;
 
 export class ResourceField {
   private readonly nodes = new Map<string, ResourceNode>();
+  private readonly listeners = new Set<ResourceFieldListener>();
 
   constructor(initialNodes: ResourceNode[] = []) {
     for (const node of initialNodes) {
       if (!node?.id) {
         continue;
       }
-      this.nodes.set(node.id, {
-        id: node.id,
-        type: node.type,
-        position: { x: node.position.x, y: node.position.y },
-        quantity: Math.max(node.quantity, 0),
-        metadata: node.metadata ? { ...node.metadata } : undefined,
-      });
+      this.nodes.set(node.id, this.cloneNode(node));
     }
   }
 
   list(): ResourceNode[] {
-    return [...this.nodes.values()].map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: { ...node.position },
-      quantity: node.quantity,
-      metadata: node.metadata ? { ...node.metadata } : undefined,
-    }));
+    return [...this.nodes.values()].map((node) => this.cloneNode(node));
+  }
+
+  subscribe(listener: ResourceFieldListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  upsertNode(node: ResourceNode): ResourceNode {
+    if (!node?.id) {
+      throw new Error('Resource node requires an id.');
+    }
+
+    const normalised = this.cloneNode(node);
+    const exists = this.nodes.has(normalised.id);
+    this.nodes.set(normalised.id, normalised);
+    this.notifyListeners({ type: exists ? 'updated' : 'added', node: this.cloneNode(normalised) });
+    return this.cloneNode(normalised);
+  }
+
+  removeNode(nodeId: string): boolean {
+    if (!this.nodes.has(nodeId)) {
+      return false;
+    }
+    this.nodes.delete(nodeId);
+    this.notifyListeners({ type: 'removed', nodeId });
+    return true;
   }
 
   scan({
@@ -209,6 +235,14 @@ export class ResourceField {
     const harvested = Math.min(requested, node.quantity);
     node.quantity -= harvested;
 
+    if (harvested > 0) {
+      if (node.quantity > 0) {
+        this.notifyListeners({ type: 'updated', node: this.cloneNode(node) });
+      } else {
+        this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
+      }
+    }
+
     return {
       status: node.quantity > 0 ? 'ok' : 'depleted',
       nodeId,
@@ -224,8 +258,26 @@ export class ResourceField {
     if (!node || !Number.isFinite(amount) || amount <= 0) {
       return node?.quantity ?? 0;
     }
+    const previous = node.quantity;
     node.quantity += amount;
+    this.notifyListeners({ type: previous <= 0 ? 'restored' : 'updated', node: this.cloneNode(node) });
     return node.quantity;
+  }
+
+  private notifyListeners(event: ResourceFieldEvent): void {
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  private cloneNode(node: ResourceNode): ResourceNode {
+    return {
+      id: node.id,
+      type: node.type,
+      position: { x: node.position.x, y: node.position.y },
+      quantity: Math.max(node.quantity, 0),
+      metadata: node.metadata ? { ...node.metadata } : undefined,
+    };
   }
 }
 

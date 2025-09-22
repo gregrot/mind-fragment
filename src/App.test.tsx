@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { simulationRuntime } from './state/simulationRuntime';
 
@@ -238,6 +238,74 @@ describe('block workspace drag and drop', () => {
     expect(within(repeatBlocks[0]).getByTestId('block-move')).toBeInTheDocument();
   });
 
+  it('restores saved workspaces when switching between robots', async () => {
+    renderAppWithOverlay();
+
+    const [startPaletteItem] = screen.getAllByTestId('palette-start');
+    const initialDropzone = getWorkspaceDropzone();
+    const startTransfer = createDataTransfer();
+
+    fireEvent.dragStart(startPaletteItem, { dataTransfer: startTransfer });
+    fireEvent.dragOver(initialDropzone, { dataTransfer: startTransfer });
+    fireEvent.drop(initialDropzone, { dataTransfer: startTransfer });
+
+    let workspace = getWorkspaceDropzone();
+    let startBlock = within(workspace).getByTestId('block-start');
+    let doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+    const [movePaletteItem] = screen.getAllByTestId('palette-move');
+    const moveTransfer = createDataTransfer();
+
+    fireEvent.dragStart(movePaletteItem, { dataTransfer: moveTransfer });
+    fireEvent.dragOver(doSlotDropzone, { dataTransfer: moveTransfer });
+    fireEvent.drop(doSlotDropzone, { dataTransfer: moveTransfer });
+
+    expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
+
+    act(() => {
+      simulationRuntime.setSelectedRobot('MF-02');
+    });
+
+    await waitFor(() => {
+      const switchedWorkspace = getWorkspaceDropzone();
+      expect(within(switchedWorkspace).queryByTestId('block-start')).toBeNull();
+    });
+
+    const [secondStartPaletteItem] = screen.getAllByTestId('palette-start');
+    const secondDropzone = getWorkspaceDropzone();
+    const secondStartTransfer = createDataTransfer();
+
+    fireEvent.dragStart(secondStartPaletteItem, { dataTransfer: secondStartTransfer });
+    fireEvent.dragOver(secondDropzone, { dataTransfer: secondStartTransfer });
+    fireEvent.drop(secondDropzone, { dataTransfer: secondStartTransfer });
+
+    workspace = getWorkspaceDropzone();
+    startBlock = within(workspace).getByTestId('block-start');
+    doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+    const [turnPaletteItem] = screen.getAllByTestId('palette-turn');
+    const turnTransfer = createDataTransfer();
+
+    fireEvent.dragStart(turnPaletteItem, { dataTransfer: turnTransfer });
+    fireEvent.dragOver(doSlotDropzone, { dataTransfer: turnTransfer });
+    fireEvent.drop(doSlotDropzone, { dataTransfer: turnTransfer });
+
+    expect(within(startBlock).getByTestId('block-turn')).toBeInTheDocument();
+
+    act(() => {
+      simulationRuntime.setSelectedRobot('MF-01');
+    });
+
+    await waitFor(() => {
+      const restoredWorkspace = getWorkspaceDropzone();
+      const restoredStart = within(restoredWorkspace).getByTestId('block-start');
+      expect(within(restoredStart).getByTestId('block-move')).toBeInTheDocument();
+      expect(within(restoredStart).queryByTestId('block-turn')).toBeNull();
+    });
+
+    act(() => {
+      simulationRuntime.clearSelectedRobot();
+    });
+  });
+
   it('allows dropping a palette block into the workspace root via touch', async () => {
     renderAppWithOverlay();
 
@@ -363,3 +431,4 @@ describe('block workspace drag and drop', () => {
     runSpy.mockRestore();
   });
 });
+

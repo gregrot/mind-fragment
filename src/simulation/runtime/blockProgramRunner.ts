@@ -200,6 +200,12 @@ export class BlockProgramRunner {
         this.executeGather();
         break;
       }
+      case 'deposit': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.executeDeposit();
+        break;
+      }
       case 'status-toggle': {
         this.applyLinearVelocity(0, 0);
         this.applyAngularVelocity(0);
@@ -303,6 +309,14 @@ export class BlockProgramRunner {
 
     const result = this.robot.invokeAction(MANIPULATOR_MODULE_ID, 'gatherResource', { nodeId });
     this.updateScanMemoryAfterGather(result);
+  }
+
+  private executeDeposit(): void {
+    if (!this.robot.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+      return;
+    }
+
+    this.robot.invokeAction(MANIPULATOR_MODULE_ID, 'dropResource', {});
   }
 
   private resolveGatherTarget(): string | null {

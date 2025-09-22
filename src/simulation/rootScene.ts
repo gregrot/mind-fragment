@@ -7,6 +7,7 @@ import { STATUS_MODULE_ID } from './robot/modules/statusModule';
 import type { CompiledProgram } from './runtime/blockProgram';
 import { BlockProgramRunner, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import type { InventorySnapshot } from './robot/inventory';
+import { ResourceLayer } from './resourceLayer';
 
 interface TickPayload {
   deltaMS: number;
@@ -35,6 +36,7 @@ export class RootScene {
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private selectedRobotId: string | null;
   private statusIndicator: Graphics | null;
+  private resourceLayer: ResourceLayer | null;
 
   constructor(app: Application) {
     this.app = app;
@@ -79,6 +81,7 @@ export class RootScene {
       this.robotCore.attachModule(moduleInstance);
     }
 
+    this.resourceLayer = null;
     this.robot = null;
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
@@ -91,6 +94,11 @@ export class RootScene {
       ? new BlockProgramRunner(this.robotCore, (status) => this.handleProgramStatus(status))
       : null;
     this.programStatus = this.programRunner?.getStatus() ?? 'idle';
+
+    if (this.robotCore) {
+      this.resourceLayer = new ResourceLayer(this.app.renderer, this.robotCore.resourceField);
+      this.rootLayer.addChild(this.resourceLayer.view);
+    }
 
     void this.initPlaceholderActors();
   }
@@ -252,6 +260,11 @@ export class RootScene {
     this.programStatus = 'idle';
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
+    if (this.resourceLayer) {
+      this.rootLayer.removeChild(this.resourceLayer.view);
+      this.resourceLayer.destroy();
+      this.resourceLayer = null;
+    }
     if (this.robotCore) {
       const modules = [...this.robotCore.moduleStack.list()].reverse();
       for (const module of modules) {

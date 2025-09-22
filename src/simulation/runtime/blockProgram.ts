@@ -13,6 +13,7 @@ export type BlockInstruction =
   | { kind: 'wait'; duration: number }
   | { kind: 'scan'; duration: number; filter: string | null }
   | { kind: 'gather'; duration: number; target: 'auto' }
+  | { kind: 'deposit'; duration: number }
   | { kind: 'status-toggle'; duration: number }
   | { kind: 'status-set'; duration: number; value: boolean }
   | { kind: 'loop'; instructions: BlockInstruction[] };
@@ -89,7 +90,7 @@ const compileBlock = (
     case 'return-home':
       return [{ kind: 'move', duration: 1, speed: MOVE_SPEED }];
     case 'deposit-cargo':
-      return [{ kind: 'wait', duration: WAIT_DURATION }];
+      return [{ kind: 'deposit', duration: WAIT_DURATION }];
     case 'repeat': {
       const inner = compileSequence(block.slots?.do, diagnostics, context);
       if (inner.length === 0) {

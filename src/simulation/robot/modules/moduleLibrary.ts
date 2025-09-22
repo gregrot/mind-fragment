@@ -117,6 +117,11 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         label: 'Gather resource',
         description: 'Harvest a surveyed node and transfer it into cargo storage.',
       },
+      {
+        name: 'dropResource',
+        label: 'Drop resource',
+        description: 'Release stored resources to create or expand nearby ground piles.',
+      },
     ],
     telemetry: [
       {
@@ -145,9 +150,19 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         description: 'Total resource units transferred into inventory.',
       },
       {
+        key: 'totalDeposited',
+        label: 'Total deposited',
+        description: 'Total resource units released back into the field.',
+      },
+      {
         key: 'lastGather',
         label: 'Last gather',
         description: 'Result payload from the most recent harvesting attempt.',
+      },
+      {
+        key: 'lastDrop',
+        label: 'Last drop',
+        description: 'Summary of the most recent drop operation.',
       },
     ],
     instantiate: () => new ManipulationModule(),

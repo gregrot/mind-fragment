@@ -78,3 +78,36 @@
   color: var(--color-slot-text);
   font-size: var(--font-size-sm);
 }
+
+@media (max-width: 720px) {
+  .block {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .blockTitle {
+    font-size: var(--font-size-sm);
+  }
+
+  .blockSummary {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockSlots {
+    gap: var(--space-2);
+  }
+
+  .blockSlot {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .slotBody {
+    gap: var(--space-2);
+  }
+
+  .slotPlaceholder {
+    font-size: var(--font-size-xs);
+    padding: var(--space-2);
+  }
+}

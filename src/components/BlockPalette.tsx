@@ -22,7 +22,7 @@ const BlockPalette = ({ blocks }: BlockPaletteProps): JSX.Element => {
   };
 
   return (
-    <div className={styles.blockPalette} role="list">
+    <div className={styles.blockPalette} role="list" data-testid="block-palette-list">
       {blocks.map((definition) => {
         const paletteItemClasses = [styles.paletteItem];
         switch (definition.category) {

@@ -32,6 +32,7 @@ async function dragWorkspaceBlock(page: Page, blockId: string, targetSelector: s
 
 test.describe('block workspace drag-and-drop', () => {
   test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 500 });
     await page.addInitScript(() => {
       window.localStorage.setItem('mf.skipOnboarding', '1');
     });
@@ -66,5 +67,43 @@ test.describe('block workspace drag-and-drop', () => {
     await expect(slot.locator('.slot-placeholder')).toHaveCount(1);
     await expect(page.locator(`${workspaceDropzone} .block`)).toHaveCount(2);
     await expect(page.locator(`${workspaceDropzone} [data-testid="block-move"]`)).toHaveCount(1);
+  });
+
+  test('provides a scrollable block palette so later blocks are reachable', async ({ page }) => {
+    const layout = page.getByTestId('programming-layout');
+    const palette = page.getByTestId('block-palette-list');
+
+    await expect(palette).toBeVisible();
+
+    const paletteOverflow = (await palette.evaluate((element) =>
+      getComputedStyle(element).overflowY,
+    )) as string;
+    expect(paletteOverflow).toBe('auto');
+
+    await page
+      .locator('#simulation-overlay-panel-programming')
+      .evaluate((element) => {
+        (element as HTMLElement).style.setProperty('height', '420px', 'important');
+      });
+
+    await layout.evaluate((element) => {
+      (element as HTMLElement).style.setProperty('height', '100%', 'important');
+    });
+
+    await expect
+      .poll(async () =>
+        palette.evaluate((element) => element.scrollHeight - element.clientHeight),
+      )
+      .toBeGreaterThan(0);
+
+    await palette.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+
+    await expect
+      .poll(async () => palette.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    await expect(page.getByTestId('palette-if')).toBeVisible();
   });
 });

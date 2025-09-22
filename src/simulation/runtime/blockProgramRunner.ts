@@ -7,6 +7,7 @@ export type ProgramRunnerStatus = 'idle' | 'running' | 'completed';
 const MOVEMENT_MODULE_ID = 'core.movement';
 const SCANNER_MODULE_ID = 'sensor.survey';
 const MANIPULATOR_MODULE_ID = 'arm.manipulator';
+const STATUS_MODULE_ID = 'status.signal';
 const EPSILON = 1e-5;
 
 interface ScanMemoryHit {
@@ -199,6 +200,18 @@ export class BlockProgramRunner {
         this.executeGather();
         break;
       }
+      case 'status-toggle': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.applyStatusToggle();
+        break;
+      }
+      case 'status-set': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.applyStatusSet(instruction.value);
+        break;
+      }
       case 'loop': {
         // Loops are handled via the execution stack when selecting instructions.
         break;
@@ -346,6 +359,20 @@ export class BlockProgramRunner {
       ...this.scanMemory,
       hits: nextHits,
     };
+  }
+
+  private applyStatusToggle(): void {
+    if (!this.robot.moduleStack.getModule(STATUS_MODULE_ID)) {
+      return;
+    }
+    this.robot.invokeAction(STATUS_MODULE_ID, 'toggleStatus', {});
+  }
+
+  private applyStatusSet(value: boolean): void {
+    if (!this.robot.moduleStack.getModule(STATUS_MODULE_ID)) {
+      return;
+    }
+    this.robot.invokeAction(STATUS_MODULE_ID, 'setStatus', { value });
   }
 
   private updateStatus(status: ProgramRunnerStatus): void {

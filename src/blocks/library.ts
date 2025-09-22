@@ -35,6 +35,18 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     summary: 'Trigger the survey scanner to look for nearby resource nodes.'
   },
   {
+    id: 'toggle-status',
+    label: 'Toggle Status',
+    category: 'action',
+    summary: 'Flip the status indicator between on and off states.'
+  },
+  {
+    id: 'set-status',
+    label: 'Set Status (true/false)',
+    category: 'action',
+    summary: 'Explicitly set the status indicator to on or off.'
+  },
+  {
     id: 'gather-resource',
     label: 'Gather Resource',
     category: 'action',
@@ -101,6 +113,10 @@ export function createBlockInstance(blockType: string): BlockInstance {
     instanceId: `block-${blockCounter}`,
     type: definition.id,
   };
+
+  if (blockType === 'set-status') {
+    instance.state = { value: true };
+  }
 
   if (definition.slots) {
     instance.slots = definition.slots.reduce<Record<string, BlockInstance[]>>(

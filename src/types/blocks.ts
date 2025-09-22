@@ -12,6 +12,7 @@ export interface BlockInstance {
   instanceId: string;
   type: string;
   slots?: Record<string, BlockInstance[]>;
+  state?: Record<string, unknown>;
 }
 
 export type WorkspaceState = BlockInstance[];

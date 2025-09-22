@@ -41,6 +41,21 @@ describe('compileWorkspaceProgram', () => {
     ]);
   });
 
+  it('compiles status control blocks', () => {
+    const start = createBlockInstance('start');
+    const toggle = createBlockInstance('toggle-status');
+    const setStatus = createBlockInstance('set-status');
+    setStatus.state = { value: false };
+    start.slots!.do = [toggle, setStatus];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toEqual([
+      { kind: 'status-toggle', duration: 0 },
+      { kind: 'status-set', duration: 0, value: false },
+    ]);
+  });
+
   it('wraps forever blocks in loop instructions so the runner can repeat them', () => {
     const start = createBlockInstance('start');
     const forever = createBlockInstance('forever');

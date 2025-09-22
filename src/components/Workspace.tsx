@@ -6,9 +6,10 @@ import styles from '../styles/Workspace.module.css';
 interface WorkspaceProps {
   blocks: BlockInstance[];
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 }
 
-const Workspace = ({ blocks, onDrop }: WorkspaceProps): JSX.Element => {
+const Workspace = ({ blocks, onDrop, onUpdateBlock }: WorkspaceProps): JSX.Element => {
   const handleRootDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
@@ -35,7 +36,13 @@ const Workspace = ({ blocks, onDrop }: WorkspaceProps): JSX.Element => {
       >
         {blocks.length === 0 ? <p className={styles.workspaceEmpty}>Drag blocks here to start building</p> : null}
         {blocks.map((block) => (
-          <BlockView key={block.instanceId} block={block} path={[]} onDrop={onDrop} />
+          <BlockView
+            key={block.instanceId}
+            block={block}
+            path={[]}
+            onDrop={onDrop}
+            onUpdateBlock={onUpdateBlock}
+          />
         ))}
       </div>
     </div>

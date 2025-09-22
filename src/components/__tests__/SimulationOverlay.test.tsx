@@ -22,6 +22,7 @@ describe('SimulationOverlay panels', () => {
     onConfirm: vi.fn(),
     workspace: [] as WorkspaceState,
     onDrop: vi.fn(),
+    onUpdateBlock: vi.fn(),
     robotId: 'MF-01',
   } as const;
 

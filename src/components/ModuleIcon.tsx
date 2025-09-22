@@ -11,6 +11,7 @@ const ICON_CONFIG: Record<ModuleIconVariant, { primary: string; accent: string; 
   inventory: { primary: '#6ab04c', accent: '#218c74', detail: '#f6ffed' },
   crafting: { primary: '#9b59b6', accent: '#6c3483', detail: '#f5e6ff' },
   scanning: { primary: '#2980b9', accent: '#0c3d6b', detail: '#e6f4ff' },
+  status: { primary: '#ff6b6b', accent: '#c0392b', detail: '#ffeaea' },
 };
 
 const ModuleIcon = ({ variant }: ModuleIconProps): JSX.Element => {
@@ -87,6 +88,14 @@ const ModuleIcon = ({ variant }: ModuleIconProps): JSX.Element => {
             strokeLinecap="round"
             opacity="0.85"
           />
+        </g>
+      ) : null}
+      {variant === 'status' ? (
+        <g>
+          <circle cx="24" cy="16" r="6" fill={palette.detail} opacity="0.95" />
+          <circle cx="24" cy="16" r="4" fill={palette.accent} opacity="0.9" />
+          <rect x="22" y="22" width="4" height="10" rx="2" fill={palette.detail} opacity="0.8" />
+          <rect x="20" y="30" width="8" height="6" rx="2" fill={palette.accent} opacity="0.75" />
         </g>
       ) : null}
     </svg>

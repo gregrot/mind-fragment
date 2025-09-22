@@ -176,4 +176,23 @@ describe('BlockProgramRunner', () => {
     const finalResult = actionSpy.mock.results[finalGatherIndex]?.value as { remaining?: number } | undefined;
     expect(finalResult?.remaining).toBe(0);
   });
+
+  it('routes status control instructions to the status module', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const program: CompiledProgram = {
+      instructions: [
+        { kind: 'status-toggle', duration: 0 },
+        { kind: 'status-set', duration: 0, value: false },
+      ],
+    };
+
+    runner.load(program);
+    runner.update(0.1);
+    robot.tick(0.1);
+
+    const telemetry = robot.getTelemetrySnapshot();
+    const statusTelemetry = telemetry.values['status.signal'];
+    expect(statusTelemetry?.active.value).toBe(false);
+  });
 });

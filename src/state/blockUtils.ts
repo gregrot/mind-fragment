@@ -162,3 +162,55 @@ export const insertBlock = (
     inserted: result.inserted,
   };
 };
+
+const updateBlocks = (
+  blocks: BlockInstance[],
+  instanceId: string,
+  updater: (block: BlockInstance) => BlockInstance,
+): { blocks: BlockInstance[]; changed: boolean } => {
+  let changed = false;
+  const nextBlocks = blocks.map((block) => {
+    if (changed) {
+      return block;
+    }
+
+    if (block.instanceId === instanceId) {
+      changed = true;
+      return updater(block);
+    }
+
+    if (!block.slots) {
+      return block;
+    }
+
+    const nextSlots: Record<string, BlockInstance[]> = {};
+    let slotChanged = false;
+    for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
+      const result = updateBlocks(slotBlocks, instanceId, updater);
+      if (result.changed) {
+        slotChanged = true;
+        nextSlots[slotName] = result.blocks;
+      } else {
+        nextSlots[slotName] = slotBlocks;
+      }
+    }
+
+    if (!slotChanged) {
+      return block;
+    }
+
+    changed = true;
+    return {
+      ...block,
+      slots: nextSlots,
+    };
+  });
+
+  return { blocks: changed ? nextBlocks : blocks, changed };
+};
+
+export const updateBlock = (
+  blocks: BlockInstance[],
+  instanceId: string,
+  updater: (block: BlockInstance) => BlockInstance,
+): { blocks: BlockInstance[]; changed: boolean } => updateBlocks(blocks, instanceId, updater);

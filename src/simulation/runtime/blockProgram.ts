@@ -13,6 +13,8 @@ export type BlockInstruction =
   | { kind: 'wait'; duration: number }
   | { kind: 'scan'; duration: number; filter: string | null }
   | { kind: 'gather'; duration: number; target: 'auto' }
+  | { kind: 'status-toggle'; duration: number }
+  | { kind: 'status-set'; duration: number; value: boolean }
   | { kind: 'loop'; instructions: BlockInstruction[] };
 
 export interface CompiledProgram {
@@ -75,6 +77,13 @@ const compileBlock = (
       return [{ kind: 'wait', duration: WAIT_DURATION }];
     case 'scan-resources':
       return [{ kind: 'scan', duration: SCAN_DURATION, filter: null }];
+    case 'toggle-status':
+      return [{ kind: 'status-toggle', duration: 0 }];
+    case 'set-status': {
+      const state = (block.state ?? {}) as { value?: unknown };
+      const value = typeof state.value === 'boolean' ? state.value : true;
+      return [{ kind: 'status-set', duration: 0, value }];
+    }
     case 'gather-resource':
       return [{ kind: 'gather', duration: GATHER_DURATION, target: 'auto' }];
     case 'return-home':

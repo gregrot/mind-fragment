@@ -3,6 +3,7 @@ import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
 import { RobotChassis } from './robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from './robot/modules/moduleLibrary';
+import { STATUS_MODULE_ID } from './robot/modules/statusModule';
 import type { CompiledProgram } from './runtime/blockProgram';
 import { BlockProgramRunner, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import type { InventorySnapshot } from './robot/inventory';
@@ -33,6 +34,7 @@ export class RootScene {
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private selectedRobotId: string | null;
+  private statusIndicator: Graphics | null;
 
   constructor(app: Application) {
     this.app = app;
@@ -84,6 +86,7 @@ export class RootScene {
     this.programListeners = new Set();
     this.selectionListeners = new Set();
     this.selectedRobotId = null;
+    this.statusIndicator = null;
     this.programRunner = this.robotCore
       ? new BlockProgramRunner(this.robotCore, (status) => this.handleProgramStatus(status))
       : null;
@@ -109,6 +112,7 @@ export class RootScene {
     this.rootLayer.addChild(robot);
 
     this.robot = robot;
+    this.updateStatusIndicator();
 
     if (!this.hasPlayerPanned) {
       this.viewport.moveCenter(robot.position.x, robot.position.y);
@@ -170,6 +174,8 @@ export class RootScene {
       this.robot.rotation = state.orientation;
       this.robot.position.set(state.position.x, state.position.y);
     }
+
+    this.updateStatusIndicator();
   }
 
   resize(width: number, height: number): void {
@@ -255,6 +261,8 @@ export class RootScene {
     }
     this.robot?.destroy({ children: true });
     this.robot = null;
+    this.statusIndicator?.destroy();
+    this.statusIndicator = null;
     assetService.disposeAll();
   }
 
@@ -273,5 +281,43 @@ export class RootScene {
     for (const listener of this.selectionListeners) {
       listener(robotId);
     }
+  }
+
+  private updateStatusIndicator(): void {
+    if (!this.robotCore || !this.robot) {
+      if (this.statusIndicator) {
+        this.statusIndicator.destroy();
+        this.statusIndicator = null;
+      }
+      return;
+    }
+
+    const hasStatusModule = Boolean(this.robotCore.moduleStack.getModule(STATUS_MODULE_ID));
+    if (!hasStatusModule) {
+      if (this.statusIndicator) {
+        this.statusIndicator.destroy();
+        this.statusIndicator = null;
+      }
+      return;
+    }
+
+    if (!this.statusIndicator) {
+      const indicator = new Graphics();
+      indicator.circle(0, -36, 6);
+      indicator.fill({ color: 0xff6b6b, alpha: 0.95 });
+      indicator.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.85 });
+      indicator.stroke();
+      indicator.position.set(0, 0);
+      this.robot.addChild(indicator);
+      this.statusIndicator = indicator;
+    }
+
+    const telemetry = this.robotCore.getTelemetrySnapshot();
+    const statusTelemetry = telemetry.values[STATUS_MODULE_ID];
+    const activeEntry = statusTelemetry?.active;
+    const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;
+
+    this.statusIndicator.alpha = isActive ? 1 : 0.2;
+    this.statusIndicator.visible = true;
   }
 }

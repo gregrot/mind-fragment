@@ -39,6 +39,37 @@
   font-size: var(--font-size-sm);
 }
 
+.blockControlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.blockControlLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.blockToggle {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.blockToggle:hover,
+.blockToggle:focus {
+  border-color: var(--color-accent-cyan);
+  background: var(--color-surface-overlay);
+  outline: none;
+}
+
 .blockSlots {
   display: flex;
   flex-direction: column;

@@ -3,12 +3,13 @@ import BlockPalette from './BlockPalette';
 import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
 import { BLOCK_LIBRARY } from '../blocks/library';
-import type { WorkspaceState, DropTarget } from '../types/blocks';
+import type { WorkspaceState, DropTarget, BlockInstance } from '../types/blocks';
 import styles from '../styles/RobotProgrammingPanel.module.css';
 
 interface RobotProgrammingPanelProps {
   workspace: WorkspaceState;
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
+  onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onClose: () => void;
   onConfirm: () => void;
   robotId: string;
@@ -17,6 +18,7 @@ interface RobotProgrammingPanelProps {
 const RobotProgrammingPanel = ({
   workspace,
   onDrop,
+  onUpdateBlock,
   onClose,
   onConfirm,
   robotId,
@@ -41,7 +43,7 @@ const RobotProgrammingPanel = ({
         </aside>
         <section className={styles.workspace}>
           <h4>Workspace</h4>
-          <Workspace blocks={workspace} onDrop={onDrop} />
+          <Workspace blocks={workspace} onDrop={onDrop} onUpdateBlock={onUpdateBlock} />
         </section>
       </div>
       <footer className={styles.footer}>

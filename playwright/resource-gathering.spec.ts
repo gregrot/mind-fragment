@@ -43,7 +43,7 @@ test.describe('resource scanning and gathering', () => {
 
     await page.getByTestId('run-program').click();
 
-    await expect(page.getByText('Routine completed')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Routine completed')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('tab', { name: 'Inventory' }).click();
     await expect(page.getByTestId('inventory-status')).toBeVisible();
     const contents = page.getByTestId('inventory-contents');

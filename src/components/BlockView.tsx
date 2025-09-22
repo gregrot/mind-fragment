@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type MouseEvent } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
 import type { BlockInstance, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
@@ -15,9 +15,10 @@ interface BlockViewProps {
   block: BlockInstance;
   path: string[];
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 }
 
-const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null => {
+const BlockView = ({ block, path, onDrop, onUpdateBlock }: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
     return null;
@@ -59,6 +60,31 @@ const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null 
 
   const blockClassName = blockClassNames.join(' ');
 
+  const statusValue = block.type === 'set-status'
+    ? Boolean((block.state as { value?: boolean } | undefined)?.value !== false)
+    : null;
+
+  const handleToggleStatusValue = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (!onUpdateBlock) {
+        return;
+      }
+      onUpdateBlock(block.instanceId, (current) => {
+        const currentValue = Boolean((current.state as { value?: boolean } | undefined)?.value !== false);
+        return {
+          ...current,
+          state: { ...current.state, value: !currentValue },
+        };
+      });
+    },
+    [block.instanceId, onUpdateBlock],
+  );
+
+  const handleStatusMouseDown = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  }, []);
+
   return (
     <div className={blockClassName} draggable onDragStart={handleDragStart} data-testid={`block-${definition.id}`}>
       <header className={styles.blockHeader}>
@@ -66,6 +92,20 @@ const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null 
       </header>
       {definition.summary && definition.category !== 'action' ? (
         <p className={styles.blockSummary}>{definition.summary}</p>
+      ) : null}
+      {block.type === 'set-status' ? (
+        <div className={styles.blockControlRow}>
+          <span className={styles.blockControlLabel}>Status value</span>
+          <button
+            type="button"
+            className={styles.blockToggle}
+            onMouseDown={handleStatusMouseDown}
+            onClick={handleToggleStatusValue}
+            data-testid={`block-${definition.id}-toggle`}
+          >
+            {statusValue ? 'true' : 'false'}
+          </button>
+        </div>
       ) : null}
       {definition.slots ? (
         <div className={styles.blockSlots}>
@@ -77,6 +117,7 @@ const BlockView = ({ block, path, onDrop }: BlockViewProps): JSX.Element | null 
               blocks={block.slots?.[slotName] ?? []}
               path={slotPath}
               onDrop={onDrop}
+              onUpdateBlock={onUpdateBlock}
             />
           ))}
         </div>
@@ -91,9 +132,10 @@ interface SlotViewProps {
   blocks: BlockInstance[];
   path: string[];
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 }
 
-const SlotView = ({ owner, slotName, blocks, path, onDrop }: SlotViewProps): JSX.Element => {
+const SlotView = ({ owner, slotName, blocks, path, onDrop, onUpdateBlock }: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
@@ -127,7 +169,13 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop }: SlotViewProps): JSX
           <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop blocks here</div>
         ) : null}
         {blocks.map((childBlock) => (
-          <BlockView key={childBlock.instanceId} block={childBlock} path={path} onDrop={onDrop} />
+          <BlockView
+            key={childBlock.instanceId}
+            block={childBlock}
+            path={path}
+            onDrop={onDrop}
+            onUpdateBlock={onUpdateBlock}
+          />
         ))}
       </div>
     </section>

@@ -1,7 +1,7 @@
 import { type Dispatch, type DragEvent, type SetStateAction, useCallback, useState } from 'react';
 import { createBlockInstance, BLOCK_MAP } from '../blocks/library';
-import { insertBlock, removeBlock } from '../state/blockUtils';
-import type { DragPayload, DropTarget, WorkspaceState } from '../types/blocks';
+import { insertBlock, removeBlock, updateBlock } from '../state/blockUtils';
+import type { BlockInstance, DragPayload, DropTarget, WorkspaceState } from '../types/blocks';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -45,6 +45,7 @@ export function useBlockWorkspace(): {
   workspace: WorkspaceState;
   handleDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   replaceWorkspace: Dispatch<SetStateAction<WorkspaceState>>;
+  updateBlockInstance: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
 } {
   const [workspace, setWorkspace] = useState<WorkspaceState>([]);
 
@@ -87,9 +88,20 @@ export function useBlockWorkspace(): {
     }
   }, []);
 
+  const updateBlockInstance = useCallback(
+    (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => {
+      setWorkspace((current) => {
+        const result = updateBlock(current, instanceId, updater);
+        return result.changed ? result.blocks : current;
+      });
+    },
+    [],
+  );
+
   return {
     workspace,
     handleDrop,
     replaceWorkspace: setWorkspace,
+    updateBlockInstance,
   };
 }

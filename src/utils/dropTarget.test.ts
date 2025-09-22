@@ -1,16 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDropTargetFromElement, getDropTargetFromTouchEvent } from './dropTarget';
 
-let originalElementFromPoint: typeof document.elementFromPoint;
+type ElementFromPoint = (x: number, y: number) => Element | null;
+
+let originalElementFromPoint: ElementFromPoint | undefined;
 
 beforeEach(() => {
-  originalElementFromPoint = document.elementFromPoint.bind(document);
+  originalElementFromPoint =
+    typeof document.elementFromPoint === 'function' ? document.elementFromPoint : undefined;
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  (document as Document & { elementFromPoint: typeof originalElementFromPoint }).elementFromPoint =
-    originalElementFromPoint;
+  const doc = document as Document & { elementFromPoint?: ElementFromPoint };
+  doc.elementFromPoint = originalElementFromPoint ?? (undefined as unknown as ElementFromPoint);
   document.body.innerHTML = '';
 });
 
@@ -92,8 +95,8 @@ describe('getDropTargetFromTouchEvent', () => {
   });
 
   it('returns null when elementFromPoint is unavailable', () => {
-    (document as Document & { elementFromPoint?: typeof originalElementFromPoint }).elementFromPoint =
-      undefined as unknown as typeof originalElementFromPoint;
+    (document as Document & { elementFromPoint?: ElementFromPoint }).elementFromPoint =
+      undefined as unknown as ElementFromPoint;
 
     const touchList = { length: 0 } as unknown as TouchList;
     expect(getDropTargetFromTouchEvent({ changedTouches: touchList })).toBeNull();

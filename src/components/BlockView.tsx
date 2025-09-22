@@ -105,6 +105,17 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
     [block.instanceId, onTouchDrop],
   );
 
+  const handleTouchMove = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!onTouchDrop || !touchPayloadRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+    },
+    [onTouchDrop],
+  );
+
   const handleTouchEnd = useCallback(
     (event: ReactTouchEvent<HTMLDivElement>) => {
       if (!onTouchDrop || !touchPayloadRef.current) {
@@ -133,6 +144,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
       draggable
       onDragStart={handleDragStart}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       data-testid={`block-${definition.id}`}

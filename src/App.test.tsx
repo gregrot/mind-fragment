@@ -44,6 +44,24 @@ const stubElementFromPoint = (element: Element | null) => {
   };
 };
 
+const dispatchCancelableTouchMove = (
+  element: Element,
+): ReturnType<typeof vi.fn> => {
+  const moveEvent = new Event('touchmove', { bubbles: true, cancelable: true });
+  Object.defineProperty(moveEvent, 'touches', {
+    value: [{ clientX: 15, clientY: 15 } as unknown as Touch],
+    configurable: true,
+  });
+  const originalPreventDefault = moveEvent.preventDefault.bind(moveEvent);
+  const preventDefaultSpy = vi.fn(() => originalPreventDefault());
+  Object.defineProperty(moveEvent, 'preventDefault', {
+    value: preventDefaultSpy,
+    configurable: true,
+  });
+  fireEvent(element, moveEvent);
+  return preventDefaultSpy;
+};
+
 const renderAppWithOverlay = () => {
   render(<App />);
   const programButtons = screen.getAllByTestId('select-robot');
@@ -266,6 +284,41 @@ describe('block workspace drag and drop', () => {
 
     await within(repeatBlock).findByTestId('block-move');
     restoreElementFromPoint();
+  });
+
+  it('prevents default behaviour while dragging a palette block with touch', () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+
+    fireEvent.touchStart(repeatPaletteItem, {
+      touches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatPaletteItem);
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('prevents default behaviour while dragging a workspace block with touch', async () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const repeatTransfer = createDataTransfer();
+
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: repeatTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const repeatBlock = await within(workspace).findByTestId('block-repeat');
+
+    fireEvent.touchStart(repeatBlock, {
+      touches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatBlock);
+    expect(preventDefault).toHaveBeenCalled();
   });
 
   it('compiles and reports a routine when Run Program is pressed', () => {

@@ -37,6 +37,17 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
     [onTouchDrop],
   );
 
+  const handleTouchMove = useCallback(
+    (event: ReactTouchEvent<HTMLDivElement>) => {
+      if (!onTouchDrop || !touchPayloadRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+    },
+    [onTouchDrop],
+  );
+
   const handleTouchEnd = useCallback(
     (event: ReactTouchEvent<HTMLDivElement>) => {
       if (!onTouchDrop || !touchPayloadRef.current) {
@@ -86,6 +97,7 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
             draggable
             onDragStart={handleDragStart(definition)}
             onTouchStart={handleTouchStart(definition)}
+            onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
             data-testid={`palette-${definition.id}`}

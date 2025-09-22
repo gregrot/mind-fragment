@@ -39,6 +39,12 @@ test.describe('block workspace drag-and-drop', () => {
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
     await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();
+
+    const stopButton = page.getByTestId('stop-program');
+    if (await stopButton.isEnabled()) {
+      await stopButton.click();
+      await expect(page.getByTestId('run-program')).toBeEnabled();
+    }
   });
 
   test('adds a palette block to the workspace root', async ({ page }) => {

@@ -1,6 +1,7 @@
 import type { RootScene } from '../simulation/rootScene';
 import type { CompiledProgram } from '../simulation/runtime/blockProgram';
 import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
+import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import type { InventorySnapshot } from '../simulation/robot/inventory';
 
 type StatusListener = (status: ProgramRunnerStatus) => void;
@@ -25,6 +26,7 @@ class SimulationRuntime {
   private status: ProgramRunnerStatus = 'idle';
   private inventorySnapshot: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT;
   private selectedRobotId: string | null = null;
+  private hasAutoStarted = false;
 
   registerScene(scene: RootScene): void {
     if (this.scene === scene) {
@@ -42,6 +44,11 @@ class SimulationRuntime {
     this.ensureInventorySubscription();
     if (this.selectedRobotId !== null) {
       scene.selectRobot(this.selectedRobotId);
+    }
+
+    if (!this.pendingProgram && !this.hasAutoStarted) {
+      scene.runProgram(DEFAULT_STARTUP_PROGRAM);
+      this.hasAutoStarted = true;
     }
 
     if (this.pendingProgram) {
@@ -63,6 +70,7 @@ class SimulationRuntime {
     this.updateStatus('idle');
     this.updateInventorySnapshot(EMPTY_INVENTORY_SNAPSHOT);
     this.updateSelectedRobot(null);
+    this.hasAutoStarted = false;
   }
 
   runProgram(program: CompiledProgram): void {

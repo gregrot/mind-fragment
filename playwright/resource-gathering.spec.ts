@@ -34,6 +34,12 @@ test.describe('resource scanning and gathering', () => {
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
     await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();
+
+    const stopButton = page.getByTestId('stop-program');
+    if (await stopButton.isEnabled()) {
+      await stopButton.click();
+    }
+    await expect(page.getByTestId('run-program')).toBeEnabled();
   });
 
   test('player can scan the area and gather resources into cargo', async ({ page }) => {

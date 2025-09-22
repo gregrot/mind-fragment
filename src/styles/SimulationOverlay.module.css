@@ -6,6 +6,8 @@
   align-items: center;
   justify-content: center;
   padding: min(var(--space-12), 6vh) min(var(--space-10), 6vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .backdrop {
@@ -127,24 +129,34 @@
   flex: 1;
   min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel {
   height: 100%;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .panelProgramming {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-right: 0;
 }
 
 @media (max-width: 960px) {
   .dialog {
     padding: var(--space-7) var(--space-7) var(--space-8);
     max-height: calc(100vh - var(--space-4));
+    width: min(960px, 100%);
   }
 
   .panel {
@@ -153,9 +165,19 @@
 }
 
 @media (max-width: 720px) {
+  .overlay {
+    align-items: flex-start;
+    padding: var(--space-5) var(--space-4);
+  }
+
   .dialog {
-    padding: var(--space-6) var(--space-6) var(--space-7);
+    padding: var(--space-5) var(--space-5) var(--space-6);
     border-radius: var(--radius-lg);
+    gap: var(--space-5);
+    width: 100%;
+    max-height: calc(100vh - 2 * var(--space-5));
+    height: calc(100vh - 2 * var(--space-5));
+    align-self: stretch;
   }
 
   .tabList {
@@ -166,5 +188,10 @@
     width: 100%;
     justify-content: center;
     text-align: center;
+  }
+
+  .content {
+    gap: var(--space-4);
+    min-height: 0;
   }
 }

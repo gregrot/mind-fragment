@@ -5,6 +5,7 @@ import SimulationOverlay, { type OverlayTab } from './components/SimulationOverl
 import OnboardingFlow from './onboarding/OnboardingFlow';
 import { useRobotSelection } from './hooks/useRobotSelection';
 import { simulationRuntime } from './state/simulationRuntime';
+import type { WorkspaceState } from './types/blocks';
 import styles from './styles/App.module.css';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
@@ -16,6 +17,11 @@ const App = (): JSX.Element => {
   const { selectedRobotId, clearSelection } = useRobotSelection();
   const [isOverlayOpen, setOverlayOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<OverlayTab>('inventory');
+  const [robotPrograms, setRobotPrograms] = useState<Record<string, WorkspaceState>>({});
+  const [workspaceRobotId, setWorkspaceRobotId] = useState<string>(
+    () => selectedRobotId ?? DEFAULT_ROBOT_ID,
+  );
+  const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
 
   const openOverlay = useCallback((tab: OverlayTab) => {
     setActiveTab(tab);
@@ -52,6 +58,39 @@ const App = (): JSX.Element => {
       setActiveTab('programming');
     }
   }, [selectedRobotId]);
+
+  useEffect(() => {
+    if (workspaceRobotId === activeRobotId) {
+      return;
+    }
+
+    const targetProgram = robotPrograms[activeRobotId];
+    if (targetProgram) {
+      if (workspace !== targetProgram) {
+        replaceWorkspace(() => targetProgram);
+      }
+    } else if (workspace.length > 0) {
+      replaceWorkspace(() => []);
+    }
+
+    setWorkspaceRobotId(activeRobotId);
+  }, [activeRobotId, robotPrograms, replaceWorkspace, workspace, workspaceRobotId]);
+
+  useEffect(() => {
+    setRobotPrograms((current) => {
+      const existing = current[workspaceRobotId];
+      if (existing === workspace) {
+        return current;
+      }
+      if (!existing && workspace.length === 0) {
+        return current;
+      }
+      return {
+        ...current,
+        [workspaceRobotId]: workspace,
+      };
+    });
+  }, [workspace, workspaceRobotId]);
 
   useEffect(() => {
     const isEditableElement = (target: EventTarget | null): boolean => {
@@ -108,8 +147,6 @@ const App = (): JSX.Element => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeTab, handleOverlayClose, isOverlayOpen, openOverlay]);
-
-  const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
 
   return (
     <div className={styles.appShell}>

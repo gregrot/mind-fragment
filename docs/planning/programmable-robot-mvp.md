@@ -63,6 +63,12 @@ This task list sets out the minimum work required to stand up a controllable, mo
 - Add integration tests that simulate full programme runs headlessly across different module stacks, asserting expected position changes, resource interactions, and telemetry output.
 - Configure CI scripts (package.json commands) to run linting and the full test suite; document the workflow in the README once stabilised.
 
+### ECS Runtime Migration
+- **Programme Runner System:** Move status updates into the `ECSBlackboard`, publishing `program.status` facts and `program.status.changed` events so UI surfaces no longer poll `RootScene` directly.
+- **Status Indicator System:** Consume `telemetry.latest` facts from the blackboard and emit `ui.signal` events when module state changes, keeping presentation logic out of the Pixi scene wrapper.
+- **Resource Layer Overlay:** Store resource-field summaries and refresh events in the blackboard instead of bespoke properties, allowing future systems to subscribe without touching `RootScene`.
+- **Selection System:** Treat the active robot ID as `selection.activeRobotId` on the blackboard, emitting `selection.changed` so telemetry, programme bindings, and HUD affordances stay in sync.
+
 ## Dependencies & Notes
 - Coordinate art direction and UX decisions with the steering documents to keep tone and affordances aligned.
 - Document any temporary shortcuts (e.g., placeholder art, reduced physics) directly in this file so follow-up tasks can retire them.

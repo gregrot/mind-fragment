@@ -3,6 +3,10 @@ import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
 import type { CompiledProgram } from './runtime/blockProgram';
 import { type ProgramRunnerStatus } from './runtime/blockProgramRunner';
+import {
+  SIMULATION_BLACKBOARD_EVENT_KEYS,
+  SIMULATION_BLACKBOARD_FACT_KEYS,
+} from './runtime/ecsBlackboard';
 import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
 
@@ -322,6 +326,7 @@ export class RootScene {
       context.world.destroyEntity(context.entities.robot);
       context.world.destroyEntity(context.entities.selection);
       context.world.runSystems(0);
+      context.blackboard.clear();
       this.context = null;
     }
     this.viewport.destroy({ children: true, texture: false });
@@ -329,7 +334,15 @@ export class RootScene {
   }
 
   private handleProgramStatus(status: ProgramRunnerStatus): void {
+    const previousStatus = this.programStatus;
     this.programStatus = status;
+    const blackboard = this.context?.blackboard;
+    if (blackboard) {
+      blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, status);
+      if (previousStatus !== status) {
+        blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.ProgramStatusChanged, status);
+      }
+    }
     for (const listener of this.programListeners) {
       listener(status);
     }

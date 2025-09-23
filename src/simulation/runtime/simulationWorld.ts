@@ -17,6 +17,14 @@ import { BlockProgramRunner } from './blockProgramRunner';
 import { STATUS_MODULE_ID } from '../robot/modules/statusModule';
 import type { ResourceLayer } from '../resourceLayer';
 import type { ResourceField } from '../resources/resourceField';
+import {
+  ECSBlackboard,
+  SIMULATION_BLACKBOARD_EVENT_KEYS,
+  SIMULATION_BLACKBOARD_FACT_KEYS,
+  type SimulationBlackboardEvents,
+  type SimulationBlackboardFacts,
+  type SimulationTelemetrySnapshot,
+} from './ecsBlackboard';
 
 export const DEBUG_PADDING = 8;
 export const DEBUG_VERTICAL_OFFSET = 72;
@@ -74,6 +82,7 @@ export interface SimulationWorldContext {
   world: ECSWorld;
   components: SimulationWorldComponents;
   entities: SimulationWorldEntities;
+  blackboard: ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>;
   getRobotCore(entity?: EntityId): RobotChassis | null;
   getProgramRunner(entity?: EntityId): BlockProgramRunner | null;
   getSprite(entity?: EntityId): Sprite | null;
@@ -112,6 +121,12 @@ export async function createSimulationWorld({
   viewport,
 }: CreateSimulationWorldOptions): Promise<SimulationWorldContext> {
   const world = new ECSWorld();
+  const blackboard = new ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>();
+
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, 'idle');
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId, null);
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, null);
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.CurrentUISignal, null);
 
   const Transform = world.defineComponent<TransformComponent>('Transform');
   const SpriteRef = world.defineComponent<Sprite>('SpriteRef');
@@ -145,6 +160,7 @@ export async function createSimulationWorld({
 
   const runner = new BlockProgramRunner(robotCore);
   ProgramRunner.set(robotEntity, runner);
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, runner.getStatus());
 
   const transform: TransformComponent = {
     position: { x: 0, y: 0 },
@@ -199,12 +215,18 @@ export async function createSimulationWorld({
     lastRenderedText: '',
   });
 
+  const telemetrySnapshot: SimulationTelemetrySnapshot = robotCore.getTelemetrySnapshot();
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, telemetrySnapshot);
+  blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated, telemetrySnapshot);
+
   const applySelection = (robotId: string | null): void => {
     const current = SelectionState.get(selectionEntity)?.robotId ?? null;
     if (current === robotId) {
       return;
     }
     SelectionState.set(selectionEntity, { robotId });
+    blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId, robotId);
+    blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.SelectionChanged, robotId);
     onRobotSelected?.(robotId);
   };
 
@@ -240,6 +262,7 @@ export async function createSimulationWorld({
       robot: robotEntity,
       selection: selectionEntity,
     },
+    blackboard,
     getRobotCore: (entity = robotEntity) => RobotCore.get(entity) ?? null,
     getProgramRunner: (entity = robotEntity) => ProgramRunner.get(entity) ?? null,
     getSprite: (entity = robotEntity) => SpriteRef.get(entity) ?? null,

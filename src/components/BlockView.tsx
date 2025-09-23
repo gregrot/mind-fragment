@@ -1,9 +1,12 @@
-import { Fragment, useCallback, useRef, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { Fragment, useCallback, useMemo, useRef, type TouchEvent as ReactTouchEvent } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
 import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
 import { getDropTargetFromTouchEvent } from '../utils/dropTarget';
 import DropZone from './DropZone';
+import BlockParameterField from './BlockParameterField';
+import BlockParameterSignalSelect from './BlockParameterSignalSelect';
+import ValueInputDropZone from './ValueInputDropZone';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -47,8 +50,10 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
 
   const slotPath = [...path, block.instanceId];
   const slotNames = definition.slots ?? [];
-  const expressionInputNames = definition.expressionInputs ?? [];
-  const hasNestedBlocks = slotNames.length > 0 || expressionInputNames.length > 0;
+  const expressionInputNames = useMemo(() => new Set(definition.expressionInputs ?? []), [
+    definition.expressionInputs,
+  ]);
+  const hasNestedBlocks = slotNames.length > 0;
 
   const blockClassNames = [styles.block, 'block'];
   switch (definition.category) {
@@ -69,36 +74,9 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
   const blockClassName = blockClassNames.join(' ');
 
   const parameterEntries = Object.entries(definition.parameters ?? {});
-
-  const handleParameterMouseDown = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-  }, []);
-
-  const handleParameterTouchStart = useCallback((event: ReactTouchEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-  }, []);
-
-  const createBooleanParameterClickHandler = useCallback(
-    (parameterName: string, defaultValue: boolean) => (event: MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (!onUpdateBlock) {
-        return;
-      }
-
-      onUpdateBlock(block.instanceId, (current) => {
-        const currentParameters = { ...(current.parameters ?? {}) };
-        const parameter = currentParameters[parameterName];
-        const currentValue = parameter?.kind === 'boolean' ? parameter.value : defaultValue;
-        return {
-          ...current,
-          parameters: {
-            ...currentParameters,
-            [parameterName]: { kind: 'boolean', value: !currentValue },
-          },
-        };
-      });
-    },
-    [block.instanceId, onUpdateBlock],
+  const parameterNameSet = new Set(parameterEntries.map(([name]) => name));
+  const standaloneExpressionInputs = (definition.expressionInputs ?? []).filter(
+    (inputName) => !parameterNameSet.has(inputName),
   );
 
   const handleTouchStart = useCallback(
@@ -164,56 +142,118 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
         <p className={styles.blockSummary}>{definition.summary}</p>
       ) : null}
       {parameterEntries.map(([parameterName, parameterDefinition]) => {
-        switch (parameterDefinition.kind) {
-          case 'boolean': {
-            const parameter = block.parameters?.[parameterName];
-            const value = parameter?.kind === 'boolean'
-              ? parameter.value
-              : parameterDefinition.defaultValue;
-            return (
-              <div key={parameterName} className={styles.blockControlRow}>
-                <span className={styles.blockControlLabel}>{formatSlotLabel(parameterName)}</span>
-                <button
-                  type="button"
-                  className={styles.blockToggle}
-                  onMouseDown={handleParameterMouseDown}
-                  onTouchStart={handleParameterTouchStart}
-                  onClick={createBooleanParameterClickHandler(parameterName, parameterDefinition.defaultValue)}
-                  data-testid={`block-${definition.id}-parameter-${parameterName}`}
-                >
-                  {value ? 'true' : 'false'}
-                </button>
-              </div>
-            );
-          }
-          case 'number':
-          case 'string':
-          default: {
-            const parameter = block.parameters?.[parameterName];
-            const value = parameter?.value ?? parameterDefinition.defaultValue;
-            return (
-              <div key={parameterName} className={styles.blockControlRow}>
-                <span className={styles.blockControlLabel}>{formatSlotLabel(parameterName)}</span>
-                <span className={styles.blockControlValue}>{String(value)}</span>
-              </div>
-            );
-          }
+        const parameterLabel = formatSlotLabel(parameterName);
+        const parameterValue = block.parameters?.[parameterName];
+        const expressionBlocks = block.expressionInputs?.[parameterName] ?? [];
+        const supportsExpression =
+          expressionInputNames.has(parameterName) || parameterDefinition.kind === 'operator';
+        const placeholder =
+          parameterDefinition.kind === 'operator'
+            ? 'Drop operator blocks here'
+            : 'Drop value blocks here';
+
+        let editor: JSX.Element | null = null;
+        if (parameterDefinition.kind === 'boolean' || parameterDefinition.kind === 'number') {
+          editor = (
+            <BlockParameterField
+              block={block}
+              parameterName={parameterName}
+              definition={parameterDefinition}
+              value={parameterValue}
+              label={parameterLabel}
+              testId={`block-${definition.id}-parameter-${parameterName}`}
+              onUpdateBlock={onUpdateBlock}
+            />
+          );
+        } else if (parameterDefinition.kind === 'string') {
+          editor = (
+            <BlockParameterField
+              block={block}
+              parameterName={parameterName}
+              definition={parameterDefinition}
+              value={parameterValue}
+              label={parameterLabel}
+              testId={`block-${definition.id}-parameter-${parameterName}`}
+              onUpdateBlock={onUpdateBlock}
+            />
+          );
+        } else if (parameterDefinition.kind === 'signal') {
+          editor = (
+            <BlockParameterSignalSelect
+              block={block}
+              parameterName={parameterName}
+              definition={parameterDefinition}
+              value={parameterValue}
+              label={parameterLabel}
+              testId={`block-${definition.id}-parameter-${parameterName}`}
+              onUpdateBlock={onUpdateBlock}
+            />
+          );
         }
+
+        return (
+          <div key={parameterName} className={styles.blockControlRow}>
+            <span className={styles.blockControlLabel}>{parameterLabel}</span>
+            <div className={styles.blockControlInputs}>
+              {editor}
+              {supportsExpression ? (
+                <ValueInputDropZone
+                  owner={block}
+                  parameterName={parameterName}
+                  blocks={expressionBlocks}
+                  path={slotPath}
+                  placeholder={placeholder}
+                  testId={`block-${definition.id}-parameter-${parameterName}-expression`}
+                  onDrop={onDrop}
+                  renderBlock={(childBlock) => (
+                    <BlockView
+                      key={childBlock.instanceId}
+                      block={childBlock}
+                      path={slotPath}
+                      onDrop={onDrop}
+                      onTouchDrop={onTouchDrop}
+                      onUpdateBlock={onUpdateBlock}
+                    />
+                  )}
+                />
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+      {standaloneExpressionInputs.map((inputName) => {
+        const label = formatSlotLabel(inputName);
+        const expressionBlocks = block.expressionInputs?.[inputName] ?? [];
+
+        return (
+          <div key={`expression-${inputName}`} className={styles.blockControlRow}>
+            <span className={styles.blockControlLabel}>{label}</span>
+            <div className={styles.blockControlInputs}>
+              <ValueInputDropZone
+                owner={block}
+                parameterName={inputName}
+                blocks={expressionBlocks}
+                path={slotPath}
+                placeholder="Drop value blocks here"
+                testId={`block-${definition.id}-parameter-${inputName}-expression`}
+                onDrop={onDrop}
+                renderBlock={(childBlock) => (
+                  <BlockView
+                    key={childBlock.instanceId}
+                    block={childBlock}
+                    path={slotPath}
+                    onDrop={onDrop}
+                    onTouchDrop={onTouchDrop}
+                    onUpdateBlock={onUpdateBlock}
+                  />
+                )}
+              />
+            </div>
+          </div>
+        );
       })}
       {hasNestedBlocks ? (
         <div className={styles.blockSlots}>
-          {expressionInputNames.map((inputName) => (
-            <ExpressionInputView
-              key={inputName}
-              owner={block}
-              inputName={inputName}
-              blocks={block.expressionInputs?.[inputName] ?? []}
-              path={slotPath}
-              onDrop={onDrop}
-              onTouchDrop={onTouchDrop}
-              onUpdateBlock={onUpdateBlock}
-            />
-          ))}
           {slotNames.map((slotName) => (
             <SlotView
               key={slotName}
@@ -326,123 +366,6 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdate
                       kind: 'slot',
                       ownerId: owner.instanceId,
                       slotName,
-                      position: index + 1,
-                      ancestorIds: path,
-                    }}
-                    onDrop={onDrop}
-                  />
-                </Fragment>
-              );
-            })}
-          </>
-        )}
-      </div>
-    </section>
-  );
-};
-
-interface ExpressionInputViewProps {
-  owner: BlockInstance;
-  inputName: string;
-  blocks: BlockInstance[];
-  path: string[];
-  onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
-  onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
-  onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
-}
-
-const ExpressionInputView = ({
-  owner,
-  inputName,
-  blocks,
-  path,
-  onDrop,
-  onTouchDrop,
-  onUpdateBlock,
-}: ExpressionInputViewProps): JSX.Element => {
-  const handleDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      onDrop(event, {
-        kind: 'parameter',
-        ownerId: owner.instanceId,
-        parameterName: inputName,
-        position: blocks.length,
-        ancestorIds: path,
-      });
-    },
-    [blocks.length, inputName, onDrop, owner.instanceId, path],
-  );
-
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const inputLabel = formatSlotLabel(inputName);
-
-  return (
-    <section className={styles.blockSlot} data-testid={`parameter-${inputName}`}>
-      <header className={styles.slotLabel}>{inputLabel}</header>
-      <div
-        className={styles.slotBody}
-        data-testid={`parameter-${inputName}-dropzone`}
-        data-drop-target-kind="parameter"
-        data-drop-target-owner-id={owner.instanceId}
-        data-drop-target-parameter-name={inputName}
-        data-drop-target-position={blocks.length}
-        data-drop-target-ancestors={path.join(',')}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        {blocks.length === 0 ? (
-          <DropZone
-            className={styles.slotDropTargetEmpty}
-            target={{
-              kind: 'parameter',
-              ownerId: owner.instanceId,
-              parameterName: inputName,
-              position: 0,
-              ancestorIds: path,
-            }}
-            onDrop={onDrop}
-          >
-            <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop value blocks here</div>
-          </DropZone>
-        ) : (
-          <>
-            <DropZone
-              className={`${styles.slotDropTarget} ${styles.slotDropTargetLeading}`}
-              target={{
-                kind: 'parameter',
-                ownerId: owner.instanceId,
-                parameterName: inputName,
-                position: 0,
-                ancestorIds: path,
-              }}
-              onDrop={onDrop}
-            />
-            {blocks.map((childBlock, index) => {
-              const trailingClassName =
-                index === blocks.length - 1 ? styles.slotDropTargetTrailing : undefined;
-              const dropTargetClassName = [styles.slotDropTarget, trailingClassName]
-                .filter(Boolean)
-                .join(' ');
-
-              return (
-                <Fragment key={childBlock.instanceId}>
-                  <BlockView
-                    block={childBlock}
-                    path={path}
-                    onDrop={onDrop}
-                    onTouchDrop={onTouchDrop}
-                    onUpdateBlock={onUpdateBlock}
-                  />
-                  <DropZone
-                    className={dropTargetClassName}
-                    target={{
-                      kind: 'parameter',
-                      ownerId: owner.instanceId,
-                      parameterName: inputName,
                       position: index + 1,
                       ancestorIds: path,
                     }}

@@ -77,7 +77,7 @@ describe('blockUtils', () => {
     const workspace = [owner];
 
     const target: DropTarget = {
-      kind: 'parameter',
+      kind: 'parameter-expression',
       ownerId: 'owner',
       parameterName: 'condition',
       position: 0,

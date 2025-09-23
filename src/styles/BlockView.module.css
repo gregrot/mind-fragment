@@ -44,7 +44,7 @@
 
 .blockControlRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
 }
@@ -52,12 +52,15 @@
 .blockControlLabel {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  flex: 1 1 auto;
 }
 
-.blockControlValue {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+.blockControlInputs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .blockToggle {
@@ -77,6 +80,31 @@
   border-color: var(--color-accent-cyan);
   background: var(--color-surface-overlay);
   outline: none;
+}
+
+.blockInput,
+.blockSelect {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  min-width: 4rem;
+}
+
+.blockInput:focus,
+.blockInput:focus-visible,
+.blockSelect:focus,
+.blockSelect:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-cyan);
+  box-shadow: 0 0 0 1px rgba(100, 249, 255, 0.35);
+}
+
+.blockSelect {
+  padding-right: var(--space-4);
 }
 
 .blockSlots {
@@ -156,6 +184,81 @@
   font-size: var(--font-size-sm);
 }
 
+.valueInputContainer {
+  display: flex;
+  align-items: stretch;
+  min-height: 2.25rem;
+}
+
+.valueInputDropZoneEmpty {
+  min-width: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--color-slot-border);
+  border-radius: var(--radius-sm);
+  background: rgba(155, 107, 255, 0.12);
+  color: var(--color-slot-text);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.valueInputDropZoneEmpty[data-dropzone-active='true'] {
+  border-color: var(--color-accent-cyan);
+  background: rgba(100, 249, 255, 0.12);
+  color: var(--color-text-primary);
+}
+
+.valueInputPlaceholder {
+  pointer-events: none;
+}
+
+.valueInputFilled {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.valueInputFilled .block {
+  margin: 0;
+}
+
+.valueInputDropTarget {
+  width: 0.5rem;
+  min-width: 0.5rem;
+  min-height: 2rem;
+  position: relative;
+}
+
+.valueInputDropTarget::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: rgba(100, 249, 255, 0.18);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--transition-base), background var(--transition-base);
+}
+
+.valueInputDropTarget[data-dropzone-active='true']::after {
+  opacity: 1;
+  background: var(--color-accent-cyan);
+}
+
+.valueInputDropTargetLeading {
+  margin-left: 0;
+}
+
+.valueInputDropTargetTrailing {
+  margin-right: 0;
+}
+
 @media (max-width: 720px) {
   .block {
     padding: var(--space-2) var(--space-3);
@@ -168,6 +271,10 @@
 
   .blockSummary {
     font-size: var(--font-size-xs);
+  }
+
+  .blockControlInputs {
+    gap: var(--space-1);
   }
 
   .blockSlots {
@@ -186,6 +293,15 @@
   .slotPlaceholder {
     font-size: var(--font-size-xs);
     padding: var(--space-2);
+  }
+
+  .valueInputContainer {
+    min-height: 2rem;
+  }
+
+  .valueInputDropZoneEmpty {
+    min-width: 5rem;
+    font-size: var(--font-size-xxs);
   }
 }
 
@@ -226,5 +342,13 @@
   .slotPlaceholder {
     font-size: var(--font-size-xs);
     padding: var(--space-1) var(--space-2);
+  }
+
+  .valueInputContainer {
+    min-height: 1.75rem;
+  }
+
+  .valueInputDropZoneEmpty {
+    min-width: 4.5rem;
   }
 }

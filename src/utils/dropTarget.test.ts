@@ -84,6 +84,28 @@ describe('getDropTargetFromElement', () => {
     });
   });
 
+  it('parses parameter expression drop targets when metadata exists', () => {
+    const dropElement = document.createElement('div');
+    dropElement.dataset.dropTargetKind = 'parameter-expression';
+    dropElement.dataset.dropTargetOwnerId = 'owner-5';
+    dropElement.dataset.dropTargetParameterName = 'count';
+    dropElement.dataset.dropTargetPosition = '2';
+    dropElement.dataset.dropTargetAncestors = 'root,owner-3';
+
+    const child = document.createElement('span');
+    dropElement.appendChild(child);
+    document.body.appendChild(dropElement);
+
+    const result = getDropTargetFromElement(child);
+    expect(result).toEqual({
+      kind: 'parameter-expression',
+      ownerId: 'owner-5',
+      parameterName: 'count',
+      position: 2,
+      ancestorIds: ['root', 'owner-3'],
+    });
+  });
+
   it('returns null when slot metadata is incomplete', () => {
     const element = document.createElement('div');
     element.dataset.dropTargetKind = 'slot';
@@ -97,6 +119,15 @@ describe('getDropTargetFromElement', () => {
     const element = document.createElement('div');
     element.dataset.dropTargetKind = 'parameter';
     element.dataset.dropTargetOwnerId = 'owner-3';
+    element.dataset.dropTargetParameterName = '';
+
+    expect(getDropTargetFromElement(element)).toBeNull();
+  });
+
+  it('returns null when parameter expression metadata is incomplete', () => {
+    const element = document.createElement('div');
+    element.dataset.dropTargetKind = 'parameter-expression';
+    element.dataset.dropTargetOwnerId = 'owner-6';
     element.dataset.dropTargetParameterName = '';
 
     expect(getDropTargetFromElement(element)).toBeNull();

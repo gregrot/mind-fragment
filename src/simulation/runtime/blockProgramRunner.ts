@@ -30,6 +30,20 @@ interface ExecutionFrame {
   index: number;
 }
 
+export interface ProgramDebugFrame {
+  kind: ExecutionFrameKind;
+  index: number;
+  length: number;
+}
+
+export interface ProgramDebugState {
+  status: ProgramRunnerStatus;
+  program: CompiledProgram | null;
+  currentInstruction: BlockInstruction | null;
+  timeRemaining: number;
+  frames: ProgramDebugFrame[];
+}
+
 export class BlockProgramRunner {
   private readonly robot: RobotChassis;
   private program: CompiledProgram | null = null;
@@ -39,6 +53,8 @@ export class BlockProgramRunner {
   private statusListener: ((status: ProgramRunnerStatus) => void) | null = null;
   private scanMemory: ScanMemory | null = null;
   private frames: ExecutionFrame[] = [];
+  private activeProgram: CompiledProgram | null = null;
+  private debugFrames: ProgramDebugFrame[] = [];
 
   constructor(robot: RobotChassis, onStatusChange?: (status: ProgramRunnerStatus) => void) {
     this.robot = robot;
@@ -60,10 +76,12 @@ export class BlockProgramRunner {
 
   load(program: CompiledProgram): void {
     this.program = program;
+    this.activeProgram = program;
     this.currentInstruction = null;
     this.timeRemaining = 0;
     this.scanMemory = null;
     this.frames = [];
+    this.debugFrames = [];
     this.resetMovement();
 
     if (!program.instructions || program.instructions.length === 0) {
@@ -78,10 +96,12 @@ export class BlockProgramRunner {
 
   stop(): void {
     this.program = null;
+    this.activeProgram = null;
     this.currentInstruction = null;
     this.timeRemaining = 0;
     this.scanMemory = null;
     this.frames = [];
+    this.debugFrames = [];
     this.resetMovement();
     this.updateStatus('idle');
   }
@@ -116,6 +136,7 @@ export class BlockProgramRunner {
 
   private advanceInstruction(): void {
     if (!this.program) {
+      this.updateDebugFrames();
       return;
     }
 
@@ -155,12 +176,16 @@ export class BlockProgramRunner {
       this.applyInstruction(instruction);
 
       if (this.timeRemaining <= EPSILON) {
+        this.currentInstruction = null;
+        this.updateDebugFrames();
         continue;
       }
 
+      this.updateDebugFrames();
       return;
     }
 
+    this.updateDebugFrames();
     this.finishProgram();
   }
 
@@ -170,6 +195,7 @@ export class BlockProgramRunner {
     this.timeRemaining = 0;
     this.resetMovement();
     this.frames = [];
+    this.debugFrames = [];
     this.updateStatus('completed');
   }
 
@@ -395,5 +421,45 @@ export class BlockProgramRunner {
     }
     this.status = status;
     this.statusListener?.(status);
+  }
+
+  getDebugState(): ProgramDebugState {
+    return {
+      status: this.status,
+      program: this.activeProgram,
+      currentInstruction: this.currentInstruction,
+      timeRemaining: this.timeRemaining,
+      frames: this.debugFrames.map((frame) => ({ ...frame })),
+    } satisfies ProgramDebugState;
+  }
+
+  private updateDebugFrames(): void {
+    if (this.frames.length === 0) {
+      this.debugFrames = [];
+      return;
+    }
+
+    const nextFrames: ProgramDebugFrame[] = this.frames.map((frame, index, frames) => {
+      const isActiveFrame = index === frames.length - 1 && this.currentInstruction !== null;
+      const length = frame.instructions.length;
+      const rawIndex = isActiveFrame ? frame.index - 1 : frame.index;
+      let adjustedIndex = rawIndex;
+
+      if (length <= 0) {
+        adjustedIndex = 0;
+      } else if (isActiveFrame) {
+        adjustedIndex = Math.min(Math.max(rawIndex, 0), length - 1);
+      } else {
+        adjustedIndex = Math.min(Math.max(rawIndex, 0), length);
+      }
+
+      return {
+        kind: frame.kind,
+        index: adjustedIndex,
+        length,
+      } satisfies ProgramDebugFrame;
+    });
+
+    this.debugFrames = nextFrames;
   }
 }

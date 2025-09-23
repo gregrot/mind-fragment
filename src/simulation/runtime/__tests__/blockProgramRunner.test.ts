@@ -226,4 +226,37 @@ describe('BlockProgramRunner', () => {
     const statusTelemetry = telemetry.values['status.signal'];
     expect(statusTelemetry?.active.value).toBe(false);
   });
+
+  it('exposes debug state including current instruction and frame stack', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const program: CompiledProgram = {
+      instructions: [
+        { kind: 'move', duration: 1, speed: 20 },
+        {
+          kind: 'loop',
+          instructions: [{ kind: 'turn', duration: 0.5, angularVelocity: Math.PI }],
+        },
+      ],
+    };
+
+    runner.load(program);
+
+    const initialDebug = runner.getDebugState();
+    expect(initialDebug.status).toBe('running');
+    expect(initialDebug.program).toBe(program);
+    expect(initialDebug.currentInstruction?.kind).toBe('move');
+    expect(initialDebug.frames).toHaveLength(1);
+    expect(initialDebug.frames[0]).toMatchObject({ kind: 'sequence', index: 0, length: 2 });
+
+    runner.update(1.1);
+    robot.tick(1.1);
+
+    const loopDebug = runner.getDebugState();
+    expect(loopDebug.currentInstruction?.kind).toBe('turn');
+    expect(loopDebug.frames).toEqual([
+      expect.objectContaining({ kind: 'sequence', index: 2, length: 2 }),
+      expect.objectContaining({ kind: 'loop', index: 0, length: 1 }),
+    ]);
+  });
 });

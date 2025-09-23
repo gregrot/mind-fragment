@@ -134,6 +134,8 @@
 }
 
 .panel {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -146,6 +148,8 @@
 }
 
 .panelProgramming {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

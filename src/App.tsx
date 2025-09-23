@@ -54,10 +54,16 @@ const App = (): JSX.Element => {
 
   useEffect(() => {
     if (selectedRobotId) {
-      setOverlayOpen(true);
-      setActiveTab('programming');
+      if (!isOverlayOpen) {
+        setActiveTab('programming');
+      }
+      return;
     }
-  }, [selectedRobotId]);
+
+    if (isOverlayOpen && activeTab === 'programming') {
+      setOverlayOpen(false);
+    }
+  }, [activeTab, isOverlayOpen, selectedRobotId]);
 
   useEffect(() => {
     if (workspaceRobotId === activeRobotId) {

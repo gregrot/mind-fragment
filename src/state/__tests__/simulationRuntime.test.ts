@@ -3,6 +3,7 @@ import { simulationRuntime } from '../simulationRuntime';
 import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
+import { EMPTY_MODULE_STATE } from '../../simulation/robot/RobotChassis';
 
 const createSceneStub = () => {
   const subscriptions: { status: ((status: string) => void) | null } = { status: null };
@@ -19,7 +20,9 @@ const createSceneStub = () => {
     getInventorySnapshot: vi.fn(() => ({ capacity: 0, used: 0, available: 0, entries: [] })),
     subscribeInventory: vi.fn(() => () => {}),
     subscribeTelemetry: vi.fn(() => () => {}),
+    subscribeModuleState: vi.fn(() => () => {}),
     getTelemetrySnapshot: vi.fn(() => ({ values: {}, actions: {} })),
+    getModuleStateSnapshot: vi.fn(() => EMPTY_MODULE_STATE),
     getSelectedRobot: vi.fn(() => null),
     selectRobot: vi.fn(),
     clearRobotSelection: vi.fn(),

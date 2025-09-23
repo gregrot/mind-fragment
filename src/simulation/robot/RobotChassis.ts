@@ -4,6 +4,10 @@ import { RobotState, type RobotStateSnapshot, type RobotStateOptions, robotState
 import type { RobotModule } from './RobotModule';
 import { InventoryStore } from './inventory';
 import { ResourceField, createDefaultResourceNodes } from '../resources/resourceField';
+import { type ModuleStateSnapshot, toModuleResourceId, extractModuleInventory, fromModuleResourceId, distanceBetween } from './moduleInventory';
+export { EMPTY_MODULE_STATE } from './moduleInventory';
+export type { ModuleStateSnapshot, ModuleInventoryEntry, DroppedModuleEntry } from './moduleInventory';
+import { createModuleInstance } from './modules/moduleLibrary';
 
 const DEFAULT_CAPACITY = 8;
 
@@ -52,6 +56,31 @@ export interface ModuleRuntimeContext {
   resourceField: ResourceField;
 }
 
+export type ModuleStoreResult =
+  | { success: true; moduleId: string; quantity: number }
+  | { success: false; moduleId: string; reason: 'not-found' | 'blocked' | 'inventory-full'; message?: string };
+
+export type ModuleMountResult =
+  | { success: true; moduleId: string }
+  | { success: false; moduleId: string; reason: 'not-found' | 'blocked'; message?: string };
+
+export type ModuleDropResult =
+  | { success: true; moduleId: string; quantity: number; nodeId: string }
+  | { success: false; moduleId: string; reason: 'not-available'; message?: string };
+
+export type ModulePickupResult =
+  | { success: true; moduleId: string; quantity: number; nodeId: string; remaining: number }
+  | {
+      success: false;
+      moduleId: string;
+      nodeId: string;
+      reason: 'not-found' | 'out-of-range' | 'inventory-full' | 'invalid';
+      message?: string;
+      remaining?: number;
+    };
+
+type ModuleListener = (snapshot: ModuleStateSnapshot) => void;
+
 export class RobotChassis {
   readonly state: RobotState;
   readonly moduleStack: ModuleStack;
@@ -61,6 +90,8 @@ export class RobotChassis {
   private readonly actuatorHandlers = new Map<string, ActuatorHandler>();
   private readonly pendingActuators = new Map<string, ActuatorRequest[]>();
   private tickCounter = 0;
+  private readonly moduleListeners = new Set<ModuleListener>();
+  private moduleInventoryUnsubscribe: (() => void) | null = null;
 
   constructor({ capacity = DEFAULT_CAPACITY, state = {} }: RobotChassisOptions = {}) {
     this.state = new RobotState(state);
@@ -68,6 +99,10 @@ export class RobotChassis {
     this.bus = new ModuleBus();
     this.inventory = new InventoryStore();
     this.resourceField = new ResourceField(createDefaultResourceNodes());
+
+    this.resourceField.subscribe(() => {
+      this.notifyModuleListeners();
+    });
 
     this.registerActuatorHandler('movement.linear', ({ request }) => {
       const payload = request.payload as { x?: number; y?: number } | undefined;
@@ -88,6 +123,36 @@ export class RobotChassis {
 
   getModuleStackSnapshot(): ModuleSnapshot[] {
     return this.moduleStack.getSnapshot();
+  }
+
+  getModuleStateSnapshot(): ModuleStateSnapshot {
+    const installed = this.moduleStack.getSnapshot();
+    const inventorySnapshot = this.inventory.getSnapshot();
+    const inventoryModules = extractModuleInventory(inventorySnapshot);
+    const state = this.getStateSnapshot();
+    const ground = this.resourceField
+      .list()
+      .map((node) => {
+        const moduleId = fromModuleResourceId(node.type);
+        if (!moduleId) {
+          return null;
+        }
+        return {
+          nodeId: node.id,
+          moduleId,
+          quantity: Math.max(Math.round(node.quantity), 0),
+          position: { x: node.position.x, y: node.position.y },
+          distance: distanceBetween(state.position, node.position),
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((a, b) => a.distance - b.distance || a.nodeId.localeCompare(b.nodeId));
+
+    return {
+      installed,
+      inventory: inventoryModules,
+      ground,
+    } satisfies ModuleStateSnapshot;
   }
 
   getTelemetrySnapshot(): { values: ReturnType<ModuleBus['getValuesSnapshot']>; actions: ReturnType<ModuleBus['getActionsSnapshot']> } {
@@ -118,6 +183,7 @@ export class RobotChassis {
         resourceField: this.resourceField,
       } as ModuleRuntimeContext,
     );
+    this.notifyModuleListeners();
     return meta;
   }
 
@@ -129,7 +195,191 @@ export class RobotChassis {
 
     module.onDetach?.();
     this.bus.unregisterModule(moduleId);
+    this.notifyModuleListeners();
     return module;
+  }
+
+  storeModule(moduleId: string): ModuleStoreResult {
+    const trimmedId = moduleId.trim().toLowerCase();
+    if (!trimmedId) {
+      return { success: false, moduleId: trimmedId, reason: 'not-found' };
+    }
+
+    let module: RobotModule | null = null;
+    try {
+      module = this.detachModule(trimmedId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Module detachment blocked.';
+      return { success: false, moduleId: trimmedId, reason: 'blocked', message };
+    }
+
+    if (!module) {
+      return { success: false, moduleId: trimmedId, reason: 'not-found' };
+    }
+
+    const resourceId = toModuleResourceId(trimmedId);
+    const result = this.inventory.store(resourceId, 1);
+
+    if (result.stored < 1) {
+      this.attachModule(module);
+      return { success: false, moduleId: trimmedId, reason: 'inventory-full' };
+    }
+
+    this.notifyModuleListeners();
+    return { success: true, moduleId: trimmedId, quantity: result.total };
+  }
+
+  mountModule(moduleId: string): ModuleMountResult {
+    const trimmedId = moduleId.trim().toLowerCase();
+    if (!trimmedId) {
+      return { success: false, moduleId: trimmedId, reason: 'not-found' };
+    }
+    const resourceId = toModuleResourceId(trimmedId);
+    const withdrawn = this.inventory.withdraw(resourceId, 1);
+    if (withdrawn.withdrawn < 1) {
+      return { success: false, moduleId: trimmedId, reason: 'not-found' };
+    }
+
+    try {
+      const module = createModuleInstance(trimmedId);
+      this.attachModule(module);
+      this.notifyModuleListeners();
+      return { success: true, moduleId: trimmedId };
+    } catch (error) {
+      this.inventory.store(resourceId, withdrawn.withdrawn);
+      const message = error instanceof Error ? error.message : 'Module attachment failed.';
+      return { success: false, moduleId: trimmedId, reason: 'blocked', message };
+    }
+  }
+
+  dropModule(
+    moduleId: string,
+    amount = 1,
+    { mergeDistance = 32 }: { mergeDistance?: number } = {},
+  ): ModuleDropResult {
+    const trimmedId = moduleId.trim().toLowerCase();
+    if (!trimmedId || amount <= 0) {
+      return { success: false, moduleId: trimmedId, reason: 'not-available', message: 'Invalid module request.' };
+    }
+    const resourceId = toModuleResourceId(trimmedId);
+    const withdrawn = this.inventory.withdraw(resourceId, amount);
+    if (withdrawn.withdrawn <= 0) {
+      return { success: false, moduleId: trimmedId, reason: 'not-available' };
+    }
+
+    const state = this.getStateSnapshot();
+    const node = this.resourceField.upsertNode({
+      type: resourceId,
+      position: { ...state.position },
+      quantity: withdrawn.withdrawn,
+      mergeDistance,
+      metadata: {
+        moduleId: trimmedId,
+        source: 'module-drop',
+      },
+    });
+
+    this.notifyModuleListeners();
+    return { success: true, moduleId: trimmedId, quantity: withdrawn.withdrawn, nodeId: node.id };
+  }
+
+  pickUpModule(
+    nodeId: string,
+    amount = 1,
+    { maxDistance = 64 }: { maxDistance?: number } = {},
+  ): ModulePickupResult {
+    const state = this.getStateSnapshot();
+    const harvest = this.resourceField.harvest({
+      nodeId,
+      origin: { ...state.position },
+      amount,
+      maxDistance,
+    });
+
+    if (harvest.status === 'not-found') {
+      return { success: false, moduleId: '', nodeId, reason: 'not-found', message: 'Module pile not found.' };
+    }
+
+    const moduleId = fromModuleResourceId(harvest.type ?? '');
+    if (!moduleId) {
+      if (harvest.harvested > 0) {
+        this.resourceField.restore(nodeId, harvest.harvested);
+      }
+      return {
+        success: false,
+        moduleId: '',
+        nodeId,
+        reason: 'invalid',
+        message: 'Node does not contain modules.',
+        remaining: harvest.remaining,
+      };
+    }
+
+    if (harvest.status === 'out-of-range') {
+      return {
+        success: false,
+        moduleId,
+        nodeId,
+        reason: 'out-of-range',
+        message: 'Module pile is out of range.',
+        remaining: harvest.remaining,
+      };
+    }
+
+    const requestedAmount = Math.max(amount, 0);
+    if (requestedAmount <= 0) {
+      return { success: true, moduleId, quantity: 0, nodeId, remaining: harvest.remaining };
+    }
+
+    const storeResult = this.inventory.store(toModuleResourceId(moduleId), harvest.harvested);
+    const overflow = harvest.harvested - storeResult.stored;
+    if (overflow > 0) {
+      this.resourceField.restore(nodeId, overflow);
+      return {
+        success: false,
+        moduleId,
+        nodeId,
+        reason: 'inventory-full',
+        message: 'No space in inventory for modules.',
+        remaining: this.resourceField.list().find((node) => node.id === nodeId)?.quantity ?? harvest.remaining,
+      };
+    }
+
+    this.notifyModuleListeners();
+    return {
+      success: true,
+      moduleId,
+      quantity: storeResult.stored,
+      nodeId,
+      remaining: Math.max(harvest.remaining, 0),
+    };
+  }
+
+  subscribeModules(listener: ModuleListener): () => void {
+    if (this.moduleListeners.size === 0) {
+      this.moduleInventoryUnsubscribe = this.inventory.subscribe(() => {
+        this.notifyModuleListeners();
+      });
+    }
+    this.moduleListeners.add(listener);
+    listener(this.getModuleStateSnapshot());
+    return () => {
+      this.moduleListeners.delete(listener);
+      if (this.moduleListeners.size === 0) {
+        this.moduleInventoryUnsubscribe?.();
+        this.moduleInventoryUnsubscribe = null;
+      }
+    };
+  }
+
+  private notifyModuleListeners(): void {
+    if (this.moduleListeners.size === 0) {
+      return;
+    }
+    const snapshot = this.getModuleStateSnapshot();
+    for (const listener of this.moduleListeners) {
+      listener(snapshot);
+    }
   }
 
   queueActuatorRequest(moduleId: string, channel: string, payload: unknown, priority = 0): void {

@@ -1,6 +1,11 @@
 import { Sprite, type Renderer } from 'pixi.js';
 import { assetService } from '../assetService';
 import { ECSWorld, type ComponentHandle, type EntityId } from '../ecs';
+import {
+  createProgramRunnerSystem,
+  createRobotPhysicsSystem,
+  createSpriteSyncSystem,
+} from '../ecs/systems';
 import { RobotChassis } from '../robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../robot/modules/moduleLibrary';
 import { BlockProgramRunner } from './blockProgramRunner';
@@ -149,6 +154,10 @@ export async function createSimulationWorld({
     selectRobot,
     getSelectedRobot,
   };
+
+  world.addSystem(createProgramRunnerSystem({ ProgramRunner }));
+  world.addSystem(createRobotPhysicsSystem({ RobotCore, Transform }));
+  world.addSystem(createSpriteSyncSystem({ Transform, SpriteRef }));
 
   return context;
 }

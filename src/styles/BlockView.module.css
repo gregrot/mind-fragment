@@ -99,7 +99,44 @@
   min-height: 2.75rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0;
+}
+
+.slotDropTarget {
+  min-height: 0.75rem;
+  margin: var(--space-2) 0;
+}
+
+.slotDropTarget::after {
+  content: '';
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: rgba(100, 249, 255, 0.18);
+  opacity: 0;
+  transition: opacity var(--transition-base), background var(--transition-base);
+}
+
+.slotDropTarget[data-dropzone-active='true']::after {
+  opacity: 1;
+  background: var(--color-accent-cyan);
+}
+
+.slotDropTargetLeading {
+  margin-top: 0;
+}
+
+.slotDropTargetTrailing {
+  margin-bottom: 0;
+}
+
+.slotDropTargetEmpty {
+  min-height: 3.5rem;
+  margin: var(--space-2) 0;
+  border-color: var(--color-slot-border);
+  background: rgba(155, 107, 255, 0.12);
 }
 
 .slotPlaceholder {
@@ -134,7 +171,7 @@
   }
 
   .slotBody {
-    gap: var(--space-2);
+    gap: 0;
   }
 
   .slotPlaceholder {

@@ -1,8 +1,9 @@
-import { useCallback, useRef, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { Fragment, useCallback, useRef, type MouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
 import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
 import { getDropTargetFromTouchEvent } from '../utils/dropTarget';
+import DropZone from './DropZone';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -236,18 +237,64 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdate
         onDrop={handleDrop}
       >
         {blocks.length === 0 ? (
-          <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop blocks here</div>
-        ) : null}
-        {blocks.map((childBlock) => (
-          <BlockView
-            key={childBlock.instanceId}
-            block={childBlock}
-            path={path}
+          <DropZone
+            className={styles.slotDropTargetEmpty}
+            target={{
+              kind: 'slot',
+              ownerId: owner.instanceId,
+              slotName,
+              position: 0,
+              ancestorIds: path,
+            }}
             onDrop={onDrop}
-            onTouchDrop={onTouchDrop}
-            onUpdateBlock={onUpdateBlock}
-          />
-        ))}
+          >
+            <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop blocks here</div>
+          </DropZone>
+        ) : (
+          <>
+            <DropZone
+              className={`${styles.slotDropTarget} ${styles.slotDropTargetLeading}`}
+              target={{
+                kind: 'slot',
+                ownerId: owner.instanceId,
+                slotName,
+                position: 0,
+                ancestorIds: path,
+              }}
+              onDrop={onDrop}
+            />
+            {blocks.map((childBlock, index) => {
+              const trailingClassName =
+                index === blocks.length - 1 ? styles.slotDropTargetTrailing : undefined;
+              const dropTargetClassName = [styles.slotDropTarget, trailingClassName]
+                .filter(Boolean)
+                .join(' ');
+
+              return (
+                <Fragment key={childBlock.instanceId}>
+                  <BlockView
+                    block={childBlock}
+                    path={path}
+                    onDrop={onDrop}
+                    onTouchDrop={onTouchDrop}
+                    onUpdateBlock={onUpdateBlock}
+                  />
+                  <DropZone
+                    className={dropTargetClassName}
+                    target={{
+                      kind: 'slot',
+                      ownerId: owner.instanceId,
+                      slotName,
+                      position: index + 1,
+                      ancestorIds: path,
+                    }}
+                    onDrop={onDrop}
+                  />
+                </Fragment>
+              );
+            })}
+          </>
+        )}
       </div>
     </section>
   );

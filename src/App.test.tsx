@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { simulationRuntime } from './state/simulationRuntime';
+
+afterEach(() => {
+  cleanup();
+});
 
 const createDataTransfer = (): DataTransfer => {
   const store = new Map<string, string>();
@@ -23,6 +27,39 @@ const createDataTransfer = (): DataTransfer => {
 const getWorkspaceDropzone = (): HTMLElement => {
   const zones = screen.getAllByTestId('workspace-dropzone');
   return zones[zones.length - 1];
+};
+
+const stubElementFromPoint = (element: Element | null) => {
+  const doc = document as Document & {
+    elementFromPoint?: (x: number, y: number) => Element | null;
+  };
+  const original = doc.elementFromPoint;
+  doc.elementFromPoint = () => element;
+  return () => {
+    if (original) {
+      doc.elementFromPoint = original;
+    } else {
+      doc.elementFromPoint = () => null;
+    }
+  };
+};
+
+const dispatchCancelableTouchMove = (
+  element: Element,
+): ReturnType<typeof vi.fn> => {
+  const moveEvent = new Event('touchmove', { bubbles: true, cancelable: true });
+  Object.defineProperty(moveEvent, 'touches', {
+    value: [{ clientX: 15, clientY: 15 } as unknown as Touch],
+    configurable: true,
+  });
+  const originalPreventDefault = moveEvent.preventDefault.bind(moveEvent);
+  const preventDefaultSpy = vi.fn(() => originalPreventDefault());
+  Object.defineProperty(moveEvent, 'preventDefault', {
+    value: preventDefaultSpy,
+    configurable: true,
+  });
+  fireEvent(element, moveEvent);
+  return preventDefaultSpy;
 };
 
 const renderAppWithOverlay = () => {
@@ -269,6 +306,88 @@ describe('block workspace drag and drop', () => {
     });
   });
 
+  it('allows dropping a palette block into the workspace root via touch', async () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const restoreElementFromPoint = stubElementFromPoint(workspaceDropzone);
+
+    fireEvent.touchStart(repeatPaletteItem, {
+      touches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+    fireEvent.touchEnd(repeatPaletteItem, {
+      changedTouches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+
+    const workspace = getWorkspaceDropzone();
+    await within(workspace).findByTestId('block-repeat');
+    restoreElementFromPoint();
+  });
+
+  it('places palette blocks into nested slots when using touch input', async () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const repeatTransfer = createDataTransfer();
+
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: repeatTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const repeatBlock = await within(workspace).findByTestId('block-repeat');
+    const doSlotDropzone = within(repeatBlock).getByTestId('slot-do-dropzone');
+
+    const [movePaletteItem] = screen.getAllByTestId('palette-move');
+    const restoreElementFromPoint = stubElementFromPoint(doSlotDropzone);
+
+    fireEvent.touchStart(movePaletteItem, {
+      touches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+    fireEvent.touchEnd(movePaletteItem, {
+      changedTouches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+
+    await within(repeatBlock).findByTestId('block-move');
+    restoreElementFromPoint();
+  });
+
+  it('prevents default behaviour while dragging a palette block with touch', () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+
+    fireEvent.touchStart(repeatPaletteItem, {
+      touches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatPaletteItem);
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('prevents default behaviour while dragging a workspace block with touch', async () => {
+    renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const repeatTransfer = createDataTransfer();
+
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: repeatTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const repeatBlock = await within(workspace).findByTestId('block-repeat');
+
+    fireEvent.touchStart(repeatBlock, {
+      touches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatBlock);
+    expect(preventDefault).toHaveBeenCalled();
+  });
   it('compiles and reports a routine when Run Program is pressed', () => {
     renderAppWithOverlay();
 

@@ -222,27 +222,7 @@ export class RootScene {
     this.viewport.update(stepSeconds * 60);
 
     const context = this.context;
-    const programRunner = context?.getProgramRunner();
-    if (programRunner) {
-      programRunner.update(stepSeconds);
-    }
-
-    if (context) {
-      const robotCore = context.getRobotCore();
-      if (robotCore) {
-        robotCore.tick(stepSeconds);
-        const state = robotCore.getStateSnapshot();
-        context.setTransform(context.entities.robot, {
-          position: { x: state.position.x, y: state.position.y },
-          rotation: state.orientation,
-        });
-        const sprite = context.getSprite();
-        if (sprite) {
-          sprite.rotation = state.orientation;
-          sprite.position.set(state.position.x, state.position.y);
-        }
-      }
-    }
+    context?.world.runSystems(stepSeconds);
 
     this.updateStatusIndicator();
     this.updateDebugOverlay();

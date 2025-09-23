@@ -1,16 +1,11 @@
-import { Application, Container, Graphics, Sprite, Text, Ticker } from 'pixi.js';
+import { Application, Container, Graphics, Text, Ticker } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
-import { RobotChassis } from './robot';
-import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from './robot/modules/moduleLibrary';
+import type { RobotChassis } from './robot';
 import { STATUS_MODULE_ID } from './robot/modules/statusModule';
 import type { BlockInstruction, CompiledProgram } from './runtime/blockProgram';
-import {
-  BlockProgramRunner,
-  type ProgramDebugFrame,
-  type ProgramDebugState,
-  type ProgramRunnerStatus,
-} from './runtime/blockProgramRunner';
+import { type ProgramDebugFrame, type ProgramDebugState, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
+import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
 import { ResourceLayer } from './resourceLayer';
 
@@ -21,7 +16,6 @@ interface TickPayload {
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
-const DEFAULT_ROBOT_ID = 'MF-01';
 const DEBUG_PADDING = 8;
 const DEBUG_VERTICAL_OFFSET = 72;
 const DEBUG_CORNER_RADIUS = 8;
@@ -38,16 +32,15 @@ export class RootScene {
   private readonly viewport: Viewport;
   private readonly backgroundLayer: Container;
   private readonly rootLayer: Container;
-  private robotCore: RobotChassis | null;
-  private robot: Sprite | null;
+  private context: SimulationWorldContext | null;
+  private readonly pendingContextCallbacks: Array<{ callback: (context: SimulationWorldContext) => void }>;
   private hasPlayerPanned: boolean;
   private accumulator: number;
   private readonly tickHandler: (payload: TickPayload) => void;
-  private programRunner: BlockProgramRunner | null;
   private programStatus: ProgramRunnerStatus;
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
-  private selectedRobotId: string | null;
+  private pendingSelection: string | null;
   private statusIndicator: Graphics | null;
   private resourceLayer: ResourceLayer | null;
   private debugOverlay: Container | null;
@@ -93,14 +86,9 @@ export class RootScene {
     this.rootLayer.sortableChildren = true;
     this.viewport.addChild(this.rootLayer);
 
-    this.robotCore = new RobotChassis();
-    for (const moduleId of DEFAULT_MODULE_LOADOUT) {
-      const moduleInstance = createModuleInstance(moduleId);
-      this.robotCore.attachModule(moduleInstance);
-    }
-
+    this.context = null;
+    this.pendingContextCallbacks = [];
     this.resourceLayer = null;
-    this.robot = null;
     this.debugOverlay = null;
     this.debugBackground = null;
     this.debugText = null;
@@ -110,46 +98,85 @@ export class RootScene {
 
     this.programListeners = new Set();
     this.selectionListeners = new Set();
-    this.selectedRobotId = null;
+    this.pendingSelection = null;
     this.statusIndicator = null;
-    this.programRunner = this.robotCore
-      ? new BlockProgramRunner(this.robotCore, (status) => this.handleProgramStatus(status))
-      : null;
-    this.programStatus = this.programRunner?.getStatus() ?? 'idle';
+    this.programStatus = 'idle';
 
-    if (this.robotCore) {
-      this.resourceLayer = new ResourceLayer(this.app.renderer, this.robotCore.resourceField);
+    void this.initialiseSimulationWorld();
+  }
+
+  private async initialiseSimulationWorld(): Promise<void> {
+    const context = await createSimulationWorld({
+      renderer: this.app.renderer,
+      onRobotSelected: (robotId) => this.notifyRobotSelected(robotId),
+    });
+
+    this.context = context;
+
+    const robotCore = context.getRobotCore();
+    if (robotCore) {
+      this.resourceLayer = new ResourceLayer(this.app.renderer, robotCore.resourceField);
       this.rootLayer.addChild(this.resourceLayer.view);
     }
 
-    void this.initPlaceholderActors();
-  }
+    const sprite = context.getSprite();
+    if (sprite) {
+      this.rootLayer.addChild(sprite);
+    }
 
-  private async initPlaceholderActors(): Promise<void> {
-    const texture = await assetService.loadTexture('robot/chassis', this.app.renderer);
-    const robot = new Sprite(texture);
-    robot.anchor.set(0.5);
-    robot.position.set(0, 0);
-    robot.eventMode = 'static';
-    robot.interactive = true;
-    robot.cursor = 'pointer';
-    robot.zIndex = 10;
-    robot.on('pointerdown', () => {
-      this.notifyRobotSelected(DEFAULT_ROBOT_ID);
-    });
-    robot.on('pointertap', () => {
-      this.notifyRobotSelected(DEFAULT_ROBOT_ID);
-    });
-    this.rootLayer.addChild(robot);
+    const programRunner = context.getProgramRunner();
+    if (programRunner) {
+      programRunner.setStatusListener((status) => this.handleProgramStatus(status));
+      this.programStatus = programRunner.getStatus();
+    } else {
+      this.programStatus = 'idle';
+    }
 
-    this.robot = robot;
-    this.ensureDebugOverlay();
+    const transform = context.getTransform();
+    if (transform && sprite) {
+      sprite.position.set(transform.position.x, transform.position.y);
+      sprite.rotation = transform.rotation;
+    }
+
+    if (this.pendingSelection !== null) {
+      if (context.getSelectedRobot() !== this.pendingSelection) {
+        context.selectRobot(this.pendingSelection);
+      }
+    } else if (context.getSelectedRobot() !== null) {
+      context.selectRobot(null);
+    }
+
+    this.flushPendingContextCallbacks(context);
+
+    if (!this.hasPlayerPanned && sprite) {
+      this.viewport.moveCenter(sprite.position.x, sprite.position.y);
+    }
+
     this.updateStatusIndicator();
     this.updateDebugOverlay();
+  }
 
-    if (!this.hasPlayerPanned) {
-      this.viewport.moveCenter(robot.position.x, robot.position.y);
+  private flushPendingContextCallbacks(context: SimulationWorldContext): void {
+    const callbacks = [...this.pendingContextCallbacks];
+    this.pendingContextCallbacks.length = 0;
+    for (const entry of callbacks) {
+      entry.callback(context);
     }
+  }
+
+  private onContextReady(callback: (context: SimulationWorldContext) => void): () => void {
+    if (this.context) {
+      callback(this.context);
+      return () => {};
+    }
+    const entry = { callback } as const;
+    this.pendingContextCallbacks.push(entry);
+    return () => {
+      const index = this.pendingContextCallbacks.indexOf(entry);
+      if (index >= 0) {
+        this.pendingContextCallbacks.splice(index, 1);
+      }
+    };
   }
 
   private createGridLayer(): Container {
@@ -194,18 +221,27 @@ export class RootScene {
     const stepSeconds = stepMs / 1000;
     this.viewport.update(stepSeconds * 60);
 
-    if (this.programRunner) {
-      this.programRunner.update(stepSeconds);
+    const context = this.context;
+    const programRunner = context?.getProgramRunner();
+    if (programRunner) {
+      programRunner.update(stepSeconds);
     }
 
-    if (this.robotCore) {
-      this.robotCore.tick(stepSeconds);
-    }
-
-    if (this.robot && this.robotCore) {
-      const state = this.robotCore.getStateSnapshot();
-      this.robot.rotation = state.orientation;
-      this.robot.position.set(state.position.x, state.position.y);
+    if (context) {
+      const robotCore = context.getRobotCore();
+      if (robotCore) {
+        robotCore.tick(stepSeconds);
+        const state = robotCore.getStateSnapshot();
+        context.setTransform(context.entities.robot, {
+          position: { x: state.position.x, y: state.position.y },
+          rotation: state.orientation,
+        });
+        const sprite = context.getSprite();
+        if (sprite) {
+          sprite.rotation = state.orientation;
+          sprite.position.set(state.position.x, state.position.y);
+        }
+      }
     }
 
     this.updateStatusIndicator();
@@ -216,18 +252,33 @@ export class RootScene {
     this.viewport.resize(width, height, width, height);
 
     if (!this.hasPlayerPanned) {
-      const targetX = this.robot?.position.x ?? 0;
-      const targetY = this.robot?.position.y ?? 0;
+      const sprite = this.context?.getSprite();
+      const targetX = sprite?.position.x ?? 0;
+      const targetY = sprite?.position.y ?? 0;
       this.viewport.moveCenter(targetX, targetY);
     }
   }
 
   runProgram(program: CompiledProgram): void {
-    this.programRunner?.load(program);
+    const execute = (context: SimulationWorldContext) => {
+      context.getProgramRunner()?.load(program);
+    };
+    if (this.context) {
+      execute(this.context);
+      return;
+    }
+    this.onContextReady(execute);
   }
 
   stopProgram(): void {
-    this.programRunner?.stop();
+    const execute = (context: SimulationWorldContext) => {
+      context.getProgramRunner()?.stop();
+    };
+    if (this.context) {
+      execute(this.context);
+      return;
+    }
+    this.onContextReady(execute);
   }
 
   getProgramStatus(): ProgramRunnerStatus {
@@ -235,18 +286,36 @@ export class RootScene {
   }
 
   getInventorySnapshot(): InventorySnapshot {
-    if (!this.robotCore) {
+    const robotCore = this.context?.getRobotCore();
+    if (!robotCore) {
       return { capacity: 0, used: 0, available: 0, entries: [] };
     }
-    return this.robotCore.getInventorySnapshot();
+    return robotCore.getInventorySnapshot();
   }
 
   subscribeInventory(listener: (snapshot: InventorySnapshot) => void): () => void {
-    if (!this.robotCore) {
-      listener({ capacity: 0, used: 0, available: 0, entries: [] });
-      return () => {};
-    }
-    return this.robotCore.inventory.subscribe(listener);
+    listener(this.getInventorySnapshot());
+
+    let unsubscribed = false;
+    let teardown: (() => void) | null = null;
+
+    const cancelReady = this.onContextReady((context) => {
+      if (unsubscribed) {
+        return;
+      }
+      const robotCore = context.getRobotCore();
+      if (!robotCore) {
+        return;
+      }
+      teardown = robotCore.inventory.subscribe(listener);
+    });
+
+    return () => {
+      unsubscribed = true;
+      cancelReady();
+      teardown?.();
+      teardown = null;
+    };
   }
 
   subscribeProgramStatus(listener: (status: ProgramRunnerStatus) => void): () => void {
@@ -259,7 +328,7 @@ export class RootScene {
 
   subscribeRobotSelection(listener: RobotSelectionListener): () => void {
     this.selectionListeners.add(listener);
-    listener(this.selectedRobotId);
+    listener(this.pendingSelection);
     return () => {
       this.selectionListeners.delete(listener);
     };
@@ -274,7 +343,7 @@ export class RootScene {
   }
 
   getSelectedRobot(): string | null {
-    return this.selectedRobotId;
+    return this.pendingSelection;
   }
 
   private ensureDebugOverlay(): void {
@@ -312,7 +381,16 @@ export class RootScene {
   }
 
   private updateDebugOverlay(): void {
-    if (!this.robotCore || !this.robot || !this.programRunner) {
+    const context = this.context;
+    if (!context) {
+      this.hideDebugOverlay();
+      return;
+    }
+
+    const robotCore = context.getRobotCore();
+    const sprite = context.getSprite();
+    const programRunner = context.getProgramRunner();
+    if (!robotCore || !sprite || !programRunner) {
       this.hideDebugOverlay();
       return;
     }
@@ -323,8 +401,8 @@ export class RootScene {
       return;
     }
 
-    const programDebug = this.programRunner.getDebugState();
-    const telemetry = this.robotCore.getTelemetrySnapshot();
+    const programDebug = programRunner.getDebugState();
+    const telemetry = robotCore.getTelemetrySnapshot();
 
     const lines: string[] = [];
     const programLines = this.describeProgramDebug(programDebug);
@@ -371,8 +449,8 @@ export class RootScene {
     this.debugText.anchor.set(0.5, 0);
     this.debugText.position.set(0, -DEBUG_VERTICAL_OFFSET - backgroundHeight + padding);
 
-    const targetX = this.robot.position.x;
-    const targetY = this.robot.position.y;
+    const targetX = sprite.position.x;
+    const targetY = sprite.position.y;
     this.debugOverlay.position.set(targetX, targetY);
 
     const scaleX = this.viewport.scale.x || 1;
@@ -557,12 +635,11 @@ export class RootScene {
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.viewport.destroy({ children: true, texture: false });
-    this.programRunner?.stop();
-    this.programRunner = null;
     this.programListeners.clear();
     this.programStatus = 'idle';
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
+    this.pendingContextCallbacks.length = 0;
     if (this.debugOverlay) {
       this.debugOverlay.destroy({ children: true });
       this.debugOverlay = null;
@@ -575,15 +652,25 @@ export class RootScene {
       this.resourceLayer.destroy();
       this.resourceLayer = null;
     }
-    if (this.robotCore) {
-      const modules = [...this.robotCore.moduleStack.list()].reverse();
-      for (const module of modules) {
-        this.robotCore.detachModule(module.definition.id);
+    const context = this.context;
+    if (context) {
+      context.getProgramRunner()?.stop();
+
+      const robotCore = context.getRobotCore();
+      if (robotCore) {
+        const modules = [...robotCore.moduleStack.list()].reverse();
+        for (const module of modules) {
+          robotCore.detachModule(module.definition.id);
+        }
       }
-      this.robotCore = null;
+
+      const sprite = context.getSprite();
+      sprite?.destroy({ children: true });
+
+      context.world.destroyEntity(context.entities.robot);
+      context.world.destroyEntity(context.entities.selection);
+      this.context = null;
     }
-    this.robot?.destroy({ children: true });
-    this.robot = null;
     this.statusIndicator?.destroy();
     this.statusIndicator = null;
     assetService.disposeAll();
@@ -597,17 +684,26 @@ export class RootScene {
   }
 
   private notifyRobotSelected(robotId: string | null): void {
-    if (this.selectedRobotId === robotId) {
+    if (this.pendingSelection === robotId) {
       return;
     }
-    this.selectedRobotId = robotId;
+    this.pendingSelection = robotId;
+    if (this.context) {
+      const current = this.context.getSelectedRobot();
+      if (current !== robotId) {
+        this.context.selectRobot(robotId);
+      }
+    }
     for (const listener of this.selectionListeners) {
       listener(robotId);
     }
   }
 
   private updateStatusIndicator(): void {
-    if (!this.robotCore || !this.robot) {
+    const context = this.context;
+    const robotCore = context?.getRobotCore();
+    const sprite = context?.getSprite();
+    if (!robotCore || !sprite) {
       if (this.statusIndicator) {
         this.statusIndicator.destroy();
         this.statusIndicator = null;
@@ -615,7 +711,7 @@ export class RootScene {
       return;
     }
 
-    const hasStatusModule = Boolean(this.robotCore.moduleStack.getModule(STATUS_MODULE_ID));
+    const hasStatusModule = Boolean(robotCore.moduleStack.getModule(STATUS_MODULE_ID));
     if (!hasStatusModule) {
       if (this.statusIndicator) {
         this.statusIndicator.destroy();
@@ -631,11 +727,11 @@ export class RootScene {
       indicator.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.85 });
       indicator.stroke();
       indicator.position.set(0, 0);
-      this.robot.addChild(indicator);
+      sprite.addChild(indicator);
       this.statusIndicator = indicator;
     }
 
-    const telemetry = this.robotCore.getTelemetrySnapshot();
+    const telemetry = robotCore.getTelemetrySnapshot();
     const statusTelemetry = telemetry.values[STATUS_MODULE_ID];
     const activeEntry = statusTelemetry?.active;
     const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;

@@ -9,6 +9,7 @@ import type { WorkspaceState } from './types/blocks';
 import styles from './styles/App.module.css';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
+const ONBOARDING_ENABLED = false;
 
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
@@ -204,7 +205,12 @@ const App = (): JSX.Element => {
         onRemoveBlock={removeBlockInstance}
         robotId={activeRobotId}
       />
-      <OnboardingFlow replaceWorkspace={replaceWorkspace} openProgrammingOverlay={handleProgramRobot} />
+      {ONBOARDING_ENABLED ? (
+        <OnboardingFlow
+          replaceWorkspace={replaceWorkspace}
+          openProgrammingOverlay={handleProgramRobot}
+        />
+      ) : null}
     </div>
   );
 };

@@ -14,9 +14,17 @@ afterEach(() => {
 });
 
 describe('Block parameter editors', () => {
-  const renderBlockView = (block: BlockInstance, options: { onDrop?: ReturnType<typeof vi.fn>; onUpdateBlock?: ReturnType<typeof vi.fn> } = {}) => {
+  const renderBlockView = (
+    block: BlockInstance,
+    options: {
+      onDrop?: ReturnType<typeof vi.fn>;
+      onUpdateBlock?: ReturnType<typeof vi.fn>;
+      onRemoveBlock?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) => {
     const onDrop = options.onDrop ?? vi.fn();
     const onUpdateBlock = options.onUpdateBlock ?? vi.fn();
+    const onRemoveBlock = options.onRemoveBlock ?? vi.fn();
 
     render(
       <BlockView
@@ -24,10 +32,11 @@ describe('Block parameter editors', () => {
         path={[]}
         onDrop={onDrop}
         onUpdateBlock={onUpdateBlock}
+        onRemoveBlock={onRemoveBlock}
       />,
     );
 
-    return { onDrop, onUpdateBlock };
+    return { onDrop, onUpdateBlock, onRemoveBlock };
   };
 
   it('updates numeric parameters when editing the field value', () => {
@@ -102,6 +111,18 @@ describe('Block parameter editors', () => {
       position: 0,
       ancestorIds: [block.instanceId],
     });
+  });
+
+  it('invokes the remove callback when clicking the delete button', () => {
+    const block = createBlockInstance('repeat');
+    const onRemoveBlock = vi.fn();
+    renderBlockView(block, { onRemoveBlock });
+
+    const deleteButton = screen.getByTestId('block-repeat-delete');
+    deleteButton.click();
+
+    expect(onRemoveBlock).toHaveBeenCalledTimes(1);
+    expect(onRemoveBlock).toHaveBeenCalledWith(block.instanceId);
   });
 
   it('refreshes signal options when telemetry snapshots change', async () => {

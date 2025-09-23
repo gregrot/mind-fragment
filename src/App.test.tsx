@@ -490,16 +490,20 @@ describe('block workspace drag and drop', () => {
     const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
     const runButtons = screen.getAllByTestId('run-program');
     let matchedProgram: { instructions: BlockInstruction[] } | null = null;
+    let matchedRobotId: string | undefined;
 
     for (const button of runButtons) {
       runSpy.mockClear();
       fireEvent.click(button);
-      const [program] = runSpy.mock.calls[0] ?? [];
+      const [robotId, program] = runSpy.mock.calls[0] ?? [];
       if (program?.instructions?.length) {
         matchedProgram = program;
+        matchedRobotId = robotId;
         break;
       }
     }
+
+    expect(matchedRobotId).toBe('MF-01');
 
     const instructions = matchedProgram?.instructions ?? [];
     expect(instructions).toHaveLength(1);

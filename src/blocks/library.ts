@@ -25,6 +25,30 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     paletteGroup: 'Actions',
   },
   {
+    id: 'move-to',
+    label: 'Move To Target',
+    category: 'action',
+    summary:
+      'Travel towards the most recent scan result, or fall back to a specified coordinate when no survey data exists.',
+    parameters: {
+      useScanHit: { kind: 'boolean', defaultValue: true },
+      scanHitIndex: { kind: 'number', defaultValue: 1, min: 1, step: 1 },
+      targetX: { kind: 'number', defaultValue: 0 },
+      targetY: { kind: 'number', defaultValue: 0 },
+      speed: { kind: 'number', defaultValue: 80 },
+    },
+    expressionInputs: ['useScanHit', 'scanHitIndex', 'targetX', 'targetY', 'speed'],
+    expressionInputDefaults: {
+      useScanHit: ['literal-boolean'],
+      scanHitIndex: ['literal-number'],
+      targetX: ['literal-number'],
+      targetY: ['literal-number'],
+      speed: ['literal-number'],
+    },
+    paletteGroup: 'Motor',
+    paletteTags: ['navigation', 'movement', 'motor'],
+  },
+  {
     id: 'turn',
     label: 'Turn Left',
     category: 'action',

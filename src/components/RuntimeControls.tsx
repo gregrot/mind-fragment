@@ -7,6 +7,7 @@ import styles from '../styles/RuntimeControls.module.css';
 
 interface RuntimeControlsProps {
   workspace: WorkspaceState;
+  robotId: string;
 }
 
 const formatStatus = (status: string): string => {
@@ -20,8 +21,8 @@ const formatStatus = (status: string): string => {
   }
 };
 
-const RuntimeControls = ({ workspace }: RuntimeControlsProps): JSX.Element => {
-  const { status, runProgram, stopProgram } = useSimulationRuntime();
+const RuntimeControls = ({ workspace, robotId }: RuntimeControlsProps): JSX.Element => {
+  const { status, runProgram, stopProgram } = useSimulationRuntime(robotId);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
 
   const handleRun = useCallback(() => {

@@ -1,17 +1,25 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { simulationRuntime } from '../simulationRuntime';
 import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram';
+import { DEFAULT_ROBOT_ID } from '../../simulation/runtime/simulationWorld';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
-import { EMPTY_MODULE_STATE } from '../../simulation/robot/RobotChassis';
+import type { ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
+import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 
 const createSceneStub = () => {
-  const subscriptions: { status: ((status: string) => void) | null } = { status: null };
+  const statusListeners: Array<(status: ProgramRunnerStatus, robotId: string) => void> = [];
+  const telemetryListeners: Array<(snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void> = [];
+  const telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
+  let selectedRobotId: string | null = null;
   return {
-    subscribeProgramStatus: vi.fn((listener: (status: string) => void) => {
-      subscriptions.status = listener;
+    subscribeProgramStatus: vi.fn((listener: (status: ProgramRunnerStatus, robotId: string) => void) => {
+      statusListeners.push(listener);
       return () => {
-        subscriptions.status = null;
+        const index = statusListeners.indexOf(listener);
+        if (index >= 0) {
+          statusListeners.splice(index, 1);
+        }
       };
     }),
     getProgramStatus: vi.fn(() => 'idle' as const),
@@ -19,23 +27,55 @@ const createSceneStub = () => {
     stopProgram: vi.fn(),
     getInventorySnapshot: vi.fn(() => ({ capacity: 0, used: 0, available: 0, entries: [] })),
     subscribeInventory: vi.fn(() => () => {}),
-    subscribeTelemetry: vi.fn(() => () => {}),
-    subscribeModuleState: vi.fn(() => () => {}),
-    getTelemetrySnapshot: vi.fn(() => ({ values: {}, actions: {} })),
-    getModuleStateSnapshot: vi.fn(() => EMPTY_MODULE_STATE),
-    getSelectedRobot: vi.fn(() => null),
-    selectRobot: vi.fn(),
-    clearRobotSelection: vi.fn(),
-    triggerStatus: (status: Parameters<NonNullable<typeof subscriptions.status>>[0]) => {
-      subscriptions.status?.(status);
+    subscribeTelemetry: vi.fn((listener: (snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void) => {
+      telemetryListeners.push(listener);
+      return () => {
+        const index = telemetryListeners.indexOf(listener);
+        if (index >= 0) {
+          telemetryListeners.splice(index, 1);
+        }
+      };
+    }),
+    getTelemetrySnapshot: vi.fn((robotId: string = DEFAULT_ROBOT_ID) => telemetrySnapshots.get(robotId) ?? { values: {}, actions: {} }),
+    getSelectedRobot: vi.fn(() => selectedRobotId),
+    selectRobot: vi.fn((robotId: string) => {
+      selectedRobotId = robotId;
+    }),
+    clearRobotSelection: vi.fn(() => {
+      selectedRobotId = null;
+    }),
+    triggerStatus: (robotId: string, status: ProgramRunnerStatus) => {
+      for (const listener of statusListeners) {
+        listener(status, robotId);
+      }
     },
-  } as unknown as RootScene & { triggerStatus: (status: Parameters<NonNullable<typeof subscriptions.status>>[0]) => void };
+    triggerTelemetry: (robotId: string, snapshot: SimulationTelemetrySnapshot) => {
+      telemetrySnapshots.set(robotId, snapshot);
+      for (const listener of telemetryListeners) {
+        listener(snapshot, robotId);
+      }
+    },
+  } as unknown as RootScene & {
+    triggerStatus: (robotId: string, status: ProgramRunnerStatus) => void;
+    triggerTelemetry: (robotId: string, snapshot: SimulationTelemetrySnapshot) => void;
+  };
 };
+
+const createTelemetrySnapshot = (value: number): SimulationTelemetrySnapshot => ({
+  values: {
+    'mock.module': {
+      metric: { value, metadata: {}, revision: 1 },
+    },
+  },
+  actions: {},
+});
 
 describe('simulationRuntime', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    simulationRuntime.stopProgram();
+    simulationRuntime.stopProgram(DEFAULT_ROBOT_ID);
+    simulationRuntime.stopProgram('MF-02');
+    simulationRuntime.clearSelectedRobot();
   });
 
   it('runs the default startup program when a scene registers', () => {
@@ -43,10 +83,10 @@ describe('simulationRuntime', () => {
 
     simulationRuntime.registerScene(scene);
 
-    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_STARTUP_PROGRAM);
+    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
 
-    scene.triggerStatus('running');
-    expect(simulationRuntime.getStatus()).toBe('running');
+    scene.triggerStatus(DEFAULT_ROBOT_ID, 'running');
+    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('running');
 
     simulationRuntime.unregisterScene(scene);
   });
@@ -59,7 +99,7 @@ describe('simulationRuntime', () => {
     const secondScene = createSceneStub();
     simulationRuntime.registerScene(secondScene);
 
-    expect(secondScene.runProgram).toHaveBeenCalledWith(DEFAULT_STARTUP_PROGRAM);
+    expect(secondScene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
 
     simulationRuntime.unregisterScene(secondScene);
   });
@@ -70,13 +110,61 @@ describe('simulationRuntime', () => {
         { kind: 'wait', duration: createNumberLiteralBinding(1, { label: 'Queued → wait' }) },
       ],
     };
-    simulationRuntime.runProgram(customProgram);
+    simulationRuntime.runProgram(DEFAULT_ROBOT_ID, customProgram);
 
     const scene = createSceneStub();
     simulationRuntime.registerScene(scene);
 
-    expect(scene.runProgram).toHaveBeenCalledWith(customProgram);
-    expect(scene.runProgram).not.toHaveBeenCalledWith(DEFAULT_STARTUP_PROGRAM);
+    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, customProgram);
+    expect(scene.runProgram).not.toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
+
+    simulationRuntime.unregisterScene(scene);
+  });
+
+  it('tracks program status per robot independently', () => {
+    const scene = createSceneStub();
+    simulationRuntime.registerScene(scene);
+
+    const mf01Statuses: ProgramRunnerStatus[] = [];
+    const mf02Statuses: ProgramRunnerStatus[] = [];
+    simulationRuntime.subscribeStatus('MF-01', (status) => {
+      mf01Statuses.push(status);
+    });
+    simulationRuntime.subscribeStatus('MF-02', (status) => {
+      mf02Statuses.push(status);
+    });
+
+    scene.triggerStatus('MF-01', 'running');
+    expect(simulationRuntime.getStatus('MF-01')).toBe('running');
+    expect(simulationRuntime.getStatus('MF-02')).toBe('idle');
+
+    scene.triggerStatus('MF-02', 'running');
+    expect(simulationRuntime.getStatus('MF-01')).toBe('running');
+    expect(simulationRuntime.getStatus('MF-02')).toBe('running');
+
+    scene.triggerStatus('MF-02', 'completed');
+    expect(simulationRuntime.getStatus('MF-01')).toBe('running');
+    expect(simulationRuntime.getStatus('MF-02')).toBe('completed');
+
+    expect(mf01Statuses).toContain('running');
+    expect(mf02Statuses).toEqual(['idle', 'running', 'completed']);
+
+    simulationRuntime.unregisterScene(scene);
+  });
+
+  it('stores telemetry snapshots separately for each robot', () => {
+    const scene = createSceneStub();
+    simulationRuntime.registerScene(scene);
+
+    const mf01Telemetry = createTelemetrySnapshot(1);
+    const mf02Telemetry = createTelemetrySnapshot(2);
+
+    scene.triggerTelemetry('MF-01', mf01Telemetry);
+    expect(simulationRuntime.getTelemetrySnapshot('MF-01')).toEqual(mf01Telemetry);
+
+    scene.triggerTelemetry('MF-02', mf02Telemetry);
+    expect(simulationRuntime.getTelemetrySnapshot('MF-01')).toEqual(mf01Telemetry);
+    expect(simulationRuntime.getTelemetrySnapshot('MF-02')).toEqual(mf02Telemetry);
 
     simulationRuntime.unregisterScene(scene);
   });

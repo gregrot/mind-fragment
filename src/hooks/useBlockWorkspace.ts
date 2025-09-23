@@ -59,6 +59,7 @@ export function useBlockWorkspace(): {
   handleTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   replaceWorkspace: Dispatch<SetStateAction<WorkspaceState>>;
   updateBlockInstance: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  removeBlockInstance: (instanceId: string) => void;
 } {
   const [workspace, setWorkspace] = useState<WorkspaceState>([]);
 
@@ -126,11 +127,19 @@ export function useBlockWorkspace(): {
     [],
   );
 
+  const removeBlockInstance = useCallback((instanceId: string) => {
+    setWorkspace((current) => {
+      const result = removeBlock(current, instanceId);
+      return result.removed ? result.blocks : current;
+    });
+  }, []);
+
   return {
     workspace,
     handleDrop,
     handleTouchDrop,
     replaceWorkspace: setWorkspace,
     updateBlockInstance,
+    removeBlockInstance,
   };
 }

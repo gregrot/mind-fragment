@@ -146,40 +146,9 @@ assetService.defineVectorAsset('resource/biotic-spore', () => {
   return graphic;
 });
 
-const drawModuleToken = (fill: number, stroke: number, detail: number): Graphics => {
-  const graphic = new Graphics();
-  graphic.roundRect(-20, -24, 40, 48, 8);
-  graphic.fill({ color: fill, alpha: 0.9 });
-  graphic.setStrokeStyle({ width: 3, color: stroke, alpha: 0.95 });
-  graphic.stroke();
-
-  graphic.roundRect(-12, -8, 24, 16, 4);
-  graphic.fill({ color: detail, alpha: 0.95 });
-
-  graphic.setStrokeStyle({ width: 2, color: stroke, alpha: 0.6 });
-  graphic.moveTo(-10, 12);
-  graphic.lineTo(10, 12);
-  graphic.stroke();
-
-  return graphic;
-};
-
-assetService.defineVectorAsset('module/movement', () => drawModuleToken(0x4ecdc4, 0x1a535c, 0xf4fdfd));
-assetService.defineVectorAsset('module/manipulation', () => drawModuleToken(0xff6b6b, 0xc44536, 0xfff1f1));
-assetService.defineVectorAsset('module/inventory', () => drawModuleToken(0x6ab04c, 0x218c74, 0xf6ffed));
-assetService.defineVectorAsset('module/crafting', () => drawModuleToken(0xf7b731, 0xf4a261, 0xfff9e6));
-assetService.defineVectorAsset('module/scanning', () => drawModuleToken(0x778beb, 0x4a69bd, 0xf1f4ff));
-assetService.defineVectorAsset('module/status', () => drawModuleToken(0x9b5de5, 0x482677, 0xf7ecff));
-
 export const RESOURCE_TEXTURE_IDS: Record<string, string> = {
   default: 'resource/default',
   'ferrous-ore': 'resource/ferrous-ore',
   'silicate-crystal': 'resource/silicate-crystal',
   'biotic-spore': 'resource/biotic-spore',
-  'module:core.movement': 'module/movement',
-  'module:arm.manipulator': 'module/manipulation',
-  'module:storage.cargo': 'module/inventory',
-  'module:fabricator.basic': 'module/crafting',
-  'module:sensor.survey': 'module/scanning',
-  'module:status.signal': 'module/status',
 };

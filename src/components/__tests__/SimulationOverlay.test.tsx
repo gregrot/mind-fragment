@@ -24,6 +24,7 @@ describe('SimulationOverlay panels', () => {
     onDrop: vi.fn(),
     onTouchDrop: vi.fn(),
     onUpdateBlock: vi.fn(),
+    onRemoveBlock: vi.fn(),
     robotId: 'MF-01',
   } as const;
 

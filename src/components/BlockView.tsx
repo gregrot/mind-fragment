@@ -1,4 +1,11 @@
-import { Fragment, useCallback, useMemo, useRef, type TouchEvent as ReactTouchEvent } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useMemo,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from 'react';
 import { BLOCK_MAP } from '../blocks/library';
 import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
 import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
@@ -23,10 +30,19 @@ interface BlockViewProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  onRemoveBlock?: (instanceId: string) => void;
   telemetry?: RobotTelemetryData;
 }
 
-const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry }: BlockViewProps): JSX.Element | null => {
+const BlockView = ({
+  block,
+  path,
+  onDrop,
+  onTouchDrop,
+  onUpdateBlock,
+  onRemoveBlock,
+  telemetry,
+}: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
     return null;
@@ -132,6 +148,20 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
     touchPayloadRef.current = null;
   }, []);
 
+  const handleRemoveClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement> | ReactTouchEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+
+      if (!onRemoveBlock) {
+        return;
+      }
+
+      onRemoveBlock(block.instanceId);
+    },
+    [block.instanceId, onRemoveBlock],
+  );
+
   return (
     <div
       className={blockClassName}
@@ -145,6 +175,31 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
     >
       <header className={styles.blockHeader}>
         <span className={styles.blockTitle}>{definition.label}</span>
+        {onRemoveBlock ? (
+          <button
+            type="button"
+            className={styles.blockDeleteButton}
+            onMouseDown={(event) => event.stopPropagation()}
+            onTouchStart={(event) => event.stopPropagation()}
+            onDragStart={(event) => event.stopPropagation()}
+            onClick={handleRemoveClick}
+            aria-label={`Delete ${definition.label} block`}
+            data-testid={`block-${definition.id}-delete`}
+          >
+            <svg
+              className={styles.blockDeleteIcon}
+              viewBox="0 0 16 16"
+              role="presentation"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M4.22 4.22a.75.75 0 0 1 1.06 0L8 6.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L9.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L8 9.06l-2.72 2.72a.75.75 0 1 1-1.06-1.06L6.94 8 4.22 5.28a.75.75 0 0 1 0-1.06z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        ) : null}
       </header>
       {definition.summary && definition.category !== 'action' ? (
         <p className={styles.blockSummary}>{definition.summary}</p>
@@ -222,6 +277,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
                       onDrop={onDrop}
                       onTouchDrop={onTouchDrop}
                       onUpdateBlock={onUpdateBlock}
+                      onRemoveBlock={onRemoveBlock}
                       telemetry={telemetry}
                     />
                   )}
@@ -255,6 +311,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    onRemoveBlock={onRemoveBlock}
                     telemetry={telemetry}
                   />
                 )}
@@ -275,6 +332,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
               onDrop={onDrop}
               onTouchDrop={onTouchDrop}
               onUpdateBlock={onUpdateBlock}
+              onRemoveBlock={onRemoveBlock}
               telemetry={telemetry}
             />
           ))}
@@ -292,10 +350,21 @@ interface SlotViewProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  onRemoveBlock?: (instanceId: string) => void;
   telemetry?: RobotTelemetryData;
 }
 
-const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdateBlock, telemetry }: SlotViewProps): JSX.Element => {
+const SlotView = ({
+  owner,
+  slotName,
+  blocks,
+  path,
+  onDrop,
+  onTouchDrop,
+  onUpdateBlock,
+  onRemoveBlock,
+  telemetry,
+}: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
@@ -372,6 +441,7 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdate
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    onRemoveBlock={onRemoveBlock}
                     telemetry={telemetry}
                   />
                   <DropZone

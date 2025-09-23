@@ -12,6 +12,7 @@ interface RobotProgrammingPanelProps {
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  onRemoveBlock: (instanceId: string) => void;
   onClose: () => void;
   onConfirm: () => void;
   robotId: string;
@@ -22,6 +23,7 @@ const RobotProgrammingPanel = ({
   onDrop,
   onTouchDrop,
   onUpdateBlock,
+  onRemoveBlock,
   onClose,
   onConfirm,
   robotId,
@@ -61,12 +63,13 @@ const RobotProgrammingPanel = ({
             onDrop={onDrop}
             onTouchDrop={onTouchDrop}
             onUpdateBlock={onUpdateBlock}
+            onRemoveBlock={onRemoveBlock}
             telemetry={telemetry}
           />
         </section>
       </div>
       <footer className={styles.footer}>
-        <RuntimeControls workspace={workspace} />
+        <RuntimeControls workspace={workspace} robotId={robotId} />
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={onClose}>
             Cancel

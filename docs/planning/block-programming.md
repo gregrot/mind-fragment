@@ -35,6 +35,7 @@ This document outlines how the block-based programming pillar should function wi
 - Each robot ticks its programme on a shared scheduler; frame budget determined by chassis tier.
 - Heat accumulation is tracked per block. Excess heat triggers warnings, then auto-throttling or failsafe handover.
 - Failsafe routines are authored via a constrained palette unlocked early; they run when signal drops or heat caps out.
+- `MoveTo` routines now pull the most recent survey hit from runtime memory, steering towards the chosen index and falling back to literal coordinates when the buffer is empty.
 
 ### Content Layer
 - Story arcs introduce unique block modifiers (e.g., Nomads grant `MoveTo` → `AvoidBiome(type)`).

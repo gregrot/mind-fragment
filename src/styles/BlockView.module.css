@@ -8,6 +8,9 @@
   flex-direction: column;
   gap: var(--space-3);
   color: var(--color-text-primary);
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .blockAction {

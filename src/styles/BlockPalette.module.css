@@ -1,6 +1,9 @@
 .blockPalette {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  justify-items: start;
+  align-items: start;
+  grid-auto-rows: max-content;
   gap: var(--space-3);
   flex: 1;
   min-height: 14rem;
@@ -9,6 +12,7 @@
   padding-right: var(--space-2);
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+  align-content: start;
 }
 
 .paletteItem {
@@ -23,12 +27,21 @@
   gap: var(--space-2);
   color: var(--color-text-primary);
   transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+  position: relative;
+  width: fit-content;
+  max-width: min(100%, 22rem);
+  align-self: start;
 }
 
 .paletteItem:active {
   cursor: grabbing;
   transform: scale(0.98);
   box-shadow: 0 12px 32px rgba(2, 6, 18, 0.65);
+}
+
+.paletteItem:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 2px;
 }
 
 .paletteItemAction {
@@ -57,10 +70,31 @@
 .paletteSummary {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity var(--transition-base), max-height var(--transition-base), margin-top var(--transition-base);
+  margin: 0;
+  pointer-events: none;
+}
+
+.paletteSummaryVisible,
+.paletteItem:hover .paletteSummary,
+.paletteItem:focus-within .paletteSummary {
+  opacity: 1;
+  max-height: 12rem;
+  margin-top: var(--space-2);
+  pointer-events: auto;
+}
+
+.paletteItemActive {
+  border-color: var(--color-accent-cyan);
+  box-shadow: 0 18px 42px rgba(100, 249, 255, 0.2);
 }
 
 @media (max-width: 720px) {
   .blockPalette {
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
     gap: var(--space-2);
     padding-right: 0;
   }
@@ -76,11 +110,13 @@
 
   .paletteSummary {
     font-size: var(--font-size-xs);
+    max-height: 10rem;
   }
 }
 
 @media (max-width: 520px) {
   .blockPalette {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
     gap: var(--space-1);
   }
 
@@ -96,5 +132,6 @@
 
   .paletteSummary {
     font-size: var(--font-size-xs);
+    max-height: 8rem;
   }
 }

@@ -82,7 +82,24 @@ export interface SignalParameterBinding {
   options: SignalDescriptor[];
 }
 
+export interface MoveToTargetMetadata {
+  useScanHit: BooleanParameterBinding;
+  scanHitIndex: NumberParameterBinding;
+  literalPosition: {
+    x: NumberParameterBinding;
+    y: NumberParameterBinding;
+  };
+}
+
+export interface MoveToInstruction {
+  kind: 'move-to';
+  duration: NumberParameterBinding;
+  speed: NumberParameterBinding;
+  target: MoveToTargetMetadata;
+}
+
 export type BlockInstruction =
+  | MoveToInstruction
   | {
       kind: 'move';
       duration: NumberParameterBinding;
@@ -797,6 +814,46 @@ const compileBlock = (
           speed: createNumberLiteralBinding(MOVE_SPEED, { label: 'Move → speed' }),
         },
       ];
+    case 'move-to': {
+      const speedBinding = resolveNumberBinding(block, 'speed', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('move-to'), 'speed'),
+        fallback: MOVE_SPEED,
+        minimum: 0,
+      });
+      const useScanBinding = resolveBooleanBinding(block, 'useScanHit', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('move-to'), 'useScanHit'),
+        fallback: true,
+      });
+      const scanHitBinding = resolveNumberBinding(block, 'scanHitIndex', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('move-to'), 'scanHitIndex'),
+        fallback: 1,
+        minimum: 1,
+        enforceInteger: true,
+      });
+      const targetXBinding = resolveNumberBinding(block, 'targetX', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('move-to'), 'targetX'),
+        fallback: 0,
+      });
+      const targetYBinding = resolveNumberBinding(block, 'targetY', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('move-to'), 'targetY'),
+        fallback: 0,
+      });
+      return [
+        {
+          kind: 'move-to',
+          duration: createNumberLiteralBinding(1, { label: 'Move To → duration' }),
+          speed: speedBinding,
+          target: {
+            useScanHit: useScanBinding,
+            scanHitIndex: scanHitBinding,
+            literalPosition: {
+              x: targetXBinding,
+              y: targetYBinding,
+            },
+          },
+        },
+      ];
+    }
     case 'turn':
       return [
         {
@@ -939,7 +996,6 @@ const compileBlock = (
     }
     case 'wait-signal':
     case 'broadcast-signal':
-    case 'move-to':
     default: {
       if (!context.unsupportedBlocks.has(block.type)) {
         diagnostics.push({

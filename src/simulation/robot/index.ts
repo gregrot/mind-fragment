@@ -9,3 +9,4 @@ export {
   type ModuleBlueprint,
   type ModuleIconVariant,
 } from './modules/moduleLibrary';
+export { SimpleNavigator, type SimpleNavigatorOptions, type SteeringCommand } from './modules/navigator';

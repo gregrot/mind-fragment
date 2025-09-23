@@ -111,7 +111,44 @@ describe('BlockProgramRunner', () => {
         },
       ],
     };
+    const originalInvoke = robot.invokeAction.bind(robot);
     const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const targetNode = robot
+      .resourceField
+      .list()
+      .find((candidate) => candidate.id === 'node-ferrous-1');
+    if (!targetNode) {
+      throw new Error('Expected the default silicate resource node to exist.');
+    }
+
+    const state = robot.getStateSnapshot();
+    const distanceToNode = Math.hypot(
+      targetNode.position.x - state.position.x,
+      targetNode.position.y - state.position.y,
+    );
+
+    actionSpy.mockImplementation((moduleId, actionName, payload) => {
+      if (moduleId === 'sensor.survey' && actionName === 'scan') {
+        return {
+          status: 'ok',
+          filter: null,
+          resources: {
+            filter: null,
+            hits: [
+              {
+                id: undefined,
+                type: targetNode.type,
+                quantity: targetNode.quantity,
+                distance: distanceToNode,
+                position: { ...targetNode.position },
+              },
+            ],
+            total: 1,
+          },
+        };
+      }
+      return originalInvoke(moduleId, actionName, payload);
+    });
     const initialInventory = robot.getInventorySnapshot();
 
     runner.load(program);
@@ -123,11 +160,78 @@ describe('BlockProgramRunner', () => {
     const finalInventory = robot.getInventorySnapshot();
     expect(finalInventory.used).toBeGreaterThan(initialInventory.used);
     expect(actionSpy).toHaveBeenCalledWith('sensor.survey', 'scan', expect.any(Object));
-    expect(actionSpy).toHaveBeenCalledWith(
-      'arm.manipulator',
-      'gatherResource',
-      expect.objectContaining({ nodeId: expect.any(String) }),
+    const gatherCall = actionSpy.mock.calls.find(
+      ([moduleId, actionName]) => moduleId === 'arm.manipulator' && actionName === 'gatherResource',
     );
+    expect(gatherCall?.[2]).toEqual(expect.objectContaining({ nodeId: targetNode.id }));
+    actionSpy.mockRestore();
+  });
+
+  it('stores scan hit positions in memory for later targeting', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const scanFilter = 'silicate-crystal';
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'scan',
+          duration: createNumberLiteralBinding(0.25, { label: 'Test → scan duration' }),
+          filter: scanFilter,
+        },
+      ],
+    };
+
+    const originalInvoke = robot.invokeAction.bind(robot);
+    const customHit = {
+      id: 'custom-node-42',
+      type: 'silicate-crystal',
+      quantity: 18,
+      distance: 96,
+      position: { x: 75, y: -45 },
+    } as const;
+    const invokeSpy = vi.spyOn(robot, 'invokeAction');
+    invokeSpy.mockImplementation((moduleId, actionName, payload) => {
+      if (moduleId === 'sensor.survey' && actionName === 'scan') {
+        return {
+          status: 'ok',
+          filter: scanFilter,
+          resources: {
+            filter: scanFilter,
+            hits: [customHit],
+            total: 1,
+          },
+        };
+      }
+      return originalInvoke(moduleId, actionName, payload);
+    });
+
+    runner.load(program);
+    runner.update(0.25);
+    robot.tick(0.25);
+
+    const scanMemory = (runner as unknown as {
+      scanMemory: { filter: string | null; hits: Array<{
+        id: string | null;
+        type: string;
+        quantity: number;
+        distance: number;
+        position: { x: number; y: number } | null;
+      }> } | null;
+    }).scanMemory;
+
+    expect(scanMemory).not.toBeNull();
+    expect(scanMemory?.hits).toHaveLength(1);
+    expect(scanMemory?.hits[0]).toEqual(
+      expect.objectContaining({
+        id: customHit.id,
+        type: customHit.type,
+        quantity: customHit.quantity,
+        distance: customHit.distance,
+        position: expect.objectContaining(customHit.position),
+      }),
+    );
+
+    invokeSpy.mockRestore();
   });
 
   it('steers towards the most recent scan hit when executing move-to instructions', () => {

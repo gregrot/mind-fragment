@@ -45,7 +45,9 @@ describe('compileWorkspaceProgram', () => {
     const start = createBlockInstance('start');
     const toggle = createBlockInstance('toggle-status');
     const setStatus = createBlockInstance('set-status');
-    setStatus.state = { value: false };
+    if (setStatus.parameters) {
+      setStatus.parameters.value = { kind: 'boolean', value: false };
+    }
     start.slots!.do = [toggle, setStatus];
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
@@ -84,7 +86,9 @@ describe('compileWorkspaceProgram', () => {
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
     expect(result.program.instructions).toHaveLength(3);
-    expect(result.diagnostics.some((diag) => diag.message.includes('loop three times'))).toBe(true);
+    expect(
+      result.diagnostics.some((diag) => diag.message.includes('configured number of times')),
+    ).toBe(true);
   });
 
   it('runs parallel branches sequentially', () => {

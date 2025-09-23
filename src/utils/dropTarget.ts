@@ -50,6 +50,17 @@ export const getDropTargetFromElement = (element: Element | null): DropTarget | 
     return { kind: 'slot', ownerId, slotName, position, ancestorIds };
   }
 
+  if (kind === 'parameter') {
+    const ownerId = dataset.dropTargetOwnerId;
+    const parameterName = dataset.dropTargetParameterName;
+
+    if (!ownerId || !parameterName) {
+      return null;
+    }
+
+    return { kind: 'parameter', ownerId, parameterName, position, ancestorIds };
+  }
+
   return null;
 };
 

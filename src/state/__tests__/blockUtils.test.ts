@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { insertBlock, removeBlock } from '../blockUtils';
-import type { BlockInstance, DropTarget } from '../../types/blocks';
+import { createBlockInstance } from '../../blocks/library';
+import type { BlockInstance, BlockParameterValue, DropTarget } from '../../types/blocks';
 
-const createBlock = (instanceId: string, slots?: Record<string, BlockInstance[]>): BlockInstance => ({
+interface MockBlockOptions {
+  slots?: Record<string, BlockInstance[]>;
+  expressionInputs?: Record<string, BlockInstance[]>;
+  parameters?: Record<string, BlockParameterValue>;
+}
+
+const createBlock = (instanceId: string, options: MockBlockOptions = {}): BlockInstance => ({
   instanceId,
   type: 'mock-block',
-  ...(slots ? { slots } : {}),
+  ...(options.slots ? { slots: options.slots } : {}),
+  ...(options.expressionInputs ? { expressionInputs: options.expressionInputs } : {}),
+  ...(options.parameters ? { parameters: options.parameters } : {}),
 });
 
 describe('blockUtils', () => {
@@ -35,9 +44,9 @@ describe('blockUtils', () => {
 
   it('moves a block with its children into a new slot', () => {
     const grandchild = createBlock('grandchild');
-    const child = createBlock('child', { chain: [grandchild] });
-    const sourceParent = createBlock('source-parent', { actions: [child] });
-    const destinationParent = createBlock('destination-parent', { actions: [] });
+    const child = createBlock('child', { slots: { chain: [grandchild] } });
+    const sourceParent = createBlock('source-parent', { slots: { actions: [child] } });
+    const destinationParent = createBlock('destination-parent', { slots: { actions: [] } });
     const workspace = [sourceParent, destinationParent];
 
     const removal = removeBlock(workspace, 'child');
@@ -60,5 +69,51 @@ describe('blockUtils', () => {
     expect(destinationSlot[0]?.slots?.chain?.[0]?.instanceId).toBe('grandchild');
     const sourceSlot = insertion.blocks[0]?.slots?.actions ?? [];
     expect(sourceSlot).toHaveLength(0);
+  });
+
+  it('allows inserting and removing blocks within parameter expression inputs', () => {
+    const expressionBlock = createBlock('expression');
+    const owner = createBlock('owner', { expressionInputs: { condition: [] } });
+    const workspace = [owner];
+
+    const target: DropTarget = {
+      kind: 'parameter',
+      ownerId: 'owner',
+      parameterName: 'condition',
+      position: 0,
+      ancestorIds: ['owner'],
+    };
+
+    const insertion = insertBlock(workspace, target, expressionBlock);
+    expect(insertion.inserted).toBe(true);
+    const inputBlocks = insertion.blocks[0]?.expressionInputs?.condition ?? [];
+    expect(inputBlocks.map((block) => block.instanceId)).toEqual(['expression']);
+
+    const removal = removeBlock(insertion.blocks, 'expression');
+    expect(removal.removed?.instanceId).toBe('expression');
+    expect(removal.blocks[0]?.expressionInputs?.condition).toEqual([]);
+  });
+
+  it('preserves parameter defaults when moving blocks between containers', () => {
+    const statusBlock = createBlockInstance('set-status');
+    const workspace: BlockInstance[] = [statusBlock];
+
+    const removal = removeBlock(workspace, statusBlock.instanceId);
+    expect(removal.removed?.parameters?.value).toEqual({ kind: 'boolean', value: true });
+
+    const insertionTarget: DropTarget = { kind: 'workspace', position: 0, ancestorIds: [] };
+    const insertion = insertBlock(removal.blocks, insertionTarget, removal.removed!);
+    expect(insertion.inserted).toBe(true);
+    expect(insertion.blocks[0]?.parameters?.value).toEqual({ kind: 'boolean', value: true });
+  });
+
+  it('seeds parameter defaults and expression containers for control blocks', () => {
+    const repeat = createBlockInstance('repeat');
+    expect(repeat.parameters?.count).toEqual({ kind: 'number', value: 3 });
+    expect(repeat.expressionInputs?.count).toEqual([]);
+
+    const conditional = createBlockInstance('if');
+    expect(conditional.parameters?.condition).toEqual({ kind: 'boolean', value: true });
+    expect(conditional.expressionInputs?.condition).toEqual([]);
   });
 });

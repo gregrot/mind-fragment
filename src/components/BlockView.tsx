@@ -46,6 +46,9 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
   );
 
   const slotPath = [...path, block.instanceId];
+  const slotNames = definition.slots ?? [];
+  const expressionInputNames = definition.expressionInputs ?? [];
+  const hasNestedBlocks = slotNames.length > 0 || expressionInputNames.length > 0;
 
   const blockClassNames = [styles.block, 'block'];
   switch (definition.category) {
@@ -65,34 +68,38 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
 
   const blockClassName = blockClassNames.join(' ');
 
-  const statusValue = block.type === 'set-status'
-    ? Boolean((block.state as { value?: boolean } | undefined)?.value !== false)
-    : null;
+  const parameterEntries = Object.entries(definition.parameters ?? {});
 
-  const handleToggleStatusValue = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
+  const handleParameterMouseDown = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  }, []);
+
+  const handleParameterTouchStart = useCallback((event: ReactTouchEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  }, []);
+
+  const createBooleanParameterClickHandler = useCallback(
+    (parameterName: string, defaultValue: boolean) => (event: MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
       if (!onUpdateBlock) {
         return;
       }
+
       onUpdateBlock(block.instanceId, (current) => {
-        const currentValue = Boolean((current.state as { value?: boolean } | undefined)?.value !== false);
+        const currentParameters = { ...(current.parameters ?? {}) };
+        const parameter = currentParameters[parameterName];
+        const currentValue = parameter?.kind === 'boolean' ? parameter.value : defaultValue;
         return {
           ...current,
-          state: { ...current.state, value: !currentValue },
+          parameters: {
+            ...currentParameters,
+            [parameterName]: { kind: 'boolean', value: !currentValue },
+          },
         };
       });
     },
     [block.instanceId, onUpdateBlock],
   );
-
-  const handleStatusMouseDown = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-  }, []);
-
-  const handleStatusTouchStart = useCallback((event: ReactTouchEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-  }, []);
 
   const handleTouchStart = useCallback(
     (event: ReactTouchEvent<HTMLDivElement>) => {
@@ -156,24 +163,58 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
       {definition.summary && definition.category !== 'action' ? (
         <p className={styles.blockSummary}>{definition.summary}</p>
       ) : null}
-      {block.type === 'set-status' ? (
-        <div className={styles.blockControlRow}>
-          <span className={styles.blockControlLabel}>Status value</span>
-          <button
-            type="button"
-            className={styles.blockToggle}
-            onMouseDown={handleStatusMouseDown}
-            onTouchStart={handleStatusTouchStart}
-            onClick={handleToggleStatusValue}
-            data-testid={`block-${definition.id}-toggle`}
-          >
-            {statusValue ? 'true' : 'false'}
-          </button>
-        </div>
-      ) : null}
-      {definition.slots ? (
+      {parameterEntries.map(([parameterName, parameterDefinition]) => {
+        switch (parameterDefinition.kind) {
+          case 'boolean': {
+            const parameter = block.parameters?.[parameterName];
+            const value = parameter?.kind === 'boolean'
+              ? parameter.value
+              : parameterDefinition.defaultValue;
+            return (
+              <div key={parameterName} className={styles.blockControlRow}>
+                <span className={styles.blockControlLabel}>{formatSlotLabel(parameterName)}</span>
+                <button
+                  type="button"
+                  className={styles.blockToggle}
+                  onMouseDown={handleParameterMouseDown}
+                  onTouchStart={handleParameterTouchStart}
+                  onClick={createBooleanParameterClickHandler(parameterName, parameterDefinition.defaultValue)}
+                  data-testid={`block-${definition.id}-parameter-${parameterName}`}
+                >
+                  {value ? 'true' : 'false'}
+                </button>
+              </div>
+            );
+          }
+          case 'number':
+          case 'string':
+          default: {
+            const parameter = block.parameters?.[parameterName];
+            const value = parameter?.value ?? parameterDefinition.defaultValue;
+            return (
+              <div key={parameterName} className={styles.blockControlRow}>
+                <span className={styles.blockControlLabel}>{formatSlotLabel(parameterName)}</span>
+                <span className={styles.blockControlValue}>{String(value)}</span>
+              </div>
+            );
+          }
+        }
+      })}
+      {hasNestedBlocks ? (
         <div className={styles.blockSlots}>
-          {definition.slots.map((slotName) => (
+          {expressionInputNames.map((inputName) => (
+            <ExpressionInputView
+              key={inputName}
+              owner={block}
+              inputName={inputName}
+              blocks={block.expressionInputs?.[inputName] ?? []}
+              path={slotPath}
+              onDrop={onDrop}
+              onTouchDrop={onTouchDrop}
+              onUpdateBlock={onUpdateBlock}
+            />
+          ))}
+          {slotNames.map((slotName) => (
             <SlotView
               key={slotName}
               owner={block}
@@ -285,6 +326,123 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdate
                       kind: 'slot',
                       ownerId: owner.instanceId,
                       slotName,
+                      position: index + 1,
+                      ancestorIds: path,
+                    }}
+                    onDrop={onDrop}
+                  />
+                </Fragment>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </section>
+  );
+};
+
+interface ExpressionInputViewProps {
+  owner: BlockInstance;
+  inputName: string;
+  blocks: BlockInstance[];
+  path: string[];
+  onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
+  onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
+  onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+}
+
+const ExpressionInputView = ({
+  owner,
+  inputName,
+  blocks,
+  path,
+  onDrop,
+  onTouchDrop,
+  onUpdateBlock,
+}: ExpressionInputViewProps): JSX.Element => {
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      onDrop(event, {
+        kind: 'parameter',
+        ownerId: owner.instanceId,
+        parameterName: inputName,
+        position: blocks.length,
+        ancestorIds: path,
+      });
+    },
+    [blocks.length, inputName, onDrop, owner.instanceId, path],
+  );
+
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const inputLabel = formatSlotLabel(inputName);
+
+  return (
+    <section className={styles.blockSlot} data-testid={`parameter-${inputName}`}>
+      <header className={styles.slotLabel}>{inputLabel}</header>
+      <div
+        className={styles.slotBody}
+        data-testid={`parameter-${inputName}-dropzone`}
+        data-drop-target-kind="parameter"
+        data-drop-target-owner-id={owner.instanceId}
+        data-drop-target-parameter-name={inputName}
+        data-drop-target-position={blocks.length}
+        data-drop-target-ancestors={path.join(',')}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {blocks.length === 0 ? (
+          <DropZone
+            className={styles.slotDropTargetEmpty}
+            target={{
+              kind: 'parameter',
+              ownerId: owner.instanceId,
+              parameterName: inputName,
+              position: 0,
+              ancestorIds: path,
+            }}
+            onDrop={onDrop}
+          >
+            <div className={`${styles.slotPlaceholder} slot-placeholder`}>Drop value blocks here</div>
+          </DropZone>
+        ) : (
+          <>
+            <DropZone
+              className={`${styles.slotDropTarget} ${styles.slotDropTargetLeading}`}
+              target={{
+                kind: 'parameter',
+                ownerId: owner.instanceId,
+                parameterName: inputName,
+                position: 0,
+                ancestorIds: path,
+              }}
+              onDrop={onDrop}
+            />
+            {blocks.map((childBlock, index) => {
+              const trailingClassName =
+                index === blocks.length - 1 ? styles.slotDropTargetTrailing : undefined;
+              const dropTargetClassName = [styles.slotDropTarget, trailingClassName]
+                .filter(Boolean)
+                .join(' ');
+
+              return (
+                <Fragment key={childBlock.instanceId}>
+                  <BlockView
+                    block={childBlock}
+                    path={path}
+                    onDrop={onDrop}
+                    onTouchDrop={onTouchDrop}
+                    onUpdateBlock={onUpdateBlock}
+                  />
+                  <DropZone
+                    className={dropTargetClassName}
+                    target={{
+                      kind: 'parameter',
+                      ownerId: owner.instanceId,
+                      parameterName: inputName,
                       position: index + 1,
                       ancestorIds: path,
                     }}

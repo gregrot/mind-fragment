@@ -114,6 +114,8 @@ describe('blockUtils', () => {
 
     const conditional = createBlockInstance('if');
     expect(conditional.parameters?.condition).toEqual({ kind: 'boolean', value: true });
-    expect(conditional.expressionInputs?.condition).toEqual([]);
+    const conditionInputs = conditional.expressionInputs?.condition ?? [];
+    expect(conditionInputs).toHaveLength(1);
+    expect(conditionInputs[0]?.type).toBe('literal-boolean');
   });
 });

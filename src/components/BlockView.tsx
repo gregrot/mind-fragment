@@ -68,6 +68,12 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry 
     case 'event':
       blockClassNames.push(styles.blockEvent);
       break;
+    case 'value':
+      blockClassNames.push(styles.blockValue);
+      break;
+    case 'operator':
+      blockClassNames.push(styles.blockOperator);
+      break;
     default:
       blockClassNames.push(styles.blockAction);
       break;

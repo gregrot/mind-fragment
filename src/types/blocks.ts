@@ -34,6 +34,9 @@ export interface BlockDefinition {
   slots?: string[];
   parameters?: Record<string, BlockParameterDefinition>;
   expressionInputs?: string[];
+  expressionInputDefaults?: Record<string, string[]>;
+  paletteGroup?: string;
+  paletteTags?: string[];
 }
 
 export interface BlockInstance {

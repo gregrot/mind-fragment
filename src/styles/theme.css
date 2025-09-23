@@ -105,6 +105,10 @@
   --color-block-control-border: rgba(155, 107, 255, 0.4);
   --color-block-event-surface: rgba(255, 179, 71, 0.18);
   --color-block-event-border: rgba(255, 179, 71, 0.4);
+  --color-block-value-surface: rgba(63, 123, 255, 0.18);
+  --color-block-value-border: rgba(63, 123, 255, 0.4);
+  --color-block-operator-surface: rgba(255, 108, 249, 0.18);
+  --color-block-operator-border: rgba(255, 108, 249, 0.4);
   --color-slot-surface: rgba(155, 107, 255, 0.12);
   --color-slot-border: rgba(155, 107, 255, 0.4);
   --color-slot-text: rgba(202, 177, 255, 0.85);

@@ -13,7 +13,14 @@ const DEFAULT_ROBOT_ID = 'MF-01';
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
 const App = (): JSX.Element => {
-  const { workspace, handleDrop, handleTouchDrop, replaceWorkspace, updateBlockInstance } = useBlockWorkspace();
+  const {
+    workspace,
+    handleDrop,
+    handleTouchDrop,
+    replaceWorkspace,
+    updateBlockInstance,
+    removeBlockInstance,
+  } = useBlockWorkspace();
   const { selectedRobotId, clearSelection } = useRobotSelection();
   const [isOverlayOpen, setOverlayOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<OverlayTab>('inventory');
@@ -194,6 +201,7 @@ const App = (): JSX.Element => {
         onDrop={handleDrop}
         onTouchDrop={handleTouchDrop}
         onUpdateBlock={updateBlockInstance}
+        onRemoveBlock={removeBlockInstance}
         robotId={activeRobotId}
       />
       <OnboardingFlow replaceWorkspace={replaceWorkspace} openProgrammingOverlay={handleProgramRobot} />

@@ -23,7 +23,7 @@ const STATUS_MODULE_ID = 'status.signal';
 const EPSILON = 1e-5;
 
 interface ScanMemoryHit {
-  id: string;
+  id: string | null;
   type: string;
   quantity: number;
   distance: number;
@@ -436,7 +436,13 @@ export class BlockProgramRunner {
       return { x: hit.position.x, y: hit.position.y } satisfies Vector2;
     }
 
-    const node = this.robot.resourceField.list().find((candidate) => candidate.id === hit.id);
+    if (!hit.id) {
+      return null;
+    }
+
+    const node = this.robot.resourceField
+      .list()
+      .find((candidate) => candidate.id === hit.id);
     if (!node) {
       return null;
     }
@@ -488,7 +494,9 @@ export class BlockProgramRunner {
     const hits = Array.isArray(typed.resources?.hits)
       ? typed.resources!.hits
           .map((hit) => {
-            const id = typeof hit.id === 'string' ? hit.id : '';
+            const rawId = (hit as { id?: unknown }).id;
+            const id =
+              typeof rawId === 'string' && rawId.trim().length > 0 ? rawId.trim() : null;
             const type = typeof hit.type === 'string' ? hit.type : 'unknown';
             const quantityRaw = (hit as { quantity?: unknown }).quantity;
             const distanceRaw = (hit as { distance?: unknown }).distance;
@@ -517,7 +525,7 @@ export class BlockProgramRunner {
             }
             return { id, type, quantity, distance, position } satisfies ScanMemoryHit;
           })
-          .filter((hit) => hit.id)
+          .filter((hit) => hit.id !== null || hit.position !== null)
       : [];
 
     this.scanMemory = {
@@ -549,30 +557,63 @@ export class BlockProgramRunner {
   }
 
   private resolveGatherTarget(): string | null {
-    const scanned = this.scanMemory?.hits.find((hit) => hit.quantity > 0);
-    if (scanned) {
-      return scanned.id;
+    const nodes = this.robot.resourceField
+      .list()
+      .filter((node) => node.quantity > 0);
+    if (nodes.length === 0) {
+      return null;
+    }
+
+    const scannedHits = this.scanMemory?.hits ?? [];
+    if (scannedHits.length > 0) {
+      for (const hit of scannedHits) {
+        if (hit.quantity <= 0) {
+          continue;
+        }
+        if (hit.id) {
+          const matchingNode = nodes.find((node) => node.id === hit.id);
+          if (matchingNode) {
+            return matchingNode.id;
+          }
+        }
+      }
+
+      let closestFromPosition: { node: ResourceNode; distance: number } | null = null;
+      for (const hit of scannedHits) {
+        if (hit.quantity <= 0 || !hit.position) {
+          continue;
+        }
+        for (const node of nodes) {
+          const distance = Math.hypot(
+            node.position.x - hit.position.x,
+            node.position.y - hit.position.y,
+          );
+          if (!closestFromPosition || distance < closestFromPosition.distance) {
+            closestFromPosition = { node, distance };
+          }
+        }
+      }
+
+      if (closestFromPosition) {
+        return closestFromPosition.node.id;
+      }
     }
 
     const state = this.robot.getStateSnapshot();
-    const nodes = this.robot.resourceField.list();
-    let closest: ResourceNode | null = null;
+    let closestToRobot: ResourceNode | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     for (const node of nodes) {
-      if (node.quantity <= 0) {
-        continue;
-      }
       const dx = node.position.x - state.position.x;
       const dy = node.position.y - state.position.y;
       const distance = Math.hypot(dx, dy);
       if (distance < bestDistance) {
         bestDistance = distance;
-        closest = node;
+        closestToRobot = node;
       }
     }
 
-    return closest?.id ?? null;
+    return closestToRobot?.id ?? null;
   }
 
   private updateScanMemoryAfterGather(result: unknown): void {

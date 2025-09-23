@@ -4,7 +4,8 @@
   gap: var(--space-6);
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: var(--space-2);
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;

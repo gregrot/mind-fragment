@@ -5,7 +5,9 @@ import { ECSWorld, type ComponentHandle, type EntityId } from '../ecs';
 import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
+  createResourceFieldViewSystem,
   createRobotPhysicsSystem,
+  createSelectableSystem,
   createSpriteSyncSystem,
   createStatusIndicatorSystem,
 } from '../ecs/systems';
@@ -13,6 +15,8 @@ import { RobotChassis } from '../robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../robot/modules/moduleLibrary';
 import { BlockProgramRunner } from './blockProgramRunner';
 import { STATUS_MODULE_ID } from '../robot/modules/statusModule';
+import type { ResourceLayer } from '../resourceLayer';
+import type { ResourceField } from '../resources/resourceField';
 
 export const DEBUG_PADDING = 8;
 export const DEBUG_VERTICAL_OFFSET = 72;
@@ -37,6 +41,16 @@ export interface SelectionStateComponent {
   robotId: string | null;
 }
 
+export interface ResourceFieldViewComponent {
+  resourceField: ResourceField;
+  layer: ResourceLayer | null;
+}
+
+export interface SelectableComponent {
+  id: string;
+  onSelected?: (id: string | null) => void;
+}
+
 export interface SimulationWorldComponents {
   Transform: ComponentHandle<TransformComponent>;
   SpriteRef: ComponentHandle<Sprite>;
@@ -47,6 +61,8 @@ export interface SimulationWorldComponents {
   RobotId: ComponentHandle<string>;
   DebugOverlay: ComponentHandle<DebugOverlayComponent>;
   StatusIndicator: ComponentHandle<StatusIndicatorComponent>;
+  ResourceFieldView: ComponentHandle<ResourceFieldViewComponent>;
+  Selectable: ComponentHandle<SelectableComponent>;
 }
 
 export interface SimulationWorldEntities {
@@ -72,7 +88,7 @@ export interface SimulationWorldContext {
 interface CreateSimulationWorldOptions {
   renderer: Renderer;
   defaultRobotId?: string;
-  onRobotSelected?: (robotId: string) => void;
+  onRobotSelected?: (robotId: string | null) => void;
   overlayLayer: Container;
   viewport: Viewport;
 }
@@ -106,6 +122,8 @@ export async function createSimulationWorld({
   const RobotId = world.defineComponent<string>('RobotId');
   const DebugOverlay = world.defineComponent<DebugOverlayComponent>('DebugOverlay');
   const StatusIndicator = world.defineComponent<StatusIndicatorComponent>('StatusIndicator');
+  const ResourceFieldView = world.defineComponent<ResourceFieldViewComponent>('ResourceFieldView');
+  const Selectable = world.defineComponent<SelectableComponent>('Selectable');
 
   const selectionEntity = world.createEntity();
   SelectionState.set(selectionEntity, { robotId: null });
@@ -119,6 +137,11 @@ export async function createSimulationWorld({
     robotCore.attachModule(moduleInstance);
   }
   RobotCore.set(robotEntity, robotCore);
+
+  ResourceFieldView.set(robotEntity, {
+    resourceField: robotCore.resourceField,
+    layer: null,
+  });
 
   const runner = new BlockProgramRunner(robotCore);
   ProgramRunner.set(robotEntity, runner);
@@ -134,12 +157,7 @@ export async function createSimulationWorld({
   const sprite = new Sprite(texture);
   sprite.anchor.set(0.5);
   sprite.position.set(transform.position.x, transform.position.y);
-  sprite.eventMode = 'static';
-  sprite.interactive = true;
-  sprite.cursor = 'pointer';
   sprite.zIndex = 10;
-  sprite.on('pointerdown', () => onRobotSelected?.(defaultRobotId));
-  sprite.on('pointertap', () => onRobotSelected?.(defaultRobotId));
   SpriteRef.set(robotEntity, sprite);
 
   const statusIndicator = new Graphics();
@@ -181,8 +199,22 @@ export async function createSimulationWorld({
     lastRenderedText: '',
   });
 
-  const selectRobot = (robotId: string | null): void => {
+  const applySelection = (robotId: string | null): void => {
+    const current = SelectionState.get(selectionEntity)?.robotId ?? null;
+    if (current === robotId) {
+      return;
+    }
     SelectionState.set(selectionEntity, { robotId });
+    onRobotSelected?.(robotId);
+  };
+
+  Selectable.set(robotEntity, {
+    id: defaultRobotId,
+    onSelected: applySelection,
+  });
+
+  const selectRobot = (robotId: string | null): void => {
+    applySelection(robotId);
   };
 
   const getSelectedRobot = (): string | null => {
@@ -201,6 +233,8 @@ export async function createSimulationWorld({
       RobotId,
       DebugOverlay,
       StatusIndicator,
+      ResourceFieldView,
+      Selectable,
     },
     entities: {
       robot: robotEntity,
@@ -229,6 +263,13 @@ export async function createSimulationWorld({
   world.addSystem(createProgramRunnerSystem({ ProgramRunner }));
   world.addSystem(createRobotPhysicsSystem({ RobotCore, Transform }));
   world.addSystem(createSpriteSyncSystem({ Transform, SpriteRef }));
+  world.addSystem(
+    createResourceFieldViewSystem(
+      { ResourceFieldView },
+      { renderer, container: overlayLayer },
+    ),
+  );
+  world.addSystem(createSelectableSystem({ Selectable, SpriteRef }));
   world.addSystem(
     createStatusIndicatorSystem({ RobotCore, StatusIndicator }, { statusModuleId: STATUS_MODULE_ID }),
   );

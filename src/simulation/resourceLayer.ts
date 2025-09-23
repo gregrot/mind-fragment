@@ -37,7 +37,7 @@ export class ResourceLayer {
     return this.container;
   }
 
-  destroy(): void {
+  dispose(): void {
     if (this.destroyed) {
       return;
     }
@@ -48,6 +48,10 @@ export class ResourceLayer {
     }
     this.spriteEntries.clear();
     this.container.destroy({ children: true });
+  }
+
+  destroy(): void {
+    this.dispose();
   }
 
   private handleEvent(event: ResourceFieldEvent): void {

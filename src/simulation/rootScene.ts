@@ -5,7 +5,6 @@ import type { CompiledProgram } from './runtime/blockProgram';
 import { type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
-import { ResourceLayer } from './resourceLayer';
 
 interface TickPayload {
   deltaMS: number;
@@ -30,7 +29,6 @@ export class RootScene {
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private pendingSelection: string | null;
-  private resourceLayer: ResourceLayer | null;
 
   constructor(app: Application) {
     this.app = app;
@@ -72,7 +70,6 @@ export class RootScene {
 
     this.context = null;
     this.pendingContextCallbacks = [];
-    this.resourceLayer = null;
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
@@ -94,11 +91,7 @@ export class RootScene {
 
     this.context = context;
 
-    const robotCore = context.getRobotCore();
-    if (robotCore) {
-      this.resourceLayer = new ResourceLayer(this.app.renderer, robotCore.resourceField);
-      this.rootLayer.addChild(this.resourceLayer.view);
-    }
+    context.world.runSystems(0);
 
     const sprite = context.getSprite();
     if (sprite) {
@@ -306,17 +299,11 @@ export class RootScene {
 
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
-    this.viewport.destroy({ children: true, texture: false });
     this.programListeners.clear();
     this.programStatus = 'idle';
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
     this.pendingContextCallbacks.length = 0;
-    if (this.resourceLayer) {
-      this.rootLayer.removeChild(this.resourceLayer.view);
-      this.resourceLayer.destroy();
-      this.resourceLayer = null;
-    }
     const context = this.context;
     if (context) {
       context.getProgramRunner()?.stop();
@@ -334,8 +321,10 @@ export class RootScene {
 
       context.world.destroyEntity(context.entities.robot);
       context.world.destroyEntity(context.entities.selection);
+      context.world.runSystems(0);
       this.context = null;
     }
+    this.viewport.destroy({ children: true, texture: false });
     assetService.disposeAll();
   }
 

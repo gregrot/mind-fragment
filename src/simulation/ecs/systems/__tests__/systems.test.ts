@@ -1,12 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Container, Graphics, Sprite, Text } from 'pixi.js';
+
+vi.mock('../../../resourceLayer', () => {
+  return {
+    ResourceLayer: class ResourceLayerMock {
+      public view: { parent: unknown; zIndex: number };
+      public dispose = vi.fn();
+
+      constructor() {
+        this.view = { parent: null, zIndex: 0 };
+      }
+    },
+  };
+});
+
+import type { Container, Graphics, Renderer, Sprite, Text } from 'pixi.js';
 import type { Viewport } from 'pixi-viewport';
+import { ResourceField } from '../../../resources/resourceField';
+import type { ResourceFieldViewComponent, SelectableComponent } from '../../../runtime/simulationWorld';
 
 import { ECSWorld } from '../../world';
 import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
+  createResourceFieldViewSystem,
   createRobotPhysicsSystem,
+  createSelectableSystem,
   createSpriteSyncSystem,
   createStatusIndicatorSystem,
 } from '../index';
@@ -55,6 +73,65 @@ const createOverlayLayerStub = (): Container => {
   } as Record<string, unknown> as { addChild(child: Container): Container } & Record<string, unknown>;
 
   return layer as unknown as Container;
+};
+
+const createSceneLayerStub = () => {
+  const children = new Set<Container>();
+  const layer = {
+    addChild: vi.fn((child: Container) => {
+      children.add(child);
+      (child as unknown as { parent: Container | null }).parent = layer as unknown as Container;
+      return child;
+    }),
+    removeChild: vi.fn((child: Container) => {
+      children.delete(child);
+      (child as unknown as { parent: Container | null }).parent = null;
+      return child;
+    }),
+  };
+
+  return Object.assign(layer as unknown as Container, {
+    addChild: layer.addChild,
+    removeChild: layer.removeChild,
+    __children: children,
+  }) as Container & {
+    addChild: ReturnType<typeof vi.fn>;
+    removeChild: ReturnType<typeof vi.fn>;
+    __children: Set<Container>;
+  };
+};
+
+const createSelectableSpriteStub = () => {
+  const handlers = new Map<string, Set<() => void>>();
+  const sprite = {
+    eventMode: 'auto',
+    interactive: false,
+    cursor: '',
+    on: vi.fn((eventName: string, handler: () => void) => {
+      if (!handlers.has(eventName)) {
+        handlers.set(eventName, new Set());
+      }
+      handlers.get(eventName)!.add(handler);
+      return sprite;
+    }),
+    off: vi.fn((eventName: string, handler: () => void) => {
+      handlers.get(eventName)?.delete(handler);
+      return sprite;
+    }),
+    trigger(eventName: string) {
+      handlers.get(eventName)?.forEach((handler) => handler());
+    },
+  } as unknown as Sprite & {
+    trigger: (eventName: string) => void;
+    on: ReturnType<typeof vi.fn>;
+    off: ReturnType<typeof vi.fn>;
+  };
+
+  Object.defineProperty(sprite, '__handlers', {
+    value: handlers,
+  });
+
+  return sprite;
 };
 
 const createDebugOverlayComponentStub = () => {
@@ -343,5 +420,98 @@ describe('simulation systems', () => {
 
     expect(containerStub.visible).toBe(false);
     expect(overlayComponent.lastRenderedText).toBe('');
+  });
+
+  it('creates and disposes resource field layers based on component presence', () => {
+    const world = new ECSWorld();
+    const ResourceFieldView = world.defineComponent<ResourceFieldViewComponent>('ResourceFieldView');
+    const entity = world.createEntity();
+    const resourceField = new ResourceField();
+
+    ResourceFieldView.set(entity, { resourceField, layer: null });
+
+    const container = createSceneLayerStub();
+    const renderer = {} as Renderer;
+
+    world.addSystem(
+      createResourceFieldViewSystem(
+        { ResourceFieldView },
+        { renderer, container },
+      ),
+    );
+
+    world.runSystems(0);
+
+    const component = ResourceFieldView.get(entity);
+    expect(component?.layer).toBeDefined();
+    expect(container.addChild).toHaveBeenCalledTimes(1);
+    expect((component?.layer?.view as { parent: unknown }).parent).toBe(container);
+    expect((component?.layer?.view as { zIndex: number }).zIndex).toBe(-10);
+
+    world.runSystems(0);
+    expect(container.addChild).toHaveBeenCalledTimes(1);
+
+    const layer = component?.layer ?? null;
+    expect(layer).toBeTruthy();
+
+    ResourceFieldView.remove(entity);
+    world.runSystems(0);
+
+    expect(container.removeChild).toHaveBeenCalledTimes(1);
+    expect(layer && 'dispose' in layer && typeof layer.dispose === 'function').toBe(true);
+    if (layer && 'dispose' in layer && typeof layer.dispose === 'function') {
+      expect(layer.dispose).toHaveBeenCalledTimes(1);
+      expect((layer.view as { parent: unknown }).parent).toBeNull();
+    }
+  });
+
+  it('attaches pointer listeners for selectable sprites', () => {
+    const world = new ECSWorld();
+    const Selectable = world.defineComponent<SelectableComponent>('Selectable');
+    const SpriteRef = world.defineComponent<Sprite>('SpriteRef');
+    const entity = world.createEntity();
+
+    const sprite = createSelectableSpriteStub();
+    const onSelected = vi.fn();
+
+    Selectable.set(entity, { id: 'bot-01', onSelected });
+    SpriteRef.set(entity, sprite);
+
+    world.addSystem(createSelectableSystem({ Selectable, SpriteRef }));
+
+    world.runSystems(0);
+
+    expect(sprite.on).toHaveBeenCalledTimes(2);
+    expect(sprite.eventMode).toBe('static');
+    expect(sprite.cursor).toBe('pointer');
+    expect(sprite.interactive).toBe(true);
+
+    sprite.trigger('pointerdown');
+    expect(onSelected).toHaveBeenCalledWith('bot-01');
+
+    world.runSystems(0);
+    expect(sprite.on).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes pointer listeners when selectable components are removed', () => {
+    const world = new ECSWorld();
+    const Selectable = world.defineComponent<SelectableComponent>('Selectable');
+    const SpriteRef = world.defineComponent<Sprite>('SpriteRef');
+    const entity = world.createEntity();
+
+    const sprite = createSelectableSpriteStub();
+
+    Selectable.set(entity, { id: 'bot-02', onSelected: vi.fn() });
+    SpriteRef.set(entity, sprite);
+
+    world.addSystem(createSelectableSystem({ Selectable, SpriteRef }));
+
+    world.runSystems(0);
+    expect(sprite.on).toHaveBeenCalledTimes(2);
+
+    Selectable.remove(entity);
+    world.runSystems(0);
+
+    expect(sprite.off).toHaveBeenCalledTimes(2);
   });
 });

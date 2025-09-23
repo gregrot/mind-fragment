@@ -41,6 +41,33 @@ describe('compileWorkspaceProgram', () => {
     expect(result.diagnostics).toHaveLength(0);
   });
 
+  it('compiles move-to instructions with scan metadata and literal fallbacks', () => {
+    const start = createBlockInstance('start');
+    const moveTo = createBlockInstance('move-to');
+
+    moveTo.parameters!.useScanHit = { kind: 'boolean', value: false };
+    moveTo.parameters!.scanHitIndex = { kind: 'number', value: 2 };
+    moveTo.parameters!.targetX = { kind: 'number', value: 120 };
+    moveTo.parameters!.targetY = { kind: 'number', value: -40 };
+    moveTo.parameters!.speed = { kind: 'number', value: 60 };
+
+    start.slots!.do = [moveTo];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(1);
+    const instruction = result.program.instructions[0];
+    if (instruction.kind !== 'move-to') {
+      throw new Error('Expected a move-to instruction.');
+    }
+    expect(instruction.target.useScanHit.literal?.value).toBe(false);
+    expect(instruction.target.useScanHit.literal?.source).toBe('user');
+    expect(instruction.target.scanHitIndex.literal?.value).toBe(2);
+    expect(instruction.target.literalPosition.x.literal?.value).toBe(120);
+    expect(instruction.target.literalPosition.y.literal?.value).toBe(-40);
+    expect(instruction.speed.literal?.value).toBe(60);
+  });
+
   it('emits scan and gather instructions with literal durations', () => {
     const start = createBlockInstance('start');
     const scan = createBlockInstance('scan-resources');

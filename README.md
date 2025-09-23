@@ -19,6 +19,7 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 - [Block Programming Plan](docs/planning/block-programming.md) — Architectural goals, player flow, and implementation priorities for the editor and runtime we need to recreate first.
 - [Programmable Robot MVP Task List](docs/planning/programmable-robot-mvp.md) — Task breakdown for delivering a PixiJS-powered, modular robot sandbox that players can programme.
 - [ECS Blackboard Planning Notes](docs/planning/simulation/ecs-blackboard.md) — Survey of lightweight blackboard patterns and the facts/events our ECS runtime should expose.
+- [Release Notes — Parameterised Block Editor](docs/planning/release-notes.md) — Running log of editor/runtime shifts so downstream tasks inherit the latest schema expectations.
 
 ### Reference
 - [Legacy BlockKit Notes](docs/reference/legacy-blockkit.md) — Snapshot of the prior technical stack that informs what we reuse, replace, or redesign.
@@ -26,7 +27,8 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 ## Block Builder Prototype
 - Live React workspace under `src/` organised with Vite for quick iteration.
 - Install dependencies with `npm install`, then launch the playground via `npm run dev` to explore block behaviours.
-- Run the drag-and-drop regression pack with `npm test`; it covers palette drops, slot placement, and lateral moves.
+- Run the regression pack with `npm test` and `npm run typecheck` to catch unit and typing slips.
+- Execute targeted Playwright flows with `npx playwright test playwright/block-workspace.spec.ts` to confirm literal editing, signal selection, and operator nesting remain stable.
 - Palette now includes event anchors (When Started) and multi-branch control blocks (Parallel, Forever) so you can prototype branching flows quickly.
 - The components mirror the schema described in [Block Programming Plan](docs/planning/block-programming.md), keeping DO / THEN / ELSE slots visible for planning discussions.
 

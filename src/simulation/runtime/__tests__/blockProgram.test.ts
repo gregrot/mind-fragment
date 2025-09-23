@@ -77,6 +77,7 @@ describe('compileWorkspaceProgram', () => {
     }
     expect(statusInstruction.duration.literal?.value).toBe(0);
     expect(statusInstruction.value.literal?.value).toBe(false);
+    expect(statusInstruction.value.literal?.source).toBe('user');
   });
 
   it('wraps forever blocks in loop instructions so the runner can repeat them', () => {
@@ -116,7 +117,27 @@ describe('compileWorkspaceProgram', () => {
       throw new Error('Expected a counted loop.');
     }
     expect(extractLiteral(instruction.iterations.literal?.value)).toBe(3);
+    expect(instruction.iterations.literal?.source).toBe('default');
     expect(result.diagnostics).toHaveLength(0);
+  });
+
+  it('honours user-specified repeat counts when provided', () => {
+    const start = createBlockInstance('start');
+    const repeat = createBlockInstance('repeat');
+    const move = createBlockInstance('move');
+    repeat.slots!.do = [move];
+    repeat.parameters!.count = { kind: 'number', value: 5 };
+    start.slots!.do = [repeat];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(1);
+    const instruction = result.program.instructions[0];
+    if (instruction.kind !== 'loop' || instruction.mode !== 'counted') {
+      throw new Error('Expected a counted loop instruction.');
+    }
+    expect(instruction.iterations.literal?.value).toBe(5);
+    expect(instruction.iterations.literal?.source).toBe('user');
   });
 
   it('branches into THEN and ELSE sequences when compiling conditionals', () => {
@@ -127,6 +148,7 @@ describe('compileWorkspaceProgram', () => {
 
     conditional.slots!.then = [thenTurn];
     conditional.slots!.else = [elseMove];
+    conditional.parameters!.condition = { kind: 'boolean', value: false };
     start.slots!.do = [conditional];
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
@@ -138,6 +160,8 @@ describe('compileWorkspaceProgram', () => {
     }
     expect(branch.whenTrue).toHaveLength(1);
     expect(branch.whenFalse).toHaveLength(1);
+    expect(branch.condition.literal?.value).toBe(false);
+    expect(branch.condition.literal?.source).toBe('user');
     expect(result.diagnostics).toHaveLength(0);
   });
 
@@ -191,6 +215,9 @@ describe('compileWorkspaceProgram', () => {
       expect(expression.operator).toBe('add');
       for (const input of expression.inputs) {
         expect(input.kind).toBe('literal');
+        if (input.kind === 'literal') {
+          expect(input.source).toBe('user');
+        }
       }
     }
   });

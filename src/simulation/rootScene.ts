@@ -1,10 +1,8 @@
-import { Application, Container, Graphics, Text, Ticker } from 'pixi.js';
+import { Application, Container, Graphics, Ticker } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
-import type { RobotChassis } from './robot';
-import { STATUS_MODULE_ID } from './robot/modules/statusModule';
-import type { BlockInstruction, CompiledProgram } from './runtime/blockProgram';
-import { type ProgramDebugFrame, type ProgramDebugState, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
+import type { CompiledProgram } from './runtime/blockProgram';
+import { type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
 import { ResourceLayer } from './resourceLayer';
@@ -16,16 +14,7 @@ interface TickPayload {
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
-const DEBUG_PADDING = 8;
-const DEBUG_VERTICAL_OFFSET = 72;
-const DEBUG_CORNER_RADIUS = 8;
-const DEBUG_MAX_WIDTH = 280;
-const DEBUG_MIN_WIDTH = 180;
-const DEBUG_BACKGROUND_COLOUR = 0x0b1623;
-
 type RobotSelectionListener = (robotId: string | null) => void;
-
-type TelemetrySnapshot = ReturnType<RobotChassis['getTelemetrySnapshot']>;
 
 export class RootScene {
   private readonly app: Application;
@@ -41,12 +30,7 @@ export class RootScene {
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private pendingSelection: string | null;
-  private statusIndicator: Graphics | null;
   private resourceLayer: ResourceLayer | null;
-  private debugOverlay: Container | null;
-  private debugBackground: Graphics | null;
-  private debugText: Text | null;
-  private lastDebugText: string;
 
   constructor(app: Application) {
     this.app = app;
@@ -89,17 +73,12 @@ export class RootScene {
     this.context = null;
     this.pendingContextCallbacks = [];
     this.resourceLayer = null;
-    this.debugOverlay = null;
-    this.debugBackground = null;
-    this.debugText = null;
-    this.lastDebugText = '';
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
     this.programListeners = new Set();
     this.selectionListeners = new Set();
     this.pendingSelection = null;
-    this.statusIndicator = null;
     this.programStatus = 'idle';
 
     void this.initialiseSimulationWorld();
@@ -109,6 +88,8 @@ export class RootScene {
     const context = await createSimulationWorld({
       renderer: this.app.renderer,
       onRobotSelected: (robotId) => this.notifyRobotSelected(robotId),
+      overlayLayer: this.rootLayer,
+      viewport: this.viewport,
     });
 
     this.context = context;
@@ -152,8 +133,7 @@ export class RootScene {
       this.viewport.moveCenter(sprite.position.x, sprite.position.y);
     }
 
-    this.updateStatusIndicator();
-    this.updateDebugOverlay();
+    // Presentation systems are responsible for updating overlay components.
   }
 
   private flushPendingContextCallbacks(context: SimulationWorldContext): void {
@@ -224,8 +204,6 @@ export class RootScene {
     const context = this.context;
     context?.world.runSystems(stepSeconds);
 
-    this.updateStatusIndicator();
-    this.updateDebugOverlay();
   }
 
   resize(width: number, height: number): void {
@@ -326,292 +304,6 @@ export class RootScene {
     return this.pendingSelection;
   }
 
-  private ensureDebugOverlay(): void {
-    if (this.debugOverlay) {
-      return;
-    }
-
-    const container = new Container();
-    container.visible = false;
-    container.zIndex = 1000;
-    container.eventMode = 'none';
-
-    const background = new Graphics();
-    container.addChild(background);
-
-    const text = new Text({
-      text: '',
-      style: {
-        fill: 0xffffff,
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 12,
-        lineHeight: 18,
-        wordWrap: true,
-        wordWrapWidth: DEBUG_MAX_WIDTH - DEBUG_PADDING * 2,
-      },
-    });
-    text.anchor.set(0.5, 0);
-    container.addChild(text);
-
-    this.rootLayer.addChild(container);
-    this.debugOverlay = container;
-    this.debugBackground = background;
-    this.debugText = text;
-    this.lastDebugText = '';
-  }
-
-  private updateDebugOverlay(): void {
-    const context = this.context;
-    if (!context) {
-      this.hideDebugOverlay();
-      return;
-    }
-
-    const robotCore = context.getRobotCore();
-    const sprite = context.getSprite();
-    const programRunner = context.getProgramRunner();
-    if (!robotCore || !sprite || !programRunner) {
-      this.hideDebugOverlay();
-      return;
-    }
-
-    this.ensureDebugOverlay();
-
-    if (!this.debugOverlay || !this.debugBackground || !this.debugText) {
-      return;
-    }
-
-    const programDebug = programRunner.getDebugState();
-    const telemetry = robotCore.getTelemetrySnapshot();
-
-    const lines: string[] = [];
-    const programLines = this.describeProgramDebug(programDebug);
-    if (programLines.length > 0) {
-      lines.push(...programLines);
-    }
-    const telemetryLines = this.describeTelemetry(telemetry);
-    if (telemetryLines.length > 0) {
-      if (lines.length > 0) {
-        lines.push('');
-      }
-      lines.push(...telemetryLines);
-    }
-
-    if (lines.length === 0) {
-      this.hideDebugOverlay();
-      return;
-    }
-
-    const textContent = lines.join('\n');
-    if (textContent !== this.lastDebugText) {
-      this.debugText.text = textContent;
-      this.lastDebugText = textContent;
-    }
-
-    const padding = DEBUG_PADDING;
-    const textWidth = this.debugText.width;
-    const textHeight = this.debugText.height;
-    const backgroundWidth = Math.max(Math.min(textWidth + padding * 2, DEBUG_MAX_WIDTH), DEBUG_MIN_WIDTH);
-    const backgroundHeight = textHeight + padding * 2;
-
-    this.debugBackground.clear();
-    this.debugBackground.roundRect(
-      -backgroundWidth / 2,
-      -DEBUG_VERTICAL_OFFSET - backgroundHeight,
-      backgroundWidth,
-      backgroundHeight,
-      DEBUG_CORNER_RADIUS,
-    );
-    this.debugBackground.fill({ color: DEBUG_BACKGROUND_COLOUR, alpha: 0.9 });
-    this.debugBackground.setStrokeStyle({ width: 1, color: 0xffffff, alpha: 0.35 });
-    this.debugBackground.stroke();
-
-    this.debugText.anchor.set(0.5, 0);
-    this.debugText.position.set(0, -DEBUG_VERTICAL_OFFSET - backgroundHeight + padding);
-
-    const targetX = sprite.position.x;
-    const targetY = sprite.position.y;
-    this.debugOverlay.position.set(targetX, targetY);
-
-    const scaleX = this.viewport.scale.x || 1;
-    const scaleY = this.viewport.scale.y || 1;
-    this.debugOverlay.scale.set(1 / scaleX, 1 / scaleY);
-    this.debugOverlay.visible = true;
-  }
-
-  private hideDebugOverlay(): void {
-    if (this.debugOverlay) {
-      this.debugOverlay.visible = false;
-    }
-    this.lastDebugText = '';
-  }
-
-  private describeProgramDebug(state: ProgramDebugState | null): string[] {
-    if (!state) {
-      return [];
-    }
-
-    const lines: string[] = [];
-    if (state.program) {
-      const totalSteps = this.countProgramInstructions(state.program);
-      const plural = totalSteps === 1 ? 'step' : 'steps';
-      lines.push(`Program: ${state.status.toUpperCase()} • ${totalSteps} ${plural}`);
-    } else {
-      lines.push(`Program: ${state.status.toUpperCase()}`);
-    }
-
-    if (state.currentInstruction) {
-      const description = this.formatInstruction(state.currentInstruction);
-      const timeRemaining = Math.max(state.timeRemaining, 0).toFixed(1);
-      lines.push(`Current: ${description} • ${timeRemaining}s`);
-    } else {
-      lines.push('Current: —');
-    }
-
-    if (state.frames.length > 0) {
-      const frameDescription = state.frames
-        .map((frame) => this.formatDebugFrame(frame))
-        .join(' ▸ ');
-      lines.push(`Stack: ${frameDescription}`);
-    } else {
-      lines.push('Stack: —');
-    }
-
-    return lines;
-  }
-
-  private formatDebugFrame(frame: ProgramDebugFrame): string {
-    if (frame.length <= 0) {
-      return frame.kind === 'sequence' ? 'seq —' : 'loop —';
-    }
-    const label = frame.kind === 'sequence' ? 'seq' : 'loop';
-    const index = Math.min(Math.max(frame.index, 0), frame.length - 1) + 1;
-    return `${label} ${index}/${frame.length}`;
-  }
-
-  private describeTelemetry(snapshot: TelemetrySnapshot): string[] {
-    const lines: string[] = [];
-    const moduleIds = new Set([
-      ...Object.keys(snapshot.values ?? {}),
-      ...Object.keys(snapshot.actions ?? {}),
-    ]);
-
-    if (moduleIds.size === 0) {
-      lines.push('ECS telemetry: —');
-      return lines;
-    }
-
-    lines.push('ECS telemetry:');
-    for (const moduleId of [...moduleIds].sort()) {
-      lines.push(`- ${moduleId}`);
-      const values = snapshot.values[moduleId] ?? {};
-      const valueKeys = Object.keys(values).sort();
-      if (valueKeys.length > 0) {
-        for (const key of valueKeys) {
-          const entry = values[key];
-          lines.push(`    ${key}: ${this.formatTelemetryValue(entry.value)}`);
-        }
-      }
-
-      const actions = snapshot.actions[moduleId] ?? {};
-      const actionNames = Object.keys(actions).sort();
-      if (actionNames.length > 0) {
-        lines.push(`    actions: ${actionNames.join(', ')}`);
-      }
-
-      if (valueKeys.length === 0 && actionNames.length === 0) {
-        lines.push('    (no signals)');
-      }
-    }
-
-    return lines;
-  }
-
-  private formatInstruction(instruction: BlockInstruction): string {
-    switch (instruction.kind) {
-      case 'move':
-        return `move • speed ${instruction.speed.toFixed(0)} • ${instruction.duration.toFixed(1)}s`;
-      case 'turn':
-        return `turn • rate ${(instruction.angularVelocity * (180 / Math.PI)).toFixed(0)}°/s • ${instruction.duration.toFixed(1)}s`;
-      case 'wait':
-        return `wait • ${instruction.duration.toFixed(1)}s`;
-      case 'scan':
-        return `scan${instruction.filter ? ` • ${instruction.filter}` : ''} • ${instruction.duration.toFixed(1)}s`;
-      case 'gather':
-        return `gather • ${instruction.duration.toFixed(1)}s`;
-      case 'deposit':
-        return `deposit • ${instruction.duration.toFixed(1)}s`;
-      case 'status-toggle':
-        return 'status toggle';
-      case 'status-set':
-        return `status set • ${instruction.value ? 'on' : 'off'}`;
-      case 'loop':
-        return `loop • ${instruction.instructions.length} step${instruction.instructions.length === 1 ? '' : 's'}`;
-      default:
-        return (instruction as { kind?: string }).kind ?? 'unknown';
-    }
-  }
-
-  private formatTelemetryValue(value: unknown): string {
-    if (typeof value === 'number') {
-      if (!Number.isFinite(value)) {
-        return String(value);
-      }
-      if (Math.abs(value) >= 1000) {
-        return value.toFixed(0);
-      }
-      if (Math.abs(value) >= 1) {
-        return value.toFixed(1);
-      }
-      return value.toFixed(2);
-    }
-    if (typeof value === 'string' || typeof value === 'boolean') {
-      return String(value);
-    }
-    if (Array.isArray(value)) {
-      const items = value.map((entry) => this.formatTelemetryValue(entry));
-      const serialised = `[${items.join(', ')}]`;
-      return serialised.length > 60 ? `${serialised.slice(0, 57)}…` : serialised;
-    }
-    if (value && typeof value === 'object') {
-      try {
-        const serialised = JSON.stringify(value);
-        if (!serialised) {
-          return 'object';
-        }
-        return serialised.length > 60 ? `${serialised.slice(0, 57)}…` : serialised;
-      } catch (error) {
-        return 'object';
-      }
-    }
-    if (value === null) {
-      return 'null';
-    }
-    return typeof value === 'undefined' ? 'undefined' : String(value);
-  }
-
-  private countProgramInstructions(program: CompiledProgram | null): number {
-    if (!program) {
-      return 0;
-    }
-    return this.countInstructions(program.instructions);
-  }
-
-  private countInstructions(instructions: BlockInstruction[] | undefined): number {
-    if (!instructions || instructions.length === 0) {
-      return 0;
-    }
-
-    let total = 0;
-    for (const instruction of instructions) {
-      total += 1;
-      if (instruction.kind === 'loop') {
-        total += this.countInstructions(instruction.instructions);
-      }
-    }
-    return total;
-  }
-
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.viewport.destroy({ children: true, texture: false });
@@ -620,13 +312,6 @@ export class RootScene {
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
     this.pendingContextCallbacks.length = 0;
-    if (this.debugOverlay) {
-      this.debugOverlay.destroy({ children: true });
-      this.debugOverlay = null;
-      this.debugBackground = null;
-      this.debugText = null;
-    }
-    this.lastDebugText = '';
     if (this.resourceLayer) {
       this.rootLayer.removeChild(this.resourceLayer.view);
       this.resourceLayer.destroy();
@@ -651,8 +336,6 @@ export class RootScene {
       context.world.destroyEntity(context.entities.selection);
       this.context = null;
     }
-    this.statusIndicator?.destroy();
-    this.statusIndicator = null;
     assetService.disposeAll();
   }
 
@@ -679,44 +362,4 @@ export class RootScene {
     }
   }
 
-  private updateStatusIndicator(): void {
-    const context = this.context;
-    const robotCore = context?.getRobotCore();
-    const sprite = context?.getSprite();
-    if (!robotCore || !sprite) {
-      if (this.statusIndicator) {
-        this.statusIndicator.destroy();
-        this.statusIndicator = null;
-      }
-      return;
-    }
-
-    const hasStatusModule = Boolean(robotCore.moduleStack.getModule(STATUS_MODULE_ID));
-    if (!hasStatusModule) {
-      if (this.statusIndicator) {
-        this.statusIndicator.destroy();
-        this.statusIndicator = null;
-      }
-      return;
-    }
-
-    if (!this.statusIndicator) {
-      const indicator = new Graphics();
-      indicator.circle(0, -36, 6);
-      indicator.fill({ color: 0xff6b6b, alpha: 0.95 });
-      indicator.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.85 });
-      indicator.stroke();
-      indicator.position.set(0, 0);
-      sprite.addChild(indicator);
-      this.statusIndicator = indicator;
-    }
-
-    const telemetry = robotCore.getTelemetrySnapshot();
-    const statusTelemetry = telemetry.values[STATUS_MODULE_ID];
-    const activeEntry = statusTelemetry?.active;
-    const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;
-
-    this.statusIndicator.alpha = isActive ? 1 : 0.2;
-    this.statusIndicator.visible = true;
-  }
 }

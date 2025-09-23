@@ -110,7 +110,9 @@ describe('blockUtils', () => {
   it('seeds parameter defaults and expression containers for control blocks', () => {
     const repeat = createBlockInstance('repeat');
     expect(repeat.parameters?.count).toEqual({ kind: 'number', value: 3 });
-    expect(repeat.expressionInputs?.count).toEqual([]);
+    const repeatExpressionInputs = repeat.expressionInputs?.count ?? [];
+    expect(repeatExpressionInputs).toHaveLength(1);
+    expect(repeatExpressionInputs[0]?.type).toBe('literal-number');
 
     const conditional = createBlockInstance('if');
     expect(conditional.parameters?.condition).toEqual({ kind: 'boolean', value: true });

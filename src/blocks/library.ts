@@ -112,6 +112,9 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
       count: { kind: 'number', defaultValue: 3 },
     },
     expressionInputs: ['count'],
+    expressionInputDefaults: {
+      count: ['literal-number'],
+    },
     paletteGroup: 'Control',
     paletteTags: ['loop'],
   },
@@ -324,7 +327,36 @@ export function createBlockInstance(blockType: string): BlockInstance {
           continue;
         }
 
-        target.push(createBlockInstance(blockType));
+        const expressionBlock = createBlockInstance(blockType);
+        target.push(expressionBlock);
+
+        const parentParameter = instance.parameters?.[inputName];
+        const expressionParameters = expressionBlock.parameters;
+        const expressionValue = expressionParameters?.value;
+
+        if (parentParameter && expressionParameters && expressionValue) {
+          switch (parentParameter.kind) {
+            case 'number':
+              if (expressionValue.kind === 'number') {
+                expressionParameters.value = {
+                  kind: 'number',
+                  value: parentParameter.value,
+                };
+              }
+              break;
+            case 'boolean':
+              if (expressionValue.kind === 'boolean') {
+                expressionParameters.value = {
+                  kind: 'boolean',
+                  value: parentParameter.value,
+                };
+              }
+              break;
+            case 'string':
+            case 'signal':
+              break;
+          }
+        }
       }
     }
   }

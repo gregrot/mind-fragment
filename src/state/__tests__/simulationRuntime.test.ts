@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { simulationRuntime } from '../simulationRuntime';
 import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram';
+import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
 
 const createSceneStub = () => {
@@ -61,7 +62,11 @@ describe('simulationRuntime', () => {
   });
 
   it('prioritises queued programs over the default startup routine', () => {
-    const customProgram = { instructions: [{ kind: 'wait' as const, duration: 1 }] };
+    const customProgram: CompiledProgram = {
+      instructions: [
+        { kind: 'wait', duration: createNumberLiteralBinding(1, { label: 'Queued → wait' }) },
+      ],
+    };
     simulationRuntime.runProgram(customProgram);
 
     const scene = createSceneStub();

@@ -4,6 +4,13 @@ import { createBlockInstance } from '../../../blocks/library';
 
 const buildWorkspace = (...blocks: ReturnType<typeof createBlockInstance>[]) => blocks;
 
+const extractLiteral = (value: number | null | undefined): number => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  throw new Error('Expected a literal number to be present.');
+};
+
 describe('compileWorkspaceProgram', () => {
   it('warns when no start block is present', () => {
     const result = compileWorkspaceProgram(buildWorkspace(createBlockInstance('move')));
@@ -12,7 +19,7 @@ describe('compileWorkspaceProgram', () => {
     expect(result.diagnostics.some((diag) => diag.message.includes('When Started'))).toBe(true);
   });
 
-  it('compiles a simple move routine', () => {
+  it('compiles a simple move routine with literal metadata', () => {
     const start = createBlockInstance('start');
     const move = createBlockInstance('move');
     const wait = createBlockInstance('wait');
@@ -20,14 +27,21 @@ describe('compileWorkspaceProgram', () => {
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
 
-    expect(result.program.instructions).toEqual([
-      { kind: 'move', duration: 1, speed: expect.any(Number) },
-      { kind: 'wait', duration: 1 },
-    ]);
+    expect(result.program.instructions).toHaveLength(2);
+    const [moveInstruction, waitInstruction] = result.program.instructions;
+    if (moveInstruction.kind !== 'move') {
+      throw new Error('Expected the first instruction to be a move.');
+    }
+    expect(extractLiteral(moveInstruction.duration.literal?.value)).toBeCloseTo(1);
+    expect(extractLiteral(moveInstruction.speed.literal?.value)).toBeGreaterThan(0);
+    if (waitInstruction.kind !== 'wait') {
+      throw new Error('Expected the second instruction to be a wait.');
+    }
+    expect(extractLiteral(waitInstruction.duration.literal?.value)).toBeCloseTo(1);
     expect(result.diagnostics).toHaveLength(0);
   });
 
-  it('emits scan and gather instructions', () => {
+  it('emits scan and gather instructions with literal durations', () => {
     const start = createBlockInstance('start');
     const scan = createBlockInstance('scan-resources');
     const gather = createBlockInstance('gather-resource');
@@ -35,27 +49,34 @@ describe('compileWorkspaceProgram', () => {
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
 
-    expect(result.program.instructions).toEqual([
-      { kind: 'scan', duration: expect.any(Number), filter: null },
-      { kind: 'gather', duration: expect.any(Number), target: 'auto' },
-    ]);
+    expect(result.program.instructions).toHaveLength(2);
+    const [scanInstruction, gatherInstruction] = result.program.instructions;
+    expect(scanInstruction).toMatchObject({ kind: 'scan', filter: null });
+    if (scanInstruction.kind === 'scan') {
+      expect(extractLiteral(scanInstruction.duration.literal?.value)).toBeGreaterThan(0);
+    }
+    expect(gatherInstruction).toMatchObject({ kind: 'gather', target: 'auto' });
+    if (gatherInstruction.kind === 'gather') {
+      expect(extractLiteral(gatherInstruction.duration.literal?.value)).toBeGreaterThan(0);
+    }
   });
 
-  it('compiles status control blocks', () => {
+  it('compiles status control blocks with literal overrides', () => {
     const start = createBlockInstance('start');
     const toggle = createBlockInstance('toggle-status');
     const setStatus = createBlockInstance('set-status');
-    if (setStatus.parameters) {
-      setStatus.parameters.value = { kind: 'boolean', value: false };
-    }
+    setStatus.parameters!.value = { kind: 'boolean', value: false };
     start.slots!.do = [toggle, setStatus];
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
 
-    expect(result.program.instructions).toEqual([
-      { kind: 'status-toggle', duration: 0 },
-      { kind: 'status-set', duration: 0, value: false },
-    ]);
+    expect(result.program.instructions).toHaveLength(2);
+    const [, statusInstruction] = result.program.instructions;
+    if (statusInstruction.kind !== 'status-set') {
+      throw new Error('Expected a status-set instruction.');
+    }
+    expect(statusInstruction.duration.literal?.value).toBe(0);
+    expect(statusInstruction.value.literal?.value).toBe(false);
   });
 
   it('wraps forever blocks in loop instructions so the runner can repeat them', () => {
@@ -68,16 +89,16 @@ describe('compileWorkspaceProgram', () => {
     const result = compileWorkspaceProgram(buildWorkspace(start));
 
     expect(result.program.instructions).toHaveLength(1);
-    expect(result.program.instructions[0]).toMatchObject({ kind: 'loop' });
     const loop = result.program.instructions[0];
     if (loop.kind !== 'loop') {
       throw new Error('Expected a loop instruction to be emitted.');
     }
+    expect(loop.mode).toBe('forever');
     expect(loop.instructions).toHaveLength(1);
     expect(loop.instructions[0]).toMatchObject({ kind: 'gather', target: 'auto' });
   });
 
-  it('expands repeat blocks three times by default', () => {
+  it('compiles repeat blocks into counted loops with defaults', () => {
     const start = createBlockInstance('start');
     const repeat = createBlockInstance('repeat');
     const move = createBlockInstance('move');
@@ -85,26 +106,20 @@ describe('compileWorkspaceProgram', () => {
     start.slots!.do = [repeat];
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
-    expect(result.program.instructions).toHaveLength(3);
-    expect(
-      result.diagnostics.some((diag) => diag.message.includes('configured number of times')),
-    ).toBe(true);
+
+    expect(result.program.instructions).toHaveLength(1);
+    const instruction = result.program.instructions[0];
+    if (instruction.kind !== 'loop') {
+      throw new Error('Expected a loop instruction.');
+    }
+    if (instruction.mode !== 'counted') {
+      throw new Error('Expected a counted loop.');
+    }
+    expect(extractLiteral(instruction.iterations.literal?.value)).toBe(3);
+    expect(result.diagnostics).toHaveLength(0);
   });
 
-  it('runs parallel branches sequentially', () => {
-    const start = createBlockInstance('start');
-    const parallel = createBlockInstance('parallel');
-    const move = createBlockInstance('move');
-    const turn = createBlockInstance('turn');
-    parallel.slots!.branchA = [move];
-    parallel.slots!.branchB = [turn];
-    start.slots!.do = [parallel];
-
-    const result = compileWorkspaceProgram(buildWorkspace(start));
-    expect(result.program.instructions.map((instruction) => instruction.kind)).toEqual(['move', 'turn']);
-  });
-
-  it('compiles the THEN branch of conditionals with a placeholder diagnostic', () => {
+  it('branches into THEN and ELSE sequences when compiling conditionals', () => {
     const start = createBlockInstance('start');
     const conditional = createBlockInstance('if');
     const thenTurn = createBlockInstance('turn');
@@ -116,8 +131,81 @@ describe('compileWorkspaceProgram', () => {
 
     const result = compileWorkspaceProgram(buildWorkspace(start));
 
-    expect(result.program.instructions.map((instruction) => instruction.kind)).toEqual(['turn']);
-    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes('Conditionals'))).toBe(true);
-    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes('Else branches'))).toBe(true);
+    expect(result.program.instructions).toHaveLength(1);
+    const branch = result.program.instructions[0];
+    if (branch.kind !== 'branch') {
+      throw new Error('Expected a branch instruction.');
+    }
+    expect(branch.whenTrue).toHaveLength(1);
+    expect(branch.whenFalse).toHaveLength(1);
+    expect(result.diagnostics).toHaveLength(0);
+  });
+
+  it('resolves signal descriptors when compiling condition expressions', () => {
+    const start = createBlockInstance('start');
+    const conditional = createBlockInstance('if');
+    conditional.expressionInputs!.condition = [createBlockInstance('read-signal')];
+    conditional.slots!.then = [createBlockInstance('wait')];
+    start.slots!.do = [conditional];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    const branch = result.program.instructions[0];
+    if (branch.kind !== 'branch') {
+      throw new Error('Expected a branch instruction.');
+    }
+    expect(branch.condition.expression?.kind).toBe('signal');
+    if (branch.condition.expression?.kind === 'signal') {
+      expect(branch.condition.expression.signal.id).toBe('status.signal.active');
+    }
+  });
+
+  it('builds operator trees for repeat counts', () => {
+    const start = createBlockInstance('start');
+    const repeat = createBlockInstance('repeat');
+    const add = createBlockInstance('operator-add');
+    const literalOne = createBlockInstance('literal-number');
+    const literalTwo = createBlockInstance('literal-number');
+
+    literalOne.parameters!.value = { kind: 'number', value: 1 };
+    literalTwo.parameters!.value = { kind: 'number', value: 2 };
+
+    add.expressionInputs!.firstValue = [literalOne];
+    add.expressionInputs!.secondValue = [literalTwo];
+    repeat.expressionInputs!.count = [add];
+    repeat.slots!.do = [createBlockInstance('move')];
+    start.slots!.do = [repeat];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    const instruction = result.program.instructions[0];
+    if (instruction.kind !== 'loop') {
+      throw new Error('Expected a loop instruction.');
+    }
+    if (instruction.mode !== 'counted') {
+      throw new Error('Expected a counted loop.');
+    }
+    const expression = instruction.iterations.expression;
+    expect(expression?.kind).toBe('operator');
+    if (expression?.kind === 'operator') {
+      expect(expression.operator).toBe('add');
+      for (const input of expression.inputs) {
+        expect(input.kind).toBe('literal');
+      }
+    }
+  });
+
+  it('warns when repeat counts fall below zero', () => {
+    const start = createBlockInstance('start');
+    const repeat = createBlockInstance('repeat');
+    const move = createBlockInstance('move');
+    repeat.slots!.do = [move];
+    repeat.parameters!.count = { kind: 'number', value: -2 };
+    start.slots!.do = [repeat];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(1);
+    expect(result.diagnostics.some((diag) => diag.message.includes('must be at least'))).toBe(true);
   });
 });

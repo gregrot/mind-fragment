@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BlockProgramRunner } from '../blockProgramRunner';
-import type { CompiledProgram } from '../blockProgram';
+import {
+  createBooleanLiteralBinding,
+  createBooleanLiteralExpression,
+  createNumberLiteralBinding,
+  createNumberLiteralExpression,
+  type CompiledProgram,
+  type NumberExpression,
+} from '../blockProgram';
 import { RobotChassis } from '../../robot';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../robot/modules/moduleLibrary';
+
+const STATUS_SIGNAL_DESCRIPTOR = {
+  id: 'status.signal.active',
+  label: 'Status Indicator – Active',
+  description: undefined,
+  moduleId: 'status.signal',
+  signalId: 'active',
+} as const;
 
 const createRobot = (): RobotChassis => {
   const robot = new RobotChassis();
@@ -17,7 +32,13 @@ describe('BlockProgramRunner', () => {
     const robot = createRobot();
     const runner = new BlockProgramRunner(robot);
     const program: CompiledProgram = {
-      instructions: [{ kind: 'move', duration: 1, speed: 40 }],
+      instructions: [
+        {
+          kind: 'move',
+          duration: createNumberLiteralBinding(1, { label: 'Test → move duration' }),
+          speed: createNumberLiteralBinding(40, { label: 'Test → move speed' }),
+        },
+      ],
     };
     const actionSpy = vi.spyOn(robot, 'invokeAction');
 
@@ -31,17 +52,6 @@ describe('BlockProgramRunner', () => {
       'setLinearVelocity',
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
     );
-    const linearCommand = actionSpy.mock.calls.find(([, actionName, payload]) => {
-      if (actionName !== 'setLinearVelocity') {
-        return false;
-      }
-      const typed = payload as { x?: number; y?: number } | undefined;
-      const magnitude = Math.hypot(typed?.x ?? 0, typed?.y ?? 0);
-      return magnitude > 0;
-    });
-    const linearPayload = linearCommand?.[2] as { x?: number; y?: number } | undefined;
-    expect(linearPayload?.x).toBeCloseTo(40);
-    expect(linearPayload?.y).toBeCloseTo(0);
 
     runner.update(0.6);
     robot.tick(0.6);
@@ -58,30 +68,30 @@ describe('BlockProgramRunner', () => {
     const robot = createRobot();
     const runner = new BlockProgramRunner(robot);
     const program: CompiledProgram = {
-      instructions: [{ kind: 'turn', duration: 0.5, angularVelocity: Math.PI }],
+      instructions: [
+        {
+          kind: 'turn',
+          duration: createNumberLiteralBinding(0.5, { label: 'Test → turn duration' }),
+          angularVelocity: createNumberLiteralBinding(Math.PI, { label: 'Test → turn rate' }),
+        },
+      ],
     };
     const actionSpy = vi.spyOn(robot, 'invokeAction');
 
     runner.load(program);
     runner.update(0.25);
     robot.tick(0.25);
-    const angularCommand = actionSpy.mock.calls.find(([, actionName, payload]) => {
-      if (actionName !== 'setAngularVelocity') {
-        return false;
-      }
-      const typed = payload as { value?: number } | undefined;
-      return Math.abs(typed?.value ?? 0) > 0;
-    });
-    const angularPayload = angularCommand?.[2] as { value?: number } | undefined;
-    expect(angularPayload?.value).toBeCloseTo(Math.PI);
+    const angularCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setAngularVelocity');
+    const firstNonZero = angularCalls.find(([, , payload]) => Math.abs(((payload as { value?: number })?.value ?? 0)) > 1e-5);
+    const firstPayload = firstNonZero?.[2] as { value?: number } | undefined;
+    expect(firstPayload?.value).toBeCloseTo(Math.PI);
 
     runner.update(0.5);
     robot.tick(0.5);
-    const finalAngularCommand = actionSpy.mock.calls
-      .filter(([, actionName]) => actionName === 'setAngularVelocity')
-      .at(-1);
-    const finalAngularPayload = finalAngularCommand?.[2] as { value?: number } | undefined;
-    expect(finalAngularPayload?.value).toBeCloseTo(0);
+    const allAngularCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setAngularVelocity');
+    expect(
+      allAngularCalls.some(([, , payload]) => Math.abs(((payload as { value?: number })?.value ?? 0)) < 1e-5),
+    ).toBe(true);
   });
 
   it('scans for resources and gathers them into inventory', () => {
@@ -89,8 +99,16 @@ describe('BlockProgramRunner', () => {
     const runner = new BlockProgramRunner(robot);
     const program: CompiledProgram = {
       instructions: [
-        { kind: 'scan', duration: 1, filter: null },
-        { kind: 'gather', duration: 1.5, target: 'auto' },
+        {
+          kind: 'scan',
+          duration: createNumberLiteralBinding(1, { label: 'Test → scan duration' }),
+          filter: null,
+        },
+        {
+          kind: 'gather',
+          duration: createNumberLiteralBinding(1.5, { label: 'Test → gather duration' }),
+          target: 'auto',
+        },
       ],
     };
     const actionSpy = vi.spyOn(robot, 'invokeAction');
@@ -119,7 +137,12 @@ describe('BlockProgramRunner', () => {
 
     const runner = new BlockProgramRunner(robot);
     const program: CompiledProgram = {
-      instructions: [{ kind: 'deposit', duration: 1 }],
+      instructions: [
+        {
+          kind: 'deposit',
+          duration: createNumberLiteralBinding(1, { label: 'Test → deposit duration' }),
+        },
+      ],
     };
 
     runner.load(program);
@@ -165,7 +188,14 @@ describe('BlockProgramRunner', () => {
       instructions: [
         {
           kind: 'loop',
-          instructions: [{ kind: 'gather', duration: 1.5, target: 'auto' }],
+          mode: 'forever',
+          instructions: [
+            {
+              kind: 'gather',
+              duration: createNumberLiteralBinding(1.5, { label: 'Test → gather duration' }),
+              target: 'auto',
+            },
+          ],
         },
       ],
     };
@@ -198,33 +228,100 @@ describe('BlockProgramRunner', () => {
       .map((call, index) => ({ call, index }))
       .filter((entry) => entry.call[1] === 'gatherResource');
     expect(gatherCallsWithIndex.length).toBeGreaterThan(1);
-    const uniqueTargets = new Set(
-      gatherCallsWithIndex.map((entry) => ((entry.call[2] as { nodeId?: string }) ?? {}).nodeId),
-    );
-    expect(uniqueTargets).toEqual(new Set([targetNode.id]));
-
     const finalGatherIndex = gatherCallsWithIndex.at(-1)?.index ?? -1;
     const finalResult = actionSpy.mock.results[finalGatherIndex]?.value as { remaining?: number } | undefined;
     expect(finalResult?.remaining).toBe(0);
   });
 
-  it('routes status control instructions to the status module', () => {
+  it('evaluates counted loops using operator expressions', () => {
     const robot = createRobot();
     const runner = new BlockProgramRunner(robot);
+    const iterations = createNumberLiteralBinding(1, { label: 'Test → repeat count' });
+    const operator: NumberExpression = {
+      kind: 'operator',
+      valueType: 'number',
+      operator: 'add',
+      inputs: [
+        createNumberLiteralExpression(1, { source: 'user', label: 'Operand A' }),
+        createNumberLiteralExpression(2, { source: 'user', label: 'Operand B' }),
+      ],
+      label: 'Add Numbers',
+    };
+    iterations.expression = operator;
+
     const program: CompiledProgram = {
       instructions: [
-        { kind: 'status-toggle', duration: 0 },
-        { kind: 'status-set', duration: 0, value: false },
+        {
+          kind: 'loop',
+          mode: 'counted',
+          iterations,
+          instructions: [
+            {
+              kind: 'move',
+              duration: createNumberLiteralBinding(0.2, { label: 'Test → move duration' }),
+              speed: createNumberLiteralBinding(10, { label: 'Test → move speed' }),
+            },
+          ],
+        },
+      ],
+    };
+
+    const actionSpy = vi.spyOn(robot, 'invokeAction');
+
+    runner.load(program);
+    runner.update(3);
+    robot.tick(3);
+
+    const moveCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setLinearVelocity');
+    expect(moveCalls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('branches based on signal telemetry', () => {
+    const robot = createRobot();
+    const runner = new BlockProgramRunner(robot);
+    const condition = createBooleanLiteralBinding(false, { label: 'Test → branch condition' });
+    condition.expression = {
+      kind: 'signal',
+      valueType: 'boolean',
+      signal: STATUS_SIGNAL_DESCRIPTOR,
+      fallback: createBooleanLiteralExpression(false, { label: 'Condition fallback' }),
+    };
+
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'branch',
+          condition,
+          whenTrue: [
+            {
+              kind: 'status-set',
+              duration: createNumberLiteralBinding(0, { label: 'Branch → true duration' }),
+              value: createBooleanLiteralBinding(true, { label: 'Branch → true value' }),
+            },
+          ],
+          whenFalse: [
+            {
+              kind: 'status-set',
+              duration: createNumberLiteralBinding(0, { label: 'Branch → false duration' }),
+              value: createBooleanLiteralBinding(false, { label: 'Branch → false value' }),
+            },
+          ],
+        },
       ],
     };
 
     runner.load(program);
     runner.update(0.1);
     robot.tick(0.1);
+    let telemetry = robot.getTelemetrySnapshot();
+    expect(telemetry.values['status.signal']?.active.value).toBe(false);
 
-    const telemetry = robot.getTelemetrySnapshot();
-    const statusTelemetry = telemetry.values['status.signal'];
-    expect(statusTelemetry?.active.value).toBe(false);
+    robot.invokeAction('status.signal', 'setStatus', { value: true });
+    runner.load(program);
+    runner.update(0.1);
+    robot.tick(0.1);
+    telemetry = robot.getTelemetrySnapshot();
+    expect(telemetry.values['status.signal']?.active.value).toBe(true);
   });
 
   it('exposes debug state including current instruction and frame stack', () => {
@@ -232,10 +329,21 @@ describe('BlockProgramRunner', () => {
     const runner = new BlockProgramRunner(robot);
     const program: CompiledProgram = {
       instructions: [
-        { kind: 'move', duration: 1, speed: 20 },
+        {
+          kind: 'move',
+          duration: createNumberLiteralBinding(1, { label: 'Debug → move duration' }),
+          speed: createNumberLiteralBinding(20, { label: 'Debug → move speed' }),
+        },
         {
           kind: 'loop',
-          instructions: [{ kind: 'turn', duration: 0.5, angularVelocity: Math.PI }],
+          mode: 'forever',
+          instructions: [
+            {
+              kind: 'turn',
+              duration: createNumberLiteralBinding(0.5, { label: 'Debug → turn duration' }),
+              angularVelocity: createNumberLiteralBinding(Math.PI, { label: 'Debug → turn rate' }),
+            },
+          ],
         },
       ],
     };

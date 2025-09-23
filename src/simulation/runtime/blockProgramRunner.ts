@@ -1,6 +1,15 @@
 import type { RobotChassis } from '../robot';
+import type { ValuesSnapshot } from '../robot/moduleBus';
 import type { ResourceNode } from '../resources/resourceField';
-import type { BlockInstruction, CompiledProgram } from './blockProgram';
+import type {
+  BlockInstruction,
+  BooleanExpression,
+  BooleanParameterBinding,
+  CompiledProgram,
+  NumberExpression,
+  NumberParameterBinding,
+  SignalDescriptor,
+} from './blockProgram';
 
 export type ProgramRunnerStatus = 'idle' | 'running' | 'completed';
 
@@ -22,16 +31,31 @@ interface ScanMemory {
   hits: ScanMemoryHit[];
 }
 
-type ExecutionFrameKind = 'sequence' | 'loop';
+type ExecutionFrameKind = 'sequence' | 'loop-forever' | 'loop-counted';
 
-interface ExecutionFrame {
-  kind: ExecutionFrameKind;
+interface SequenceFrame {
+  kind: 'sequence';
   instructions: BlockInstruction[];
   index: number;
 }
 
+interface LoopForeverFrame {
+  kind: 'loop-forever';
+  instructions: BlockInstruction[];
+  index: number;
+}
+
+interface LoopCountedFrame {
+  kind: 'loop-counted';
+  instructions: BlockInstruction[];
+  index: number;
+  remaining: number;
+}
+
+type ExecutionFrame = SequenceFrame | LoopForeverFrame | LoopCountedFrame;
+
 export interface ProgramDebugFrame {
-  kind: ExecutionFrameKind;
+  kind: 'sequence' | 'loop';
   index: number;
   length: number;
 }
@@ -145,16 +169,32 @@ export class BlockProgramRunner {
     while (this.frames.length > 0) {
       const frame = this.frames[this.frames.length - 1];
 
-      if (frame.index >= frame.instructions.length) {
-        if (frame.kind === 'loop') {
-          if (frame.instructions.length === 0) {
-            this.frames.pop();
-            continue;
-          }
+      if (frame.kind === 'loop-counted' && frame.instructions.length === 0) {
+        this.frames.pop();
+        continue;
+      }
+
+      if (frame.kind === 'loop-counted' && frame.index >= frame.instructions.length) {
+        frame.remaining -= 1;
+        if (frame.remaining > 0) {
           frame.index = 0;
           continue;
         }
+        this.frames.pop();
+        continue;
+      }
 
+      if (frame.kind === 'loop-forever' && frame.instructions.length === 0) {
+        this.frames.pop();
+        continue;
+      }
+
+      if (frame.kind === 'loop-forever' && frame.index >= frame.instructions.length) {
+        frame.index = 0;
+        continue;
+      }
+
+      if (frame.index >= frame.instructions.length) {
         this.frames.pop();
         continue;
       }
@@ -166,14 +206,49 @@ export class BlockProgramRunner {
         if (instruction.instructions.length === 0) {
           continue;
         }
-        this.frames.push({ kind: 'loop', instructions: instruction.instructions, index: 0 });
+
+        if (instruction.mode === 'forever') {
+          this.frames.push({ kind: 'loop-forever', instructions: instruction.instructions, index: 0 });
+        } else {
+          const telemetry = this.getTelemetryValues();
+          const label = instruction.iterations.literal?.label ?? 'Repeat → count';
+          const iterations = Math.max(
+            0,
+            Math.floor(this.evaluateNumberBinding(instruction.iterations, label, telemetry)),
+          );
+          if (iterations <= 0) {
+            continue;
+          }
+          this.frames.push({
+            kind: 'loop-counted',
+            instructions: instruction.instructions,
+            index: 0,
+            remaining: iterations,
+          });
+        }
         continue;
       }
 
+      if (instruction.kind === 'branch') {
+        frame.index += 1;
+        const telemetry = this.getTelemetryValues();
+        const label = instruction.condition.literal?.label ?? 'If → condition';
+        const condition = this.evaluateBooleanBinding(instruction.condition, label, telemetry);
+        const branch = condition ? instruction.whenTrue : instruction.whenFalse;
+        if (branch.length > 0) {
+          this.frames.push({ kind: 'sequence', instructions: branch, index: 0 });
+        }
+        continue;
+      }
+
+      const telemetry = this.getTelemetryValues();
+      const durationLabel = instruction.duration.literal?.label ?? `${instruction.kind} → duration`;
+      const duration = Math.max(0, this.evaluateNumberBinding(instruction.duration, durationLabel, telemetry));
+
       this.currentInstruction = instruction;
-      this.timeRemaining = Math.max(instruction.duration, 0);
+      this.timeRemaining = duration;
       frame.index += 1;
-      this.applyInstruction(instruction);
+      this.applyInstruction(instruction, telemetry);
 
       if (this.timeRemaining <= EPSILON) {
         this.currentInstruction = null;
@@ -199,19 +274,27 @@ export class BlockProgramRunner {
     this.updateStatus('completed');
   }
 
-  private applyInstruction(instruction: BlockInstruction): void {
+  private applyInstruction(instruction: BlockInstruction, telemetry: ValuesSnapshot): void {
     switch (instruction.kind) {
       case 'move': {
+        const speedLabel = instruction.speed.literal?.label ?? 'Move → speed';
+        const speed = this.evaluateNumberBinding(instruction.speed, speedLabel, telemetry);
         const orientation = this.robot.getStateSnapshot().orientation;
-        const velocityX = Math.cos(orientation) * instruction.speed;
-        const velocityY = Math.sin(orientation) * instruction.speed;
+        const velocityX = Math.cos(orientation) * speed;
+        const velocityY = Math.sin(orientation) * speed;
         this.applyLinearVelocity(velocityX, velocityY);
         this.applyAngularVelocity(0);
         break;
       }
       case 'turn': {
         this.applyLinearVelocity(0, 0);
-        this.applyAngularVelocity(instruction.angularVelocity);
+        const rateLabel = instruction.angularVelocity.literal?.label ?? 'Turn → rate';
+        const angularVelocity = this.evaluateNumberBinding(
+          instruction.angularVelocity,
+          rateLabel,
+          telemetry,
+        );
+        this.applyAngularVelocity(angularVelocity);
         break;
       }
       case 'scan': {
@@ -241,11 +324,16 @@ export class BlockProgramRunner {
       case 'status-set': {
         this.applyLinearVelocity(0, 0);
         this.applyAngularVelocity(0);
-        this.applyStatusSet(instruction.value);
+        const valueLabel = instruction.value.literal?.label ?? 'Set Status → value';
+        const value = this.evaluateBooleanBinding(instruction.value, valueLabel, telemetry);
+        this.applyStatusSet(value);
         break;
       }
       case 'loop': {
         // Loops are handled via the execution stack when selecting instructions.
+        break;
+      }
+      case 'branch': {
         break;
       }
       case 'wait':
@@ -415,6 +503,175 @@ export class BlockProgramRunner {
     this.robot.invokeAction(STATUS_MODULE_ID, 'setStatus', { value });
   }
 
+  private getTelemetryValues(): ValuesSnapshot {
+    return this.robot.getTelemetrySnapshot().values ?? {};
+  }
+
+  private evaluateNumberBinding(
+    binding: NumberParameterBinding,
+    label: string,
+    telemetry: ValuesSnapshot,
+  ): number {
+    if (binding.expression) {
+      const evaluated = this.evaluateNumberExpression(binding.expression, telemetry, label);
+      if (Number.isFinite(evaluated)) {
+        return evaluated;
+      }
+    }
+
+    const literalValue = binding.literal?.value;
+    if (Number.isFinite(literalValue)) {
+      return literalValue as number;
+    }
+
+    this.warn(`${label} resolved to an invalid number; using 0.`);
+    return 0;
+  }
+
+  private evaluateBooleanBinding(
+    binding: BooleanParameterBinding,
+    label: string,
+    telemetry: ValuesSnapshot,
+  ): boolean {
+    if (binding.expression) {
+      return this.evaluateBooleanExpression(binding.expression, telemetry, label);
+    }
+
+    const literalValue = binding.literal?.value;
+    if (typeof literalValue === 'boolean') {
+      return literalValue;
+    }
+
+    this.warn(`${label} resolved to an invalid condition; using false.`);
+    return false;
+  }
+
+  private evaluateNumberExpression(
+    expression: NumberExpression,
+    telemetry: ValuesSnapshot,
+    label: string,
+  ): number {
+    switch (expression.kind) {
+      case 'literal':
+        return expression.value;
+      case 'signal': {
+        const value = this.readSignalValue(expression.signal, telemetry);
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return value;
+        }
+        if (expression.fallback) {
+          this.warn(
+            `${label} could not read ${this.describeSignal(expression.signal)}; using ${expression.fallback.value}.`,
+          );
+          return expression.fallback.value;
+        }
+        this.warn(`${label} could not read ${this.describeSignal(expression.signal)}; using 0.`);
+        return 0;
+      }
+      case 'operator': {
+        switch (expression.operator) {
+          case 'add': {
+            const operandLabel = expression.label ?? label;
+            return expression.inputs.reduce((total, input) => {
+              const value = this.evaluateNumberExpression(input as NumberExpression, telemetry, operandLabel);
+              return total + (Number.isFinite(value) ? value : 0);
+            }, 0);
+          }
+          default:
+            this.warn(`${label} operator ${expression.operator} is not supported for numbers; using 0.`);
+            return 0;
+        }
+      }
+      default:
+        return 0;
+    }
+  }
+
+  private evaluateBooleanExpression(
+    expression: BooleanExpression,
+    telemetry: ValuesSnapshot,
+    label: string,
+  ): boolean {
+    switch (expression.kind) {
+      case 'literal':
+        return expression.value;
+      case 'signal': {
+        const value = this.readSignalValue(expression.signal, telemetry);
+        if (typeof value === 'boolean') {
+          return value;
+        }
+        if (expression.fallback) {
+          this.warn(
+            `${label} could not read ${this.describeSignal(expression.signal)}; using ${expression.fallback.value ? 'true' : 'false'}.`,
+          );
+          return expression.fallback.value;
+        }
+        this.warn(`${label} could not read ${this.describeSignal(expression.signal)}; using false.`);
+        return false;
+      }
+      case 'operator': {
+        switch (expression.operator) {
+          case 'and': {
+            const operandLabel = expression.label ?? label;
+            return expression.inputs.every((input) =>
+              this.evaluateBooleanExpression(input as BooleanExpression, telemetry, operandLabel),
+            );
+          }
+          case 'greater-than': {
+            if (expression.inputs.length < 2) {
+              this.warn(`${label} is missing comparison inputs; using false.`);
+              return false;
+            }
+            const operandLabel = expression.label ?? label;
+            const firstValue = this.evaluateNumberExpression(
+              expression.inputs[0] as NumberExpression,
+              telemetry,
+              operandLabel,
+            );
+            const secondValue = this.evaluateNumberExpression(
+              expression.inputs[1] as NumberExpression,
+              telemetry,
+              operandLabel,
+            );
+            return firstValue > secondValue;
+          }
+          default:
+            this.warn(`${label} operator ${expression.operator} is not supported for booleans; using false.`);
+            return false;
+        }
+      }
+      default:
+        return false;
+    }
+  }
+
+  private readSignalValue(descriptor: SignalDescriptor, telemetry: ValuesSnapshot): unknown {
+    if (!descriptor.moduleId || !descriptor.signalId) {
+      return undefined;
+    }
+    const moduleValues = telemetry[descriptor.moduleId];
+    if (!moduleValues) {
+      return undefined;
+    }
+    return moduleValues[descriptor.signalId]?.value;
+  }
+
+  private describeSignal(descriptor: SignalDescriptor): string {
+    const readable = descriptor.label ?? descriptor.id;
+    const identifier = descriptor.moduleId && descriptor.signalId
+      ? `${descriptor.moduleId}.${descriptor.signalId}`
+      : descriptor.id;
+    if (identifier && identifier !== readable) {
+      return `${readable} (${identifier})`;
+    }
+    return readable;
+  }
+
+  private warn(message: string): void {
+    // eslint-disable-next-line no-console
+    console.warn(`[BlockProgramRunner] ${message}`);
+  }
+
   private updateStatus(status: ProgramRunnerStatus): void {
     if (this.status === status) {
       return;
@@ -453,8 +710,9 @@ export class BlockProgramRunner {
         adjustedIndex = Math.min(Math.max(rawIndex, 0), length);
       }
 
+      const kind: ProgramDebugFrame['kind'] = frame.kind === 'sequence' ? 'sequence' : 'loop';
       return {
-        kind: frame.kind,
+        kind,
         index: adjustedIndex,
         length,
       } satisfies ProgramDebugFrame;

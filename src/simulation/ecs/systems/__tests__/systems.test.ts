@@ -32,6 +32,7 @@ import {
   BlockProgramRunner,
   type ProgramDebugState,
 } from '../../../runtime/blockProgramRunner';
+import { createNumberLiteralBinding } from '../../../runtime/blockProgram';
 import { RobotChassis } from '../../../robot';
 import { STATUS_MODULE_ID } from '../../../robot/modules/statusModule';
 import type {
@@ -339,14 +340,31 @@ describe('simulation systems', () => {
     const viewport = { scale: { x: 2, y: 0.5 } } as unknown as Viewport;
 
     const programInstructions: BlockInstruction[] = [
-      { kind: 'wait', duration: 1 } as BlockInstruction,
-      { kind: 'loop', instructions: [{ kind: 'gather', duration: 2, target: 'auto' } as BlockInstruction] } as BlockInstruction,
+      {
+        kind: 'wait',
+        duration: createNumberLiteralBinding(1, { label: 'Debug → wait' }),
+      },
+      {
+        kind: 'loop',
+        mode: 'forever',
+        instructions: [
+          {
+            kind: 'gather',
+            duration: createNumberLiteralBinding(2, { label: 'Debug → gather' }),
+            target: 'auto',
+          },
+        ],
+      },
     ];
 
     let debugState: ProgramDebugState | null = {
       status: 'running',
       program: { instructions: programInstructions } as CompiledProgram,
-      currentInstruction: { kind: 'move', speed: 3, duration: 2 } as BlockInstruction,
+      currentInstruction: {
+        kind: 'move',
+        duration: createNumberLiteralBinding(2, { label: 'Debug → move duration' }),
+        speed: createNumberLiteralBinding(3, { label: 'Debug → move speed' }),
+      },
       timeRemaining: 1.25,
       frames: [{ kind: 'sequence', index: 0, length: 2 }],
     } satisfies ProgramDebugState;

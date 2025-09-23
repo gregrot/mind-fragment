@@ -1,15 +1,18 @@
 import type { RobotChassis } from '../robot';
 import type { ValuesSnapshot } from '../robot/moduleBus';
+import type { Vector2 } from '../robot/robotState';
 import type { ResourceNode } from '../resources/resourceField';
 import type {
   BlockInstruction,
   BooleanExpression,
   BooleanParameterBinding,
   CompiledProgram,
+  MoveToInstruction,
   NumberExpression,
   NumberParameterBinding,
   SignalDescriptor,
 } from './blockProgram';
+import { SimpleNavigator } from '../robot/modules/navigator';
 
 export type ProgramRunnerStatus = 'idle' | 'running' | 'completed';
 
@@ -24,6 +27,7 @@ interface ScanMemoryHit {
   type: string;
   quantity: number;
   distance: number;
+  position: Vector2 | null;
 }
 
 interface ScanMemory {
@@ -70,6 +74,7 @@ export interface ProgramDebugState {
 
 export class BlockProgramRunner {
   private readonly robot: RobotChassis;
+  private readonly navigator = new SimpleNavigator();
   private program: CompiledProgram | null = null;
   private currentInstruction: BlockInstruction | null = null;
   private timeRemaining = 0;
@@ -144,6 +149,11 @@ export class BlockProgramRunner {
 
     let remaining = stepSeconds;
     while (remaining > 0 && this.status === 'running' && this.currentInstruction) {
+      if (this.currentInstruction?.kind === 'move-to') {
+        const telemetryForMaintenance = this.getTelemetryValues();
+        this.executeMoveToInstruction(this.currentInstruction, telemetryForMaintenance);
+      }
+
       const delta = Math.min(remaining, this.timeRemaining);
       this.timeRemaining -= delta;
       remaining -= delta;
@@ -286,6 +296,10 @@ export class BlockProgramRunner {
         this.applyAngularVelocity(0);
         break;
       }
+      case 'move-to': {
+        this.executeMoveToInstruction(instruction, telemetry);
+        break;
+      }
       case 'turn': {
         this.applyLinearVelocity(0, 0);
         const rateLabel = instruction.angularVelocity.literal?.label ?? 'Turn → rate';
@@ -344,6 +358,92 @@ export class BlockProgramRunner {
     }
   }
 
+  private executeMoveToInstruction(instruction: MoveToInstruction, telemetry: ValuesSnapshot): void {
+    const speedLabel = instruction.speed.literal?.label ?? 'Move To → speed';
+    const requestedSpeed = Math.max(
+      0,
+      this.evaluateNumberBinding(instruction.speed, speedLabel, telemetry),
+    );
+
+    const target = this.resolveMoveToTarget(instruction, telemetry);
+    if (!target) {
+      this.applyLinearVelocity(0, 0);
+      this.applyAngularVelocity(0);
+      return;
+    }
+
+    const state = this.robot.getStateSnapshot();
+    const command = this.navigator.steerTowards(state, target, requestedSpeed);
+    this.applyAngularVelocity(command.angularVelocity);
+    this.applyLinearVelocity(command.linearVelocity.x, command.linearVelocity.y);
+  }
+
+  private resolveMoveToTarget(instruction: MoveToInstruction, telemetry: ValuesSnapshot): Vector2 | null {
+    const useScanLabel = instruction.target.useScanHit.literal?.label ?? 'Move To → use scan hit';
+    const useScan = this.evaluateBooleanBinding(
+      instruction.target.useScanHit,
+      useScanLabel,
+      telemetry,
+    );
+
+    if (useScan) {
+      const indexLabel = instruction.target.scanHitIndex.literal?.label ?? 'Move To → scan hit index';
+      const hitIndex = this.evaluateNumberBinding(
+        instruction.target.scanHitIndex,
+        indexLabel,
+        telemetry,
+      );
+      const scanPosition = this.selectScanTarget(hitIndex);
+      if (scanPosition) {
+        return scanPosition;
+      }
+    }
+
+    const literalXLabel = instruction.target.literalPosition.x.literal?.label ?? 'Move To → target X';
+    const literalYLabel = instruction.target.literalPosition.y.literal?.label ?? 'Move To → target Y';
+    const literalX = this.evaluateNumberBinding(
+      instruction.target.literalPosition.x,
+      literalXLabel,
+      telemetry,
+    );
+    const literalY = this.evaluateNumberBinding(
+      instruction.target.literalPosition.y,
+      literalYLabel,
+      telemetry,
+    );
+
+    if (!Number.isFinite(literalX) || !Number.isFinite(literalY)) {
+      return null;
+    }
+
+    return { x: literalX, y: literalY } satisfies Vector2;
+  }
+
+  private selectScanTarget(requestedIndex: number): Vector2 | null {
+    if (!this.scanMemory || this.scanMemory.hits.length === 0) {
+      return null;
+    }
+
+    const safeIndex = Number.isFinite(requestedIndex)
+      ? Math.max(1, Math.floor(requestedIndex))
+      : 1;
+    const hit = this.scanMemory.hits[safeIndex - 1] ?? null;
+    if (!hit) {
+      return null;
+    }
+
+    if (hit.position) {
+      return { x: hit.position.x, y: hit.position.y } satisfies Vector2;
+    }
+
+    const node = this.robot.resourceField.list().find((candidate) => candidate.id === hit.id);
+    if (!node) {
+      return null;
+    }
+
+    return { x: node.position.x, y: node.position.y } satisfies Vector2;
+  }
+
   private resetMovement(): void {
     this.applyLinearVelocity(0, 0);
     this.applyAngularVelocity(0);
@@ -392,6 +492,7 @@ export class BlockProgramRunner {
             const type = typeof hit.type === 'string' ? hit.type : 'unknown';
             const quantityRaw = (hit as { quantity?: unknown }).quantity;
             const distanceRaw = (hit as { distance?: unknown }).distance;
+            const positionRaw = (hit as { position?: unknown }).position;
             const quantity =
               typeof quantityRaw === 'number' && Number.isFinite(quantityRaw)
                 ? Math.max(quantityRaw, 0)
@@ -400,7 +501,21 @@ export class BlockProgramRunner {
               typeof distanceRaw === 'number' && Number.isFinite(distanceRaw)
                 ? Math.max(distanceRaw, 0)
                 : Number.POSITIVE_INFINITY;
-            return { id, type, quantity, distance } satisfies ScanMemoryHit;
+            let position: Vector2 | null = null;
+            if (
+              positionRaw &&
+              typeof positionRaw === 'object' &&
+              typeof (positionRaw as { x?: unknown }).x === 'number' &&
+              Number.isFinite((positionRaw as { x: number }).x) &&
+              typeof (positionRaw as { y?: unknown }).y === 'number' &&
+              Number.isFinite((positionRaw as { y: number }).y)
+            ) {
+              position = {
+                x: (positionRaw as { x: number }).x,
+                y: (positionRaw as { y: number }).y,
+              } satisfies Vector2;
+            }
+            return { id, type, quantity, distance, position } satisfies ScanMemoryHit;
           })
           .filter((hit) => hit.id)
       : [];

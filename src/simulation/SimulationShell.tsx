@@ -21,6 +21,7 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
     let disposed = false;
     let cleanupResize: (() => void) | undefined;
     let selectionCleanup: (() => void) | undefined;
+    let hasAnnouncedFirstRobot = false;
 
     const init = async () => {
       const container = containerRef.current;
@@ -59,7 +60,11 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
       selectionCleanup = rootScene.subscribeRobotSelection((robotId) => {
         if (robotId) {
           simulationRuntime.setSelectedRobot(robotId);
-          onRobotSelect?.();
+          if (hasAnnouncedFirstRobot) {
+            onRobotSelect?.();
+          } else {
+            hasAnnouncedFirstRobot = true;
+          }
         } else {
           simulationRuntime.clearSelectedRobot();
         }

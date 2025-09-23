@@ -74,7 +74,7 @@ export interface SimulationWorldComponents {
 }
 
 export interface SimulationWorldEntities {
-  robot: EntityId;
+  robots: Map<string, EntityId>;
   selection: EntityId;
 }
 
@@ -83,11 +83,12 @@ export interface SimulationWorldContext {
   components: SimulationWorldComponents;
   entities: SimulationWorldEntities;
   blackboard: ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>;
-  getRobotCore(entity?: EntityId): RobotChassis | null;
-  getProgramRunner(entity?: EntityId): BlockProgramRunner | null;
-  getSprite(entity?: EntityId): Sprite | null;
-  getTransform(entity?: EntityId): TransformComponent | null;
-  setTransform(entity: EntityId, transform: TransformComponent): void;
+  defaultRobotId: string;
+  getRobotCore(robotId?: string): RobotChassis | null;
+  getProgramRunner(robotId?: string): BlockProgramRunner | null;
+  getSprite(robotId?: string): Sprite | null;
+  getTransform(robotId?: string): TransformComponent | null;
+  setTransform(robotId: string, transform: TransformComponent): void;
   getRobotId(entity: EntityId): string | null;
   getRobotEntity(robotId: string): EntityId | null;
   selectRobot(robotId: string | null): void;
@@ -143,85 +144,16 @@ export async function createSimulationWorld({
   const selectionEntity = world.createEntity();
   SelectionState.set(selectionEntity, { robotId: null });
 
-  const robotEntity = world.createEntity();
-  RobotId.set(robotEntity, defaultRobotId);
+  const chassisTexture = await assetService.loadTexture('robot/chassis', renderer);
 
-  const robotCore = new RobotChassis();
-  for (const moduleId of DEFAULT_MODULE_LOADOUT) {
-    const moduleInstance = createModuleInstance(moduleId);
-    robotCore.attachModule(moduleInstance);
-  }
-  RobotCore.set(robotEntity, robotCore);
-
-  ResourceFieldView.set(robotEntity, {
-    resourceField: robotCore.resourceField,
-    layer: null,
-  });
-
-  const runner = new BlockProgramRunner(robotCore);
-  ProgramRunner.set(robotEntity, runner);
-  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, runner.getStatus());
-
-  const transform: TransformComponent = {
-    position: { x: 0, y: 0 },
-    rotation: 0,
-  };
-  Transform.set(robotEntity, transform);
-  ViewportTarget.set(robotEntity, { kind: 'primary', priority: 1 });
-
-  const texture = await assetService.loadTexture('robot/chassis', renderer);
-  const sprite = new Sprite(texture);
-  sprite.anchor.set(0.5);
-  sprite.position.set(transform.position.x, transform.position.y);
-  sprite.zIndex = 10;
-  SpriteRef.set(robotEntity, sprite);
-
-  const statusIndicator = new Graphics();
-  statusIndicator.circle(0, -36, 6);
-  statusIndicator.fill({ color: 0xff6b6b, alpha: 0.95 });
-  statusIndicator.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.85 });
-  statusIndicator.stroke();
-  statusIndicator.visible = false;
-  sprite.addChild(statusIndicator);
-  StatusIndicator.set(robotEntity, { indicator: statusIndicator });
-
-  const debugOverlayContainer = new Container();
-  debugOverlayContainer.visible = false;
-  debugOverlayContainer.zIndex = 1000;
-  debugOverlayContainer.eventMode = 'none';
-
-  const debugOverlayBackground = new Graphics();
-  debugOverlayContainer.addChild(debugOverlayBackground);
-
-  const debugOverlayText = new Text({
-    text: '',
-    style: {
-      fill: 0xffffff,
-      fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 12,
-      lineHeight: 18,
-      wordWrap: true,
-      wordWrapWidth: DEBUG_MAX_WIDTH - DEBUG_PADDING * 2,
-    },
-  });
-  debugOverlayText.anchor.set(0.5, 0);
-  debugOverlayContainer.addChild(debugOverlayText);
-  overlayLayer.addChild(debugOverlayContainer);
-
-  DebugOverlay.set(robotEntity, {
-    container: debugOverlayContainer,
-    background: debugOverlayBackground,
-    text: debugOverlayText,
-    lastRenderedText: '',
-  });
-
-  const telemetrySnapshot: SimulationTelemetrySnapshot = robotCore.getTelemetrySnapshot();
-  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, telemetrySnapshot);
-  blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated, telemetrySnapshot);
+  const robots = new Map<string, EntityId>();
 
   const applySelection = (robotId: string | null): void => {
     const current = SelectionState.get(selectionEntity)?.robotId ?? null;
     if (current === robotId) {
+      return;
+    }
+    if (robotId !== null && !robots.has(robotId)) {
       return;
     }
     SelectionState.set(selectionEntity, { robotId });
@@ -230,10 +162,113 @@ export async function createSimulationWorld({
     onRobotSelected?.(robotId);
   };
 
-  Selectable.set(robotEntity, {
-    id: defaultRobotId,
-    onSelected: applySelection,
-  });
+  const createRobotEntity = async (robotId: string) => {
+    const entity = world.createEntity();
+    robots.set(robotId, entity);
+    RobotId.set(entity, robotId);
+
+    const robotCore = new RobotChassis();
+    for (const moduleId of DEFAULT_MODULE_LOADOUT) {
+      const moduleInstance = createModuleInstance(moduleId);
+      robotCore.attachModule(moduleInstance);
+    }
+    RobotCore.set(entity, robotCore);
+
+    ResourceFieldView.set(entity, {
+      resourceField: robotCore.resourceField,
+      layer: null,
+    });
+
+    const runner = new BlockProgramRunner(robotCore);
+    ProgramRunner.set(entity, runner);
+
+    const transform: TransformComponent = {
+      position: { x: 0, y: 0 },
+      rotation: 0,
+    };
+    Transform.set(entity, transform);
+    ViewportTarget.set(entity, { kind: 'primary', priority: 1 });
+
+    const sprite = new Sprite(chassisTexture);
+    sprite.anchor.set(0.5);
+    sprite.position.set(transform.position.x, transform.position.y);
+    sprite.zIndex = 10;
+    SpriteRef.set(entity, sprite);
+
+    const statusIndicator = new Graphics();
+    statusIndicator.circle(0, -36, 6);
+    statusIndicator.fill({ color: 0xff6b6b, alpha: 0.95 });
+    statusIndicator.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.85 });
+    statusIndicator.stroke();
+    statusIndicator.visible = false;
+    sprite.addChild(statusIndicator);
+    StatusIndicator.set(entity, { indicator: statusIndicator });
+
+    const debugOverlayContainer = new Container();
+    debugOverlayContainer.visible = false;
+    debugOverlayContainer.zIndex = 1000;
+    debugOverlayContainer.eventMode = 'none';
+
+    const debugOverlayBackground = new Graphics();
+    debugOverlayContainer.addChild(debugOverlayBackground);
+
+    const debugOverlayText = new Text({
+      text: '',
+      style: {
+        fill: 0xffffff,
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 12,
+        lineHeight: 18,
+        wordWrap: true,
+        wordWrapWidth: DEBUG_MAX_WIDTH - DEBUG_PADDING * 2,
+      },
+    });
+    debugOverlayText.anchor.set(0.5, 0);
+    debugOverlayContainer.addChild(debugOverlayText);
+    overlayLayer.addChild(debugOverlayContainer);
+
+    DebugOverlay.set(entity, {
+      container: debugOverlayContainer,
+      background: debugOverlayBackground,
+      text: debugOverlayText,
+      lastRenderedText: '',
+    });
+
+    Selectable.set(entity, {
+      id: robotId,
+      onSelected: (id) => applySelection(id),
+    });
+
+    return { entity, robotCore, runner, sprite };
+  };
+
+  const creationOrder: string[] = [];
+  if (!creationOrder.includes(defaultRobotId)) {
+    creationOrder.push(defaultRobotId);
+  }
+  for (const robotId of ['MF-01', 'MF-02']) {
+    if (!creationOrder.includes(robotId)) {
+      creationOrder.push(robotId);
+    }
+  }
+
+  const robotResults: Array<{
+    robotId: string;
+    robotCore: RobotChassis;
+    runner: BlockProgramRunner;
+  }> = [];
+
+  for (const robotId of creationOrder) {
+    const { robotCore, runner } = await createRobotEntity(robotId);
+    robotResults.push({ robotId, robotCore, runner });
+  }
+
+  const defaultRobot = robotResults.find((entry) => entry.robotId === defaultRobotId) ?? robotResults[0];
+  const defaultTelemetry: SimulationTelemetrySnapshot = defaultRobot.robotCore.getTelemetrySnapshot();
+
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, defaultRobot.runner.getStatus());
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, defaultTelemetry);
+  blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated, defaultTelemetry);
 
   const selectRobot = (robotId: string | null): void => {
     applySelection(robotId);
@@ -242,6 +277,19 @@ export async function createSimulationWorld({
   const getSelectedRobot = (): string | null => {
     return SelectionState.get(selectionEntity)?.robotId ?? null;
   };
+
+  const resolveRobotEntity = (robotId?: string): EntityId | null => {
+    if (robotId) {
+      return robots.get(robotId) ?? null;
+    }
+    const selected = getSelectedRobot();
+    if (selected) {
+      return robots.get(selected) ?? null;
+    }
+    return robots.get(defaultRobot.robotId) ?? null;
+  };
+
+  applySelection(defaultRobot.robotId);
 
   const context: SimulationWorldContext = {
     world,
@@ -259,26 +307,36 @@ export async function createSimulationWorld({
       Selectable,
     },
     entities: {
-      robot: robotEntity,
+      robots,
       selection: selectionEntity,
     },
     blackboard,
-    getRobotCore: (entity = robotEntity) => RobotCore.get(entity) ?? null,
-    getProgramRunner: (entity = robotEntity) => ProgramRunner.get(entity) ?? null,
-    getSprite: (entity = robotEntity) => SpriteRef.get(entity) ?? null,
-    getTransform: (entity = robotEntity) => Transform.get(entity) ?? null,
-    setTransform: (entity, nextTransform) => {
+    defaultRobotId: defaultRobot.robotId,
+    getRobotCore: (robotId) => {
+      const entity = resolveRobotEntity(robotId);
+      return entity ? RobotCore.get(entity) ?? null : null;
+    },
+    getProgramRunner: (robotId) => {
+      const entity = resolveRobotEntity(robotId);
+      return entity ? ProgramRunner.get(entity) ?? null : null;
+    },
+    getSprite: (robotId) => {
+      const entity = resolveRobotEntity(robotId);
+      return entity ? SpriteRef.get(entity) ?? null : null;
+    },
+    getTransform: (robotId) => {
+      const entity = resolveRobotEntity(robotId);
+      return entity ? Transform.get(entity) ?? null : null;
+    },
+    setTransform: (robotId, nextTransform) => {
+      const entity = resolveRobotEntity(robotId);
+      if (!entity) {
+        return;
+      }
       Transform.set(entity, nextTransform);
     },
     getRobotId: (entity) => RobotId.get(entity) ?? null,
-    getRobotEntity: (robotId) => {
-      for (const [entity, id] of RobotId.entries()) {
-        if (id === robotId) {
-          return entity;
-        }
-      }
-      return null;
-    },
+    getRobotEntity: (robotId) => robots.get(robotId) ?? null,
     selectRobot,
     getSelectedRobot,
   };

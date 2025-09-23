@@ -130,6 +130,87 @@ describe('BlockProgramRunner', () => {
     );
   });
 
+  it('steers towards the most recent scan hit when executing move-to instructions', () => {
+    const robot = new RobotChassis({ state: { orientation: Math.PI / 2 } });
+    for (const moduleId of DEFAULT_MODULE_LOADOUT) {
+      robot.attachModule(createModuleInstance(moduleId));
+    }
+
+    const runner = new BlockProgramRunner(robot);
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'scan',
+          duration: createNumberLiteralBinding(1, { label: 'Test → scan duration' }),
+          filter: null,
+        },
+        {
+          kind: 'move-to',
+          duration: createNumberLiteralBinding(4, { label: 'Test → move-to duration' }),
+          speed: createNumberLiteralBinding(80, { label: 'Test → move-to speed' }),
+          target: {
+            useScanHit: createBooleanLiteralBinding(true, { label: 'Test → use scan hit' }),
+            scanHitIndex: createNumberLiteralBinding(1, { label: 'Test → scan hit index' }),
+            literalPosition: {
+              x: createNumberLiteralBinding(0, { label: 'Test → fallback X' }),
+              y: createNumberLiteralBinding(0, { label: 'Test → fallback Y' }),
+            },
+          },
+        },
+      ],
+    };
+
+    const actionSpy = vi.spyOn(robot, 'invokeAction');
+
+    runner.load(program);
+    runner.update(0.5);
+    robot.tick(0.5);
+    runner.update(0.5);
+
+    const node = robot.resourceField.list().find((candidate) => candidate.id === 'node-silicate-1');
+    if (!node) {
+      throw new Error('Expected the default silicate node to be present.');
+    }
+
+    const beforeState = robot.getStateSnapshot();
+    const beforeDistance = Math.hypot(
+      node.position.x - beforeState.position.x,
+      node.position.y - beforeState.position.y,
+    );
+
+    for (let i = 0; i < 8; i += 1) {
+      runner.update(0.25);
+      robot.tick(0.25);
+    }
+
+    const afterState = robot.getStateSnapshot();
+    const afterDistance = Math.hypot(
+      node.position.x - afterState.position.x,
+      node.position.y - afterState.position.y,
+    );
+
+    expect(afterDistance).toBeLessThan(beforeDistance);
+
+    const angularCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setAngularVelocity');
+    expect(
+      angularCalls.some(([, , payload]) => Math.abs(((payload as { value?: number })?.value ?? 0)) > 1e-3),
+    ).toBe(true);
+
+    const linearCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setLinearVelocity');
+    expect(
+      linearCalls.some(([, , payload]) => {
+        const typed = (payload as { x?: number; y?: number }) ?? {};
+        return Math.hypot(typed.x ?? 0, typed.y ?? 0) > 0.5;
+      }),
+    ).toBe(true);
+    expect(
+      linearCalls.every(([, , payload]) => {
+        const typed = (payload as { x?: number; y?: number }) ?? {};
+        return Math.hypot(typed.x ?? 0, typed.y ?? 0) <= 120 + 1e-6;
+      }),
+    ).toBe(true);
+  });
+
   it('drops carried resources when executing a deposit instruction', () => {
     const robot = createRobot();
     robot.inventory.store('ferrous-ore', 6);

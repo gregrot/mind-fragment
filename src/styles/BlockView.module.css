@@ -44,6 +44,34 @@
   font-size: var(--font-size-md);
 }
 
+.blockDeleteButton {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  line-height: 0;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.blockDeleteButton:hover,
+.blockDeleteButton:focus-visible {
+  background: var(--color-surface-overlay);
+  color: var(--color-accent-cyan);
+  outline: none;
+}
+
+.blockDeleteButton:active {
+  transform: scale(0.96);
+}
+
+.blockDeleteIcon {
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+}
+
 .blockSummary {
   margin: 0;
   color: var(--color-text-secondary);

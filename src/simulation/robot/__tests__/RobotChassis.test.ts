@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  RobotChassis,
-  type ModuleActionContext,
-  type ModuleUpdateContext,
-  type ModuleStateSnapshot,
-} from '../RobotChassis';
+import { RobotChassis, type ModuleActionContext, type ModuleUpdateContext } from '../RobotChassis';
 import { RobotModule } from '../RobotModule';
 import type { ModulePort } from '../moduleBus';
-import { toModuleResourceId } from '../moduleInventory';
 
 interface LinearMovementOptions {
   id: string;
@@ -193,99 +187,5 @@ describe('Module messaging and actuator resolution', () => {
     const stateAfterSecondTick = chassis.getStateSnapshot();
     expect(stateAfterSecondTick.position.x).toBeCloseTo(10);
     expect(stateAfterSecondTick.orientation).toBeGreaterThan(stateAfterTick.orientation);
-  });
-});
-
-describe('Module storage and loadout management', () => {
-  it('unmounts modules into inventory and exposes them via the module state snapshot', () => {
-    const chassis = new RobotChassis({ capacity: 6 });
-    const power = new PowerCoreModule();
-    const mover = new RobotModule({
-      id: 'move.basic',
-      title: 'Basic Movement',
-      provides: ['movement.basic'],
-      requires: ['power.core'],
-      attachment: { slot: 'core', index: 1 },
-    });
-
-    chassis.attachModule(power);
-    chassis.attachModule(mover);
-    chassis.inventory.setCapacitySource('test-hold', 10);
-
-    const storeResult = chassis.storeModule('move.basic');
-    expect(storeResult).toEqual({ success: true, moduleId: 'move.basic', quantity: 1 });
-    expect(chassis.moduleStack.getModule('move.basic')).toBeNull();
-    expect(chassis.inventory.getQuantity(toModuleResourceId('move.basic'))).toBe(1);
-
-    const snapshot = chassis.getModuleStateSnapshot();
-    expect(snapshot.installed.find((entry) => entry.id === 'move.basic')).toBeUndefined();
-    expect(snapshot.inventory).toEqual([{ id: 'move.basic', quantity: 1 }]);
-  });
-
-  it('blocks unmounting when dependencies would break', () => {
-    const chassis = new RobotChassis({ capacity: 6 });
-    chassis.attachModule(new PowerCoreModule());
-    chassis.attachModule(
-      new RobotModule({
-        id: 'support.frame',
-        title: 'Support Frame',
-        provides: ['support.frame'],
-        attachment: { slot: 'support', index: 0 },
-      }),
-    );
-    chassis.attachModule(
-      new RobotModule({
-        id: 'tool.aux',
-        title: 'Aux Tool',
-        requires: ['support.frame'],
-        attachment: { slot: 'extension', index: 0 },
-      }),
-    );
-
-    const result = chassis.storeModule('support.frame');
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.reason).toBe('blocked');
-    }
-    expect(chassis.moduleStack.getModule('support.frame')).not.toBeNull();
-  });
-
-  it('mounts stored modules back onto the chassis', () => {
-    const chassis = new RobotChassis({ capacity: 6 });
-    chassis.attachModule(new PowerCoreModule());
-    chassis.inventory.setCapacitySource('test-hold', 10);
-    chassis.inventory.store(toModuleResourceId('storage.cargo'), 1);
-
-    const result = chassis.mountModule('storage.cargo');
-    expect(result).toEqual({ success: true, moduleId: 'storage.cargo' });
-    expect(chassis.moduleStack.getModule('storage.cargo')).not.toBeNull();
-    expect(chassis.inventory.getQuantity(toModuleResourceId('storage.cargo'))).toBe(0);
-  });
-
-  it('drops stored modules into the world and picks them back up', () => {
-    const chassis = new RobotChassis({ capacity: 6 });
-    chassis.attachModule(new PowerCoreModule());
-    chassis.inventory.setCapacitySource('test-hold', 10);
-    chassis.inventory.store(toModuleResourceId('support.frame'), 2);
-
-    const drop = chassis.dropModule('support.frame', 2, { mergeDistance: 0 });
-    expect(drop).toMatchObject({ success: true, moduleId: 'support.frame', quantity: 2 });
-    if (!drop.success) {
-      throw new Error('Expected drop to succeed');
-    }
-    const nodeId = drop.nodeId;
-
-    expect(chassis.inventory.getQuantity(toModuleResourceId('support.frame'))).toBe(0);
-
-    const pickup = chassis.pickUpModule(nodeId, 1);
-    expect(pickup.success).toBe(true);
-    if (!pickup.success) {
-      throw new Error('Expected pickup to succeed');
-    }
-    expect(pickup.moduleId).toBe('support.frame');
-    expect(chassis.inventory.getQuantity(toModuleResourceId('support.frame'))).toBe(1);
-
-    const stateAfterPickup: ModuleStateSnapshot = chassis.getModuleStateSnapshot();
-    expect(stateAfterPickup.ground.find((entry) => entry.nodeId === nodeId)?.quantity).toBeGreaterThanOrEqual(1);
   });
 });

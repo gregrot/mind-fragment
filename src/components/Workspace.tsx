@@ -10,10 +10,11 @@ interface WorkspaceProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  onRemoveBlock: (instanceId: string) => void;
   telemetry?: RobotTelemetryData;
 }
 
-const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock, telemetry }: WorkspaceProps): JSX.Element => {
+const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock, onRemoveBlock, telemetry }: WorkspaceProps): JSX.Element => {
   const workspaceTarget = (position: number): DropTarget => ({
     kind: 'workspace',
     position,
@@ -69,6 +70,7 @@ const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock, telemetry }: Wo
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    onRemoveBlock={onRemoveBlock}
                     telemetry={telemetry}
                   />
                   <DropZone

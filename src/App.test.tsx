@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { simulationRuntime } from './state/simulationRuntime';
+import type { BlockInstruction, ExpressionNode } from './simulation/runtime/blockProgram';
 
 afterEach(() => {
   cleanup();
@@ -388,7 +389,7 @@ describe('block workspace drag and drop', () => {
     const preventDefault = dispatchCancelableTouchMove(repeatBlock);
     expect(preventDefault).toHaveBeenCalled();
   });
-  it('compiles and reports a routine when Run Program is pressed', () => {
+  it('compiles user-authored literals, signals, and operator expressions when Run Program is pressed', async () => {
     renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
@@ -399,22 +400,96 @@ describe('block workspace drag and drop', () => {
     fireEvent.dragOver(workspaceDropzone, { dataTransfer: startTransfer });
     fireEvent.drop(workspaceDropzone, { dataTransfer: startTransfer });
 
+    await waitFor(() => {
+      const workspace = getWorkspaceDropzone();
+      expect(within(workspace).getByTestId('block-start')).toBeInTheDocument();
+    });
+
     const workspace = getWorkspaceDropzone();
     const startBlock = within(workspace).getByTestId('block-start');
-    const doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+    const startDoDropzone = within(startBlock).getByTestId('slot-do-dropzone');
 
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const repeatTransfer = createDataTransfer();
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(startDoDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(startDoDropzone, { dataTransfer: repeatTransfer });
+
+    await waitFor(() => {
+      const latestWorkspace = getWorkspaceDropzone();
+      const refreshedStart = within(latestWorkspace).getByTestId('block-start');
+      expect(within(refreshedStart).getByTestId('block-repeat')).toBeInTheDocument();
+    });
+
+    const repeatBlock = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+    const repeatDoDropzone = within(repeatBlock).getByTestId('slot-do-dropzone');
     const [movePaletteItem] = screen.getAllByTestId('palette-move');
     const moveTransfer = createDataTransfer();
 
     fireEvent.dragStart(movePaletteItem, { dataTransfer: moveTransfer });
-    fireEvent.dragOver(doSlotDropzone, { dataTransfer: moveTransfer });
-    fireEvent.drop(doSlotDropzone, { dataTransfer: moveTransfer });
+    fireEvent.dragOver(repeatDoDropzone, { dataTransfer: moveTransfer });
+    fireEvent.drop(repeatDoDropzone, { dataTransfer: moveTransfer });
 
-    expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
+    await waitFor(() => {
+      const latestRepeat = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+      expect(within(latestRepeat).getByTestId('block-move')).toBeInTheDocument();
+    });
+
+    const countExpressionDropzone = within(getWorkspaceDropzone()).getByTestId(
+      'block-repeat-parameter-count-expression-dropzone',
+    );
+    const [operatorPaletteItem] = screen.getAllByTestId('palette-operator-add');
+    const operatorTransfer = createDataTransfer();
+
+    fireEvent.dragStart(operatorPaletteItem, { dataTransfer: operatorTransfer });
+    fireEvent.dragOver(countExpressionDropzone, { dataTransfer: operatorTransfer });
+    fireEvent.drop(countExpressionDropzone, { dataTransfer: operatorTransfer });
+
+    await waitFor(() => {
+      const updatedRepeat = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+      expect(within(updatedRepeat).getByTestId('block-operator-add')).toBeInTheDocument();
+    });
+
+    const operatorBlock = within(getWorkspaceDropzone()).getByTestId('block-operator-add');
+    const literalInputs = within(operatorBlock).getAllByTestId(
+      'block-literal-number-parameter-value',
+    ) as HTMLInputElement[];
+
+    fireEvent.change(literalInputs[0], { target: { value: '4' } });
+    fireEvent.blur(literalInputs[0]);
+    fireEvent.change(literalInputs[1], { target: { value: '2' } });
+    fireEvent.blur(literalInputs[1]);
+
+    expect(literalInputs[0].value).toBe('4');
+    expect(literalInputs[1].value).toBe('2');
+
+    const [broadcastPaletteItem] = screen.getAllByTestId('palette-broadcast-signal');
+    const broadcastTransfer = createDataTransfer();
+    const refreshedStartBlock = within(getWorkspaceDropzone()).getByTestId('block-start');
+    const refreshedDoDropzone = within(refreshedStartBlock).getAllByTestId('slot-do-dropzone')[0];
+
+    fireEvent.dragStart(broadcastPaletteItem, { dataTransfer: broadcastTransfer });
+    fireEvent.dragOver(refreshedDoDropzone, { dataTransfer: broadcastTransfer });
+    fireEvent.drop(refreshedDoDropzone, { dataTransfer: broadcastTransfer });
+
+    await waitFor(() => {
+      const latestStart = within(getWorkspaceDropzone()).getByTestId('block-start');
+      expect(within(latestStart).getAllByTestId('block-broadcast-signal').length).toBeGreaterThan(0);
+    });
+
+    const startWithSignal = within(getWorkspaceDropzone()).getByTestId('block-start');
+    const broadcastBlocks = within(startWithSignal).getAllByTestId('block-broadcast-signal');
+    const broadcastBlock = broadcastBlocks[broadcastBlocks.length - 1];
+    const signalSelect = within(broadcastBlock).getByTestId(
+      'block-broadcast-signal-parameter-signal',
+    ) as HTMLSelectElement;
+
+    fireEvent.change(signalSelect, { target: { value: 'alert.signal' } });
+    expect(signalSelect.value).toBe('alert.signal');
 
     const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
     const runButtons = screen.getAllByTestId('run-program');
-    let matchedProgram: { instructions: unknown[] } | null = null;
+    let matchedProgram: { instructions: BlockInstruction[] } | null = null;
 
     for (const button of runButtons) {
       runSpy.mockClear();
@@ -426,7 +501,27 @@ describe('block workspace drag and drop', () => {
       }
     }
 
-    expect(matchedProgram?.instructions).toHaveLength(1);
+    const instructions = matchedProgram?.instructions ?? [];
+    expect(instructions).toHaveLength(1);
+    const loopInstruction = instructions[0];
+    if (!loopInstruction || loopInstruction.kind !== 'loop' || loopInstruction.mode !== 'counted') {
+      throw new Error('Expected a counted loop to be emitted.');
+    }
+
+    const expression = loopInstruction.iterations.expression;
+    expect(expression?.kind).toBe('operator');
+    if (expression?.kind === 'operator') {
+      expect(expression.operator).toBe('add');
+      const literalInputs = expression.inputs.filter(
+        (input): input is Extract<ExpressionNode, { kind: 'literal' }> => input.kind === 'literal',
+      );
+      const literalValues = literalInputs.map((input) => ({ value: input.value, source: input.source }));
+      expect(literalValues).toEqual([
+        { value: 4, source: 'user' },
+        { value: 2, source: 'user' },
+      ]);
+    }
+
     runSpy.mockRestore();
   });
 });

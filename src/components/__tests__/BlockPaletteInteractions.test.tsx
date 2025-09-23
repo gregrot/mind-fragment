@@ -38,11 +38,11 @@ describe('BlockPalette value and operator blocks', () => {
     expect(screen.getByText('Operators')).toBeInTheDocument();
 
     const numberLiteral = screen.getByTestId('palette-literal-number');
-    expect(within(numberLiteral).getByText('Number Literal')).toBeInTheDocument();
-    expect(within(numberLiteral).getByText('Value')).toBeInTheDocument();
+    expect(numberLiteral).toHaveAttribute('role', 'listitem');
+    expect(within(numberLiteral).getByText('Value', { selector: 'span' })).toBeInTheDocument();
 
     const operatorBlock = screen.getByTestId('palette-operator-greater-than');
-    expect(within(operatorBlock).getByText('Operator')).toBeInTheDocument();
+    expect(within(operatorBlock).getByText(/Operator/i)).toBeInTheDocument();
   });
 
   it('supports dragging value blocks into boolean parameter drop zones', () => {
@@ -76,6 +76,39 @@ describe('BlockPalette value and operator blocks', () => {
     expect(handleDrop).toHaveBeenCalledTimes(1);
     const [, target] = handleDrop.mock.calls[0];
     expect(target).toMatchObject({ kind: 'parameter-expression', parameterName: 'condition' });
+  });
+
+  it('supports dropping operator blocks into numeric expression inputs', () => {
+    const handleDrop = vi.fn();
+    const repeat = createBlockInstance('repeat');
+    if (repeat.expressionInputs) {
+      repeat.expressionInputs.count = [];
+    }
+
+    render(
+      <div>
+        <BlockPalette blocks={BLOCK_LIBRARY} />
+        <BlockView block={repeat} path={[]} onDrop={handleDrop} />
+      </div>,
+    );
+
+    const [operatorAdd] = screen.getAllByTestId('palette-operator-add');
+    const dropZone = screen.getByTestId('block-repeat-parameter-count-expression-dropzone');
+
+    const dataTransfer = createMockDataTransfer();
+
+    fireEvent.dragStart(operatorAdd, { dataTransfer });
+
+    expect(dataTransfer.setData).toHaveBeenCalledWith(
+      'application/json',
+      expect.stringContaining('"blockType":"operator-add"'),
+    );
+
+    fireEvent.drop(dropZone, { dataTransfer });
+
+    expect(handleDrop).toHaveBeenCalledTimes(1);
+    const [, target] = handleDrop.mock.calls[0];
+    expect(target).toMatchObject({ kind: 'parameter-expression', parameterName: 'count' });
   });
 
   it('filters palette items using the search input', () => {

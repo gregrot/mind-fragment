@@ -57,10 +57,10 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     parameters: {
       signal: {
         kind: 'signal',
-        defaultValue: 'status.signal',
+        defaultValue: 'status.signal.active',
         allowNone: false,
         options: [
-          { id: 'status.signal', label: 'Status Pulse' },
+          { id: 'status.signal.active', label: 'Status Indicator – Active' },
           { id: 'alert.signal', label: 'Alert Beacon' },
           { id: 'ping.signal', label: 'Ping Sweep' },
         ],

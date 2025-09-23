@@ -5,6 +5,7 @@ import RuntimeControls from './RuntimeControls';
 import { BLOCK_LIBRARY } from '../blocks/library';
 import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
 import styles from '../styles/RobotProgrammingPanel.module.css';
+import useRobotTelemetry from '../hooks/useRobotTelemetry';
 
 interface RobotProgrammingPanelProps {
   workspace: WorkspaceState;
@@ -26,6 +27,7 @@ const RobotProgrammingPanel = ({
   robotId,
 }: RobotProgrammingPanelProps): JSX.Element => {
   const paletteRef = useRef<HTMLDivElement | null>(null);
+  const telemetry = useRobotTelemetry();
   const handleConfirm = useCallback(() => {
     onConfirm();
   }, [onConfirm]);
@@ -59,6 +61,7 @@ const RobotProgrammingPanel = ({
             onDrop={onDrop}
             onTouchDrop={onTouchDrop}
             onUpdateBlock={onUpdateBlock}
+            telemetry={telemetry}
           />
         </section>
       </div>

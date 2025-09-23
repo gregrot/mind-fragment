@@ -1,6 +1,7 @@
 import { Fragment, useCallback } from 'react';
 import BlockView from './BlockView';
 import DropZone from './DropZone';
+import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
 import type { BlockInstance, DropTarget, DragPayload } from '../types/blocks';
 import styles from '../styles/Workspace.module.css';
 
@@ -9,9 +10,10 @@ interface WorkspaceProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  telemetry?: RobotTelemetryData;
 }
 
-const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock }: WorkspaceProps): JSX.Element => {
+const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock, telemetry }: WorkspaceProps): JSX.Element => {
   const workspaceTarget = (position: number): DropTarget => ({
     kind: 'workspace',
     position,
@@ -67,6 +69,7 @@ const Workspace = ({ blocks, onDrop, onTouchDrop, onUpdateBlock }: WorkspaceProp
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    telemetry={telemetry}
                   />
                   <DropZone
                     className={dropTargetClassName}

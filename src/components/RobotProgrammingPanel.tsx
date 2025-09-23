@@ -66,7 +66,7 @@ const RobotProgrammingPanel = ({
         </section>
       </div>
       <footer className={styles.footer}>
-        <RuntimeControls workspace={workspace} />
+        <RuntimeControls workspace={workspace} robotId={robotId} />
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={onClose}>
             Cancel

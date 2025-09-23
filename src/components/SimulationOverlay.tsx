@@ -25,6 +25,7 @@ interface SimulationOverlayProps {
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  onRemoveBlock: (instanceId: string) => void;
   robotId: string;
 }
 
@@ -38,6 +39,7 @@ const SimulationOverlay = ({
   onDrop,
   onTouchDrop,
   onUpdateBlock,
+  onRemoveBlock,
   robotId,
 }: SimulationOverlayProps): JSX.Element | null => {
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +182,7 @@ const SimulationOverlay = ({
               onDrop={onDrop}
               onTouchDrop={onTouchDrop}
               onUpdateBlock={onUpdateBlock}
+              onRemoveBlock={onRemoveBlock}
               onClose={onClose}
               onConfirm={onConfirm}
               robotId={robotId}

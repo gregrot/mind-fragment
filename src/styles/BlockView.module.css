@@ -25,6 +25,14 @@
   border-left-color: var(--color-accent-amber);
 }
 
+.blockValue {
+  border-left-color: var(--color-block-value-border);
+}
+
+.blockOperator {
+  border-left-color: var(--color-block-operator-border);
+}
+
 .blockHeader {
   display: flex;
   justify-content: space-between;

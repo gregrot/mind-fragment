@@ -13,7 +13,11 @@ import {
   DEBUG_PADDING,
   DEBUG_VERTICAL_OFFSET,
 } from '../../runtime/simulationWorld';
-import type { BlockInstruction } from '../../runtime/blockProgram';
+import type {
+  BlockInstruction,
+  BooleanParameterBinding,
+  NumberParameterBinding,
+} from '../../runtime/blockProgram';
 import type {
   ProgramDebugFrame,
   ProgramDebugState,
@@ -232,26 +236,84 @@ function describeTelemetry(snapshot: TelemetrySnapshot): string[] {
   return lines;
 }
 
+function getLiteralNumber(binding: NumberParameterBinding | undefined): number | null {
+  if (!binding) {
+    return null;
+  }
+  if (typeof binding.literal?.value === 'number') {
+    return binding.literal.value;
+  }
+  if (binding.expression?.kind === 'literal' && typeof binding.expression.value === 'number') {
+    return binding.expression.value;
+  }
+  return null;
+}
+
+function formatNumberBinding(binding: NumberParameterBinding, digits = 1): string {
+  const literal = getLiteralNumber(binding);
+  const hasExpression = binding.expression && binding.expression.kind !== 'literal';
+  if (literal !== null) {
+    const formatted = literal.toFixed(digits);
+    return hasExpression ? `${formatted}*` : formatted;
+  }
+  return hasExpression ? 'expr*' : 'expr';
+}
+
+function formatBooleanBinding(binding: BooleanParameterBinding): string {
+  const literal = typeof binding.literal?.value === 'boolean'
+    ? binding.literal.value
+    : binding.expression?.kind === 'literal'
+      ? binding.expression.value
+      : null;
+  const hasExpression = binding.expression && binding.expression.kind !== 'literal';
+  if (typeof literal === 'boolean') {
+    const base = literal ? 'true' : 'false';
+    return hasExpression ? `${base}*` : base;
+  }
+  return hasExpression ? 'expr*' : 'expr';
+}
+
 function formatInstruction(instruction: BlockInstruction): string {
   switch (instruction.kind) {
     case 'move':
-      return `move • speed ${instruction.speed.toFixed(0)} • ${instruction.duration.toFixed(1)}s`;
+      return `move • speed ${formatNumberBinding(instruction.speed, 0)} • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'turn':
-      return `turn • rate ${(instruction.angularVelocity * (180 / Math.PI)).toFixed(0)}°/s • ${instruction.duration.toFixed(1)}s`;
+      {
+        const literalRate = getLiteralNumber(instruction.angularVelocity);
+        const hasExpression = instruction.angularVelocity.expression && instruction.angularVelocity.expression.kind !== 'literal';
+        const rateText = literalRate !== null
+          ? `${(literalRate * (180 / Math.PI)).toFixed(0)}°/s${hasExpression ? '*' : ''}`
+          : hasExpression
+            ? 'expr*'
+            : 'expr';
+        return `turn • rate ${rateText} • ${formatNumberBinding(instruction.duration, 1)}s`;
+      }
     case 'wait':
-      return `wait • ${instruction.duration.toFixed(1)}s`;
+      return `wait • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'scan':
-      return `scan${instruction.filter ? ` • ${instruction.filter}` : ''} • ${instruction.duration.toFixed(1)}s`;
+      return `scan${instruction.filter ? ` • ${instruction.filter}` : ''} • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'gather':
-      return `gather • ${instruction.duration.toFixed(1)}s`;
+      return `gather • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'deposit':
-      return `deposit • ${instruction.duration.toFixed(1)}s`;
+      return `deposit • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'status-toggle':
       return 'status toggle';
     case 'status-set':
-      return `status set • ${instruction.value ? 'on' : 'off'}`;
+      return `status set • ${formatBooleanBinding(instruction.value)}`;
     case 'loop':
-      return `loop • ${instruction.instructions.length} step${instruction.instructions.length === 1 ? '' : 's'}`;
+      if (instruction.mode === 'counted') {
+        const literalCount = getLiteralNumber(instruction.iterations);
+        const hasExpression = instruction.iterations.expression && instruction.iterations.expression.kind !== 'literal';
+        const countText = literalCount !== null ? literalCount.toString() : 'expr';
+        const suffix = hasExpression ? '*' : '';
+        return `repeat ×${countText}${suffix} • ${instruction.instructions.length} step${instruction.instructions.length === 1 ? '' : 's'}`;
+      }
+      return `loop ∞ • ${instruction.instructions.length} step${instruction.instructions.length === 1 ? '' : 's'}`;
+    case 'branch': {
+      const thenLength = instruction.whenTrue.length;
+      const elseLength = instruction.whenFalse.length;
+      return `if • then ${thenLength} / else ${elseLength}`;
+    }
     default:
       return (instruction as { kind?: string }).kind ?? 'unknown';
   }
@@ -305,6 +367,10 @@ function countProgramInstructions(instructions: BlockInstruction[] | undefined):
     total += 1;
     if (instruction.kind === 'loop') {
       total += countProgramInstructions(instruction.instructions);
+    }
+    if (instruction.kind === 'branch') {
+      total += countProgramInstructions(instruction.whenTrue);
+      total += countProgramInstructions(instruction.whenFalse);
     }
   }
   return total;

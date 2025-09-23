@@ -50,6 +50,24 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     },
   },
   {
+    id: 'broadcast-signal',
+    label: 'Broadcast Signal',
+    category: 'action',
+    summary: 'Emit one of the robot signals onto the shared channel.',
+    parameters: {
+      signal: {
+        kind: 'signal',
+        defaultValue: 'status.signal',
+        allowNone: false,
+        options: [
+          { id: 'status.signal', label: 'Status Pulse' },
+          { id: 'alert.signal', label: 'Alert Beacon' },
+          { id: 'ping.signal', label: 'Ping Sweep' },
+        ],
+      },
+    },
+  },
+  {
     id: 'gather-resource',
     label: 'Gather Resource',
     category: 'action',
@@ -142,11 +160,21 @@ export function createBlockInstance(blockType: string): BlockInstance {
             };
             break;
           case 'string':
-          default:
             accumulator[parameterName] = {
               kind: 'string',
               value: parameterDefinition.defaultValue,
             };
+            break;
+          case 'signal':
+            accumulator[parameterName] = {
+              kind: 'signal',
+              value:
+                typeof parameterDefinition.defaultValue === 'string'
+                  ? parameterDefinition.defaultValue
+                  : null,
+            };
+            break;
+          case 'operator':
             break;
         }
         return accumulator;

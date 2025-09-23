@@ -7,12 +7,13 @@ interface DropZoneProps {
   target: DropTarget;
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   children?: ReactNode;
+  testId?: string;
 }
 
 const joinClassNames = (classNames: Array<string | undefined>): string =>
   classNames.filter(Boolean).join(' ');
 
-const DropZone = ({ className, target, onDrop, children }: DropZoneProps): JSX.Element => {
+const DropZone = ({ className, target, onDrop, children, testId }: DropZoneProps): JSX.Element => {
   const [isActive, setIsActive] = useState(false);
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -63,13 +64,18 @@ const DropZone = ({ className, target, onDrop, children }: DropZoneProps): JSX.E
       data-drop-target-position={typeof target.position === 'number' ? String(target.position) : ''}
       data-drop-target-ancestors={ancestorIds}
       data-drop-target-owner-id={
-        target.kind === 'slot' || target.kind === 'parameter' ? target.ownerId : undefined
+        target.kind === 'slot' || target.kind === 'parameter' || target.kind === 'parameter-expression'
+          ? target.ownerId
+          : undefined
       }
       data-drop-target-slot-name={target.kind === 'slot' ? target.slotName : undefined}
       data-drop-target-parameter-name={
-        target.kind === 'parameter' ? target.parameterName : undefined
+        target.kind === 'parameter' || target.kind === 'parameter-expression'
+          ? target.parameterName
+          : undefined
       }
       data-dropzone-active={isActive ? 'true' : undefined}
+      data-testid={testId}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

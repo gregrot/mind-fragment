@@ -142,7 +142,7 @@ const insertIntoBlocks = (
         continue;
       }
 
-      if (target.kind === 'parameter') {
+      if (target.kind === 'parameter' || target.kind === 'parameter-expression') {
         const inputBlocks = block.expressionInputs?.[target.parameterName] ?? [];
         const insertionIndex = clampIndex(target.position, inputBlocks.length);
         const updatedInputBlocks = [...inputBlocks];

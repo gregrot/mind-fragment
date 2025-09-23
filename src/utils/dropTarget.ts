@@ -61,6 +61,23 @@ export const getDropTargetFromElement = (element: Element | null): DropTarget | 
     return { kind: 'parameter', ownerId, parameterName, position, ancestorIds };
   }
 
+  if (kind === 'parameter-expression') {
+    const ownerId = dataset.dropTargetOwnerId;
+    const parameterName = dataset.dropTargetParameterName;
+
+    if (!ownerId || !parameterName) {
+      return null;
+    }
+
+    return {
+      kind: 'parameter-expression',
+      ownerId,
+      parameterName,
+      position,
+      ancestorIds,
+    };
+  }
+
   return null;
 };
 

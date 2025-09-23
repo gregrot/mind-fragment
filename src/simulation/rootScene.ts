@@ -9,6 +9,14 @@ import {
   type SimulationTelemetrySnapshot,
 } from './runtime/ecsBlackboard';
 import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
+import {
+  type ModuleStateSnapshot,
+  EMPTY_MODULE_STATE,
+  type ModuleStoreResult,
+  type ModuleMountResult,
+  type ModuleDropResult,
+  type ModulePickupResult,
+} from './robot/RobotChassis';
 import type { InventorySnapshot } from './robot/inventory';
 
 interface TickPayload {
@@ -47,6 +55,9 @@ export class RootScene {
   private telemetrySnapshot: SimulationTelemetrySnapshot;
   private telemetrySignature: string | null;
   private telemetryRobotId: string | null;
+  private readonly moduleStateListeners: Set<(snapshot: ModuleStateSnapshot) => void>;
+  private moduleStateSnapshot: ModuleStateSnapshot;
+  private moduleStateUnsubscribe: (() => void) | null = null;
 
   constructor(app: Application) {
     this.app = app;
@@ -99,6 +110,9 @@ export class RootScene {
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
     this.telemetrySignature = null;
     this.telemetryRobotId = null;
+    this.moduleStateListeners = new Set();
+    this.moduleStateSnapshot = EMPTY_MODULE_STATE;
+    this.moduleStateUnsubscribe = null;
 
     void this.initialiseSimulationWorld();
   }
@@ -118,6 +132,22 @@ export class RootScene {
     const sprite = context.getSprite();
     if (sprite) {
       this.rootLayer.addChild(sprite);
+    }
+
+    const robotCore = context.getRobotCore();
+    const previousModuleUnsubscribe = this.moduleStateUnsubscribe as (() => void) | null;
+    if (previousModuleUnsubscribe) {
+      previousModuleUnsubscribe();
+    }
+    if (robotCore) {
+      this.moduleStateUnsubscribe = robotCore.subscribeModules((snapshot) => {
+        this.moduleStateSnapshot = snapshot;
+        this.notifyModuleStateListeners();
+      });
+      this.moduleStateSnapshot = robotCore.getModuleStateSnapshot();
+    } else {
+      this.moduleStateUnsubscribe = null;
+      this.moduleStateSnapshot = EMPTY_MODULE_STATE;
     }
 
     const programRunner = context.getProgramRunner();
@@ -349,6 +379,13 @@ export class RootScene {
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
     this.telemetrySignature = null;
     this.telemetryRobotId = null;
+    this.moduleStateListeners.clear();
+    this.moduleStateSnapshot = EMPTY_MODULE_STATE;
+    const pendingModuleUnsubscribe = this.moduleStateUnsubscribe as (() => void) | null;
+    if (pendingModuleUnsubscribe) {
+      pendingModuleUnsubscribe();
+    }
+    this.moduleStateUnsubscribe = null;
     this.pendingContextCallbacks.length = 0;
     const context = this.context;
     if (context) {
@@ -356,6 +393,11 @@ export class RootScene {
 
       const robotCore = context.getRobotCore();
       if (robotCore) {
+        const teardownModules = this.moduleStateUnsubscribe as (() => void) | null;
+        if (teardownModules) {
+          teardownModules();
+        }
+        this.moduleStateUnsubscribe = null;
         const modules = [...robotCore.moduleStack.list()].reverse();
         for (const module of modules) {
           robotCore.detachModule(module.definition.id);
@@ -373,6 +415,59 @@ export class RootScene {
     }
     this.viewport.destroy({ children: true, texture: false });
     assetService.disposeAll();
+  }
+
+  getModuleStateSnapshot(): ModuleStateSnapshot {
+    return this.moduleStateSnapshot;
+  }
+
+  subscribeModuleState(listener: (snapshot: ModuleStateSnapshot) => void): () => void {
+    this.moduleStateListeners.add(listener);
+    listener(this.moduleStateSnapshot);
+    return () => {
+      this.moduleStateListeners.delete(listener);
+    };
+  }
+
+  async storeModule(moduleId: string): Promise<ModuleStoreResult> {
+    const trimmedId = moduleId.trim().toLowerCase();
+    return this.runWithRobotCore<ModuleStoreResult>(
+      (robotCore) => robotCore.storeModule(trimmedId),
+      () => ({ success: false, moduleId: trimmedId, reason: 'not-found' } satisfies ModuleStoreResult),
+    );
+  }
+
+  async mountModule(moduleId: string): Promise<ModuleMountResult> {
+    const trimmedId = moduleId.trim().toLowerCase();
+    return this.runWithRobotCore<ModuleMountResult>(
+      (robotCore) => robotCore.mountModule(trimmedId),
+      () => ({ success: false, moduleId: trimmedId, reason: 'not-found' } satisfies ModuleMountResult),
+    );
+  }
+
+  async dropModule(moduleId: string, amount = 1): Promise<ModuleDropResult> {
+    const trimmedId = moduleId.trim().toLowerCase();
+    return this.runWithRobotCore<ModuleDropResult>(
+      (robotCore) => robotCore.dropModule(trimmedId, amount),
+      () => ({ success: false, moduleId: trimmedId, reason: 'not-available' } satisfies ModuleDropResult),
+    );
+  }
+
+  async pickUpModule(nodeId: string, amount = 1): Promise<ModulePickupResult> {
+    const executor = (
+      robotCore: ReturnType<SimulationWorldContext['getRobotCore']>,
+    ): ModulePickupResult =>
+      robotCore
+        ? robotCore.pickUpModule(nodeId, amount)
+        : { success: false, moduleId: '', nodeId, reason: 'not-found' };
+    if (this.context) {
+      return executor(this.context.getRobotCore());
+    }
+    return new Promise<ModulePickupResult>((resolve) => {
+      this.onContextReady((context) => {
+        resolve(executor(context.getRobotCore()));
+      });
+    });
   }
 
   private handleProgramStatus(status: ProgramRunnerStatus): void {
@@ -446,5 +541,33 @@ export class RootScene {
     for (const listener of this.telemetryListeners) {
       listener(this.telemetrySnapshot, this.telemetryRobotId);
     }
+  }
+
+  private notifyModuleStateListeners(): void {
+    for (const listener of this.moduleStateListeners) {
+      listener(this.moduleStateSnapshot);
+    }
+  }
+
+  private async runWithRobotCore<T>(
+    callback: (robotCore: NonNullable<ReturnType<SimulationWorldContext['getRobotCore']>>) => T,
+    fallbackFactory: () => T,
+  ): Promise<T> {
+    const execute = (robotCore: ReturnType<SimulationWorldContext['getRobotCore']>) => {
+      if (!robotCore) {
+        return fallbackFactory();
+      }
+      return callback(robotCore);
+    };
+
+    if (this.context) {
+      return execute(this.context.getRobotCore());
+    }
+
+    return new Promise((resolve) => {
+      this.onContextReady((context) => {
+        resolve(execute(context.getRobotCore()));
+      });
+    });
   }
 }

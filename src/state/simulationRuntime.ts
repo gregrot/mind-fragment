@@ -4,6 +4,14 @@ import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunn
 import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
 import type { InventorySnapshot } from '../simulation/robot/inventory';
+import type {
+  ModuleStateSnapshot,
+  ModuleStoreResult,
+  ModuleMountResult,
+  ModuleDropResult,
+  ModulePickupResult,
+} from '../simulation/robot/RobotChassis';
+import { EMPTY_MODULE_STATE } from '../simulation/robot/RobotChassis';
 
 type StatusListener = (status: ProgramRunnerStatus) => void;
 type InventoryListener = (snapshot: InventorySnapshot) => void;
@@ -12,6 +20,7 @@ type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
   robotId: string | null,
 ) => void;
+type ModuleStateListener = (snapshot: ModuleStateSnapshot) => void;
 
 const EMPTY_INVENTORY_SNAPSHOT: InventorySnapshot = {
   capacity: 0,
@@ -32,9 +41,11 @@ class SimulationRuntime {
   private readonly inventoryListeners = new Set<InventoryListener>();
   private readonly selectionListeners = new Set<SelectionListener>();
   private readonly telemetryListeners = new Set<TelemetryListener>();
+  private readonly moduleStateListeners = new Set<ModuleStateListener>();
   private unsubscribeScene: (() => void) | null = null;
   private sceneInventoryUnsubscribe: (() => void) | null = null;
   private sceneTelemetryUnsubscribe: (() => void) | null = null;
+  private sceneModuleUnsubscribe: (() => void) | null = null;
   private status: ProgramRunnerStatus = 'idle';
   private inventorySnapshot: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT;
   private telemetrySnapshot: SimulationTelemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
@@ -42,6 +53,7 @@ class SimulationRuntime {
   private readonly telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
   private selectedRobotId: string | null = null;
   private hasAutoStarted = false;
+  private moduleStateSnapshot: ModuleStateSnapshot = EMPTY_MODULE_STATE;
 
   registerScene(scene: RootScene): void {
     if (this.scene === scene) {
@@ -51,6 +63,8 @@ class SimulationRuntime {
     this.unsubscribeScene?.();
     this.teardownInventorySubscription();
     this.sceneTelemetryUnsubscribe?.();
+    this.sceneModuleUnsubscribe?.();
+    this.sceneModuleUnsubscribe = null;
     this.telemetrySnapshots.clear();
     this.scene = scene;
     this.unsubscribeScene = scene.subscribeProgramStatus((nextStatus) => {
@@ -63,6 +77,10 @@ class SimulationRuntime {
       this.handleSceneTelemetry(snapshot, robotId);
     });
     this.handleSceneTelemetry(scene.getTelemetrySnapshot(), scene.getSelectedRobot());
+    this.sceneModuleUnsubscribe = scene.subscribeModuleState((snapshot) => {
+      this.updateModuleStateSnapshot(snapshot);
+    });
+    this.updateModuleStateSnapshot(scene.getModuleStateSnapshot());
     if (this.selectedRobotId !== null) {
       scene.selectRobot(this.selectedRobotId);
     }
@@ -88,6 +106,8 @@ class SimulationRuntime {
     this.teardownInventorySubscription();
     this.sceneTelemetryUnsubscribe?.();
     this.sceneTelemetryUnsubscribe = null;
+    this.sceneModuleUnsubscribe?.();
+    this.sceneModuleUnsubscribe = null;
     this.scene = null;
     this.pendingProgram = null;
     this.updateStatus('idle');
@@ -96,6 +116,7 @@ class SimulationRuntime {
     this.telemetrySnapshots.clear();
     this.updateSelectedRobot(null);
     this.hasAutoStarted = false;
+    this.updateModuleStateSnapshot(EMPTY_MODULE_STATE);
   }
 
   runProgram(program: CompiledProgram): void {
@@ -161,6 +182,18 @@ class SimulationRuntime {
     return this.telemetrySnapshot;
   }
 
+  subscribeModuleState(listener: ModuleStateListener): () => void {
+    this.moduleStateListeners.add(listener);
+    listener(this.moduleStateSnapshot);
+    return () => {
+      this.moduleStateListeners.delete(listener);
+    };
+  }
+
+  getModuleStateSnapshot(): ModuleStateSnapshot {
+    return this.moduleStateSnapshot;
+  }
+
   subscribeSelectedRobot(listener: SelectionListener): () => void {
     this.selectionListeners.add(listener);
     listener(this.selectedRobotId);
@@ -185,6 +218,37 @@ class SimulationRuntime {
     this.applyTelemetryForSelection(null);
   }
 
+  async storeModule(moduleId: string): Promise<ModuleStoreResult> {
+    if (this.scene) {
+      return this.scene.storeModule(moduleId);
+    }
+    const trimmed = moduleId.trim().toLowerCase();
+    return { success: false, moduleId: trimmed, reason: 'not-found' };
+  }
+
+  async mountModule(moduleId: string): Promise<ModuleMountResult> {
+    if (this.scene) {
+      return this.scene.mountModule(moduleId);
+    }
+    const trimmed = moduleId.trim().toLowerCase();
+    return { success: false, moduleId: trimmed, reason: 'not-found' };
+  }
+
+  async dropModule(moduleId: string, amount = 1): Promise<ModuleDropResult> {
+    if (this.scene) {
+      return this.scene.dropModule(moduleId, amount);
+    }
+    const trimmed = moduleId.trim().toLowerCase();
+    return { success: false, moduleId: trimmed, reason: 'not-available' };
+  }
+
+  async pickUpModule(nodeId: string, amount = 1): Promise<ModulePickupResult> {
+    if (this.scene) {
+      return this.scene.pickUpModule(nodeId, amount);
+    }
+    return { success: false, moduleId: '', nodeId, reason: 'not-found' };
+  }
+
   private updateStatus(status: ProgramRunnerStatus): void {
     if (this.status === status) {
       return;
@@ -198,6 +262,13 @@ class SimulationRuntime {
   private updateInventorySnapshot(snapshot: InventorySnapshot): void {
     this.inventorySnapshot = snapshot;
     for (const listener of this.inventoryListeners) {
+      listener(snapshot);
+    }
+  }
+
+  private updateModuleStateSnapshot(snapshot: ModuleStateSnapshot): void {
+    this.moduleStateSnapshot = snapshot;
+    for (const listener of this.moduleStateListeners) {
       listener(snapshot);
     }
   }

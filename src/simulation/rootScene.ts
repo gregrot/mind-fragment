@@ -6,6 +6,7 @@ import { type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import {
   SIMULATION_BLACKBOARD_EVENT_KEYS,
   SIMULATION_BLACKBOARD_FACT_KEYS,
+  type SimulationTelemetrySnapshot,
 } from './runtime/ecsBlackboard';
 import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
@@ -18,6 +19,15 @@ const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
 type RobotSelectionListener = (robotId: string | null) => void;
+type TelemetryListener = (
+  snapshot: SimulationTelemetrySnapshot,
+  robotId: string | null,
+) => void;
+
+const EMPTY_TELEMETRY_SNAPSHOT: SimulationTelemetrySnapshot = {
+  values: {},
+  actions: {},
+};
 
 export class RootScene {
   private readonly app: Application;
@@ -33,6 +43,10 @@ export class RootScene {
   private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private pendingSelection: string | null;
+  private readonly telemetryListeners: Set<TelemetryListener>;
+  private telemetrySnapshot: SimulationTelemetrySnapshot;
+  private telemetrySignature: string | null;
+  private telemetryRobotId: string | null;
 
   constructor(app: Application) {
     this.app = app;
@@ -81,6 +95,10 @@ export class RootScene {
     this.selectionListeners = new Set();
     this.pendingSelection = null;
     this.programStatus = 'idle';
+    this.telemetryListeners = new Set();
+    this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
+    this.telemetrySignature = null;
+    this.telemetryRobotId = null;
 
     void this.initialiseSimulationWorld();
   }
@@ -129,6 +147,8 @@ export class RootScene {
     if (!this.hasPlayerPanned && sprite) {
       this.viewport.moveCenter(sprite.position.x, sprite.position.y);
     }
+
+    this.captureTelemetrySnapshot(true);
 
     // Presentation systems are responsible for updating overlay components.
   }
@@ -200,6 +220,8 @@ export class RootScene {
 
     const context = this.context;
     context?.world.runSystems(stepSeconds);
+
+    this.captureTelemetrySnapshot();
 
   }
 
@@ -289,6 +311,14 @@ export class RootScene {
     };
   }
 
+  subscribeTelemetry(listener: TelemetryListener): () => void {
+    this.telemetryListeners.add(listener);
+    listener(this.getTelemetrySnapshot(), this.telemetryRobotId);
+    return () => {
+      this.telemetryListeners.delete(listener);
+    };
+  }
+
   selectRobot(robotId: string): void {
     this.notifyRobotSelected(robotId);
   }
@@ -301,12 +331,24 @@ export class RootScene {
     return this.pendingSelection;
   }
 
+  getTelemetrySnapshot(): SimulationTelemetrySnapshot {
+    if (!this.context) {
+      return this.telemetrySnapshot;
+    }
+    this.captureTelemetrySnapshot();
+    return this.telemetrySnapshot;
+  }
+
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.programListeners.clear();
     this.programStatus = 'idle';
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
+    this.telemetryListeners.clear();
+    this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
+    this.telemetrySignature = null;
+    this.telemetryRobotId = null;
     this.pendingContextCallbacks.length = 0;
     const context = this.context;
     if (context) {
@@ -362,6 +404,47 @@ export class RootScene {
     for (const listener of this.selectionListeners) {
       listener(robotId);
     }
+    this.captureTelemetrySnapshot(true);
   }
 
+  private captureTelemetrySnapshot(force = false): void {
+    const context = this.context;
+    if (!context) {
+      if (force && this.telemetrySignature !== null) {
+        this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
+        this.telemetrySignature = null;
+        this.telemetryRobotId = null;
+        this.notifyTelemetryListeners();
+      }
+      return;
+    }
+
+    const robotCore = context.getRobotCore();
+    if (!robotCore) {
+      return;
+    }
+
+    const snapshot = robotCore.getTelemetrySnapshot();
+    const signature = JSON.stringify(snapshot);
+    const robotId = context.getSelectedRobot();
+    const hasChanged =
+      force ||
+      this.telemetrySignature !== signature ||
+      this.telemetryRobotId !== (robotId ?? null);
+
+    if (!hasChanged) {
+      return;
+    }
+
+    this.telemetrySnapshot = snapshot;
+    this.telemetrySignature = signature;
+    this.telemetryRobotId = robotId ?? null;
+    this.notifyTelemetryListeners();
+  }
+
+  private notifyTelemetryListeners(): void {
+    for (const listener of this.telemetryListeners) {
+      listener(this.telemetrySnapshot, this.telemetryRobotId);
+    }
+  }
 }

@@ -17,6 +17,9 @@ const createSceneStub = () => {
     stopProgram: vi.fn(),
     getInventorySnapshot: vi.fn(() => ({ capacity: 0, used: 0, available: 0, entries: [] })),
     subscribeInventory: vi.fn(() => () => {}),
+    subscribeTelemetry: vi.fn(() => () => {}),
+    getTelemetrySnapshot: vi.fn(() => ({ values: {}, actions: {} })),
+    getSelectedRobot: vi.fn(() => null),
     selectRobot: vi.fn(),
     clearRobotSelection: vi.fn(),
     triggerStatus: (status: Parameters<NonNullable<typeof subscriptions.status>>[0]) => {

@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useMemo, useRef, type TouchEvent as ReactTouchEvent } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
+import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
 import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
 import { getDropTargetFromTouchEvent } from '../utils/dropTarget';
@@ -22,9 +23,10 @@ interface BlockViewProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  telemetry?: RobotTelemetryData;
 }
 
-const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockViewProps): JSX.Element | null => {
+const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock, telemetry }: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
     return null;
@@ -187,6 +189,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
               label={parameterLabel}
               testId={`block-${definition.id}-parameter-${parameterName}`}
               onUpdateBlock={onUpdateBlock}
+              telemetry={telemetry}
             />
           );
         }
@@ -213,6 +216,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
                       onDrop={onDrop}
                       onTouchDrop={onTouchDrop}
                       onUpdateBlock={onUpdateBlock}
+                      telemetry={telemetry}
                     />
                   )}
                 />
@@ -245,6 +249,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    telemetry={telemetry}
                   />
                 )}
               />
@@ -264,6 +269,7 @@ const BlockView = ({ block, path, onDrop, onTouchDrop, onUpdateBlock }: BlockVie
               onDrop={onDrop}
               onTouchDrop={onTouchDrop}
               onUpdateBlock={onUpdateBlock}
+              telemetry={telemetry}
             />
           ))}
         </div>
@@ -280,9 +286,10 @@ interface SlotViewProps {
   onDrop: (event: React.DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  telemetry?: RobotTelemetryData;
 }
 
-const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdateBlock }: SlotViewProps): JSX.Element => {
+const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdateBlock, telemetry }: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       onDrop(event, {
@@ -359,6 +366,7 @@ const SlotView = ({ owner, slotName, blocks, path, onDrop, onTouchDrop, onUpdate
                     onDrop={onDrop}
                     onTouchDrop={onTouchDrop}
                     onUpdateBlock={onUpdateBlock}
+                    telemetry={telemetry}
                   />
                   <DropZone
                     className={dropTargetClassName}

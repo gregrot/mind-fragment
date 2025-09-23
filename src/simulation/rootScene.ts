@@ -8,7 +8,7 @@ import {
   SIMULATION_BLACKBOARD_FACT_KEYS,
   type SimulationTelemetrySnapshot,
 } from './runtime/ecsBlackboard';
-import { createSimulationWorld, type SimulationWorldContext } from './runtime/simulationWorld';
+import { createSimulationWorld, DEFAULT_ROBOT_ID, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { InventorySnapshot } from './robot/inventory';
 
 interface TickPayload {
@@ -39,14 +39,19 @@ export class RootScene {
   private hasPlayerPanned: boolean;
   private accumulator: number;
   private readonly tickHandler: (payload: TickPayload) => void;
+  private readonly programStatusByRobot: Map<string, ProgramRunnerStatus>;
   private programStatus: ProgramRunnerStatus;
-  private readonly programListeners: Set<(status: ProgramRunnerStatus) => void>;
+  private readonly programListeners: Set<(status: ProgramRunnerStatus, robotId: string) => void>;
   private readonly selectionListeners: Set<RobotSelectionListener>;
   private pendingSelection: string | null;
   private readonly telemetryListeners: Set<TelemetryListener>;
   private telemetrySnapshot: SimulationTelemetrySnapshot;
-  private telemetrySignature: string | null;
   private telemetryRobotId: string | null;
+  private readonly telemetrySnapshotsByRobot: Map<
+    string,
+    { snapshot: SimulationTelemetrySnapshot; signature: string }
+  >;
+  private defaultRobotId: string;
 
   constructor(app: Application) {
     this.app = app;
@@ -91,14 +96,16 @@ export class RootScene {
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
+    this.programStatusByRobot = new Map();
     this.programListeners = new Set();
     this.selectionListeners = new Set();
     this.pendingSelection = null;
+    this.defaultRobotId = DEFAULT_ROBOT_ID;
     this.programStatus = 'idle';
     this.telemetryListeners = new Set();
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-    this.telemetrySignature = null;
     this.telemetryRobotId = null;
+    this.telemetrySnapshotsByRobot = new Map();
 
     void this.initialiseSimulationWorld();
   }
@@ -112,40 +119,50 @@ export class RootScene {
     });
 
     this.context = context;
+    this.defaultRobotId = context.defaultRobotId ?? DEFAULT_ROBOT_ID;
 
     context.world.runSystems(0);
 
-    const sprite = context.getSprite();
-    if (sprite) {
-      this.rootLayer.addChild(sprite);
-    }
+    this.telemetrySnapshotsByRobot.clear();
+    this.programStatusByRobot.clear();
 
-    const programRunner = context.getProgramRunner();
-    if (programRunner) {
-      programRunner.setStatusListener((status) => this.handleProgramStatus(status));
-      this.programStatus = programRunner.getStatus();
-    } else {
-      this.programStatus = 'idle';
-    }
-
-    const transform = context.getTransform();
-    if (transform && sprite) {
-      sprite.position.set(transform.position.x, transform.position.y);
-      sprite.rotation = transform.rotation;
-    }
-
-    if (this.pendingSelection !== null) {
-      if (context.getSelectedRobot() !== this.pendingSelection) {
-        context.selectRobot(this.pendingSelection);
+    for (const robotId of context.entities.robots.keys()) {
+      const sprite = context.getSprite(robotId);
+      if (sprite && sprite.parent !== this.rootLayer) {
+        this.rootLayer.addChild(sprite);
       }
-    } else if (context.getSelectedRobot() !== null) {
-      context.selectRobot(null);
+
+      const transform = context.getTransform(robotId);
+      if (transform && sprite) {
+        sprite.position.set(transform.position.x, transform.position.y);
+        sprite.rotation = transform.rotation;
+      }
+
+      const programRunner = context.getProgramRunner(robotId);
+      if (programRunner) {
+        programRunner.setStatusListener((status) => this.handleProgramStatus(robotId, status));
+        this.programStatusByRobot.set(robotId, programRunner.getStatus());
+      } else {
+        this.programStatusByRobot.set(robotId, 'idle');
+      }
     }
+
+    const targetSelection =
+      this.pendingSelection ?? context.getSelectedRobot() ?? this.defaultRobotId ?? DEFAULT_ROBOT_ID;
+    if (context.getSelectedRobot() !== targetSelection) {
+      context.selectRobot(targetSelection);
+    }
+    this.pendingSelection = targetSelection;
+    this.updateProgramStatusForSelection();
 
     this.flushPendingContextCallbacks(context);
 
-    if (!this.hasPlayerPanned && sprite) {
-      this.viewport.moveCenter(sprite.position.x, sprite.position.y);
+    if (!this.hasPlayerPanned) {
+      const focusRobotId = this.getActiveRobotId(context);
+      const focusSprite = context.getSprite(focusRobotId);
+      if (focusSprite) {
+        this.viewport.moveCenter(focusSprite.position.x, focusSprite.position.y);
+      }
     }
 
     this.captureTelemetrySnapshot(true);
@@ -229,16 +246,18 @@ export class RootScene {
     this.viewport.resize(width, height, width, height);
 
     if (!this.hasPlayerPanned) {
-      const sprite = this.context?.getSprite();
+      const context = this.context;
+      const robotId = this.getActiveRobotId(context);
+      const sprite = context?.getSprite(robotId);
       const targetX = sprite?.position.x ?? 0;
       const targetY = sprite?.position.y ?? 0;
       this.viewport.moveCenter(targetX, targetY);
     }
   }
 
-  runProgram(program: CompiledProgram): void {
+  runProgram(robotId: string, program: CompiledProgram): void {
     const execute = (context: SimulationWorldContext) => {
-      context.getProgramRunner()?.load(program);
+      context.getProgramRunner(robotId)?.load(program);
     };
     if (this.context) {
       execute(this.context);
@@ -247,9 +266,9 @@ export class RootScene {
     this.onContextReady(execute);
   }
 
-  stopProgram(): void {
+  stopProgram(robotId: string): void {
     const execute = (context: SimulationWorldContext) => {
-      context.getProgramRunner()?.stop();
+      context.getProgramRunner(robotId)?.stop();
     };
     if (this.context) {
       execute(this.context);
@@ -258,12 +277,12 @@ export class RootScene {
     this.onContextReady(execute);
   }
 
-  getProgramStatus(): ProgramRunnerStatus {
-    return this.programStatus;
+  getProgramStatus(robotId: string = this.getActiveRobotId()): ProgramRunnerStatus {
+    return this.programStatusByRobot.get(robotId) ?? 'idle';
   }
 
-  getInventorySnapshot(): InventorySnapshot {
-    const robotCore = this.context?.getRobotCore();
+  getInventorySnapshot(robotId: string = this.getActiveRobotId()): InventorySnapshot {
+    const robotCore = this.context?.getRobotCore(robotId);
     if (!robotCore) {
       return { capacity: 0, used: 0, available: 0, entries: [] };
     }
@@ -280,7 +299,8 @@ export class RootScene {
       if (unsubscribed) {
         return;
       }
-      const robotCore = context.getRobotCore();
+      const robotId = this.getActiveRobotId(context);
+      const robotCore = context.getRobotCore(robotId);
       if (!robotCore) {
         return;
       }
@@ -295,9 +315,14 @@ export class RootScene {
     };
   }
 
-  subscribeProgramStatus(listener: (status: ProgramRunnerStatus) => void): () => void {
+  subscribeProgramStatus(listener: (status: ProgramRunnerStatus, robotId: string) => void): () => void {
     this.programListeners.add(listener);
-    listener(this.programStatus);
+    for (const [robotId, status] of this.programStatusByRobot) {
+      listener(status, robotId);
+    }
+    if (this.programStatusByRobot.size === 0) {
+      listener(this.programStatus, this.getActiveRobotId());
+    }
     return () => {
       this.programListeners.delete(listener);
     };
@@ -313,7 +338,13 @@ export class RootScene {
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener);
-    listener(this.getTelemetrySnapshot(), this.telemetryRobotId);
+    if (this.telemetrySnapshotsByRobot.size > 0) {
+      for (const [robotId, entry] of this.telemetrySnapshotsByRobot) {
+        listener(entry.snapshot, robotId);
+      }
+    } else {
+      listener(this.telemetrySnapshot, this.telemetryRobotId);
+    }
     return () => {
       this.telemetryListeners.delete(listener);
     };
@@ -331,41 +362,62 @@ export class RootScene {
     return this.pendingSelection;
   }
 
-  getTelemetrySnapshot(): SimulationTelemetrySnapshot {
+  getTelemetrySnapshot(robotId: string = this.getActiveRobotId()): SimulationTelemetrySnapshot {
     if (!this.context) {
-      return this.telemetrySnapshot;
+      const cached = this.telemetrySnapshotsByRobot.get(robotId);
+      if (cached) {
+        return cached.snapshot;
+      }
+      if (this.telemetryRobotId === robotId) {
+        return this.telemetrySnapshot;
+      }
+      return EMPTY_TELEMETRY_SNAPSHOT;
     }
     this.captureTelemetrySnapshot();
-    return this.telemetrySnapshot;
+    const entry = this.telemetrySnapshotsByRobot.get(robotId);
+    if (entry) {
+      return entry.snapshot;
+    }
+    if (this.telemetryRobotId === robotId) {
+      return this.telemetrySnapshot;
+    }
+    return EMPTY_TELEMETRY_SNAPSHOT;
   }
 
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.programListeners.clear();
+    this.programStatusByRobot.clear();
     this.programStatus = 'idle';
     this.notifyRobotSelected(null);
     this.selectionListeners.clear();
     this.telemetryListeners.clear();
+    this.telemetrySnapshotsByRobot.clear();
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-    this.telemetrySignature = null;
     this.telemetryRobotId = null;
     this.pendingContextCallbacks.length = 0;
+    this.defaultRobotId = DEFAULT_ROBOT_ID;
     const context = this.context;
     if (context) {
-      context.getProgramRunner()?.stop();
+      for (const robotId of context.entities.robots.keys()) {
+        context.getProgramRunner(robotId)?.stop();
 
-      const robotCore = context.getRobotCore();
-      if (robotCore) {
-        const modules = [...robotCore.moduleStack.list()].reverse();
-        for (const module of modules) {
-          robotCore.detachModule(module.definition.id);
+        const robotCore = context.getRobotCore(robotId);
+        if (robotCore) {
+          const modules = [...robotCore.moduleStack.list()].reverse();
+          for (const module of modules) {
+            robotCore.detachModule(module.definition.id);
+          }
+        }
+
+        const sprite = context.getSprite(robotId);
+        sprite?.destroy({ children: true });
+
+        const entity = context.entities.robots.get(robotId);
+        if (entity !== undefined) {
+          context.world.destroyEntity(entity);
         }
       }
-
-      const sprite = context.getSprite();
-      sprite?.destroy({ children: true });
-
-      context.world.destroyEntity(context.entities.robot);
       context.world.destroyEntity(context.entities.selection);
       context.world.runSystems(0);
       context.blackboard.clear();
@@ -375,7 +427,23 @@ export class RootScene {
     assetService.disposeAll();
   }
 
-  private handleProgramStatus(status: ProgramRunnerStatus): void {
+  private handleProgramStatus(robotId: string, status: ProgramRunnerStatus): void {
+    this.programStatusByRobot.set(robotId, status);
+    if (this.getActiveRobotId() === robotId) {
+      this.applyProgramStatusForActiveRobot(robotId, status);
+    }
+    for (const listener of this.programListeners) {
+      listener(status, robotId);
+    }
+  }
+
+  private updateProgramStatusForSelection(): void {
+    const activeRobotId = this.getActiveRobotId();
+    const status = this.programStatusByRobot.get(activeRobotId) ?? 'idle';
+    this.applyProgramStatusForActiveRobot(activeRobotId, status);
+  }
+
+  private applyProgramStatusForActiveRobot(robotId: string, status: ProgramRunnerStatus): void {
     const previousStatus = this.programStatus;
     this.programStatus = status;
     const blackboard = this.context?.blackboard;
@@ -384,9 +452,6 @@ export class RootScene {
       if (previousStatus !== status) {
         blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.ProgramStatusChanged, status);
       }
-    }
-    for (const listener of this.programListeners) {
-      listener(status);
     }
   }
 
@@ -400,51 +465,91 @@ export class RootScene {
       if (current !== robotId) {
         this.context.selectRobot(robotId);
       }
+      if (!this.hasPlayerPanned && robotId) {
+        const sprite = this.context.getSprite(robotId);
+        if (sprite) {
+          this.viewport.moveCenter(sprite.position.x, sprite.position.y);
+        }
+      }
     }
     for (const listener of this.selectionListeners) {
       listener(robotId);
     }
+    this.updateProgramStatusForSelection();
     this.captureTelemetrySnapshot(true);
+  }
+
+  private getActiveRobotId(context: SimulationWorldContext | null = this.context): string {
+    const fallback = context?.defaultRobotId ?? this.defaultRobotId ?? DEFAULT_ROBOT_ID;
+    const selected = this.pendingSelection ?? context?.getSelectedRobot() ?? fallback;
+    if (!context) {
+      return selected ?? fallback;
+    }
+    if (selected && context.entities.robots.has(selected)) {
+      return selected;
+    }
+    const iterator = context.entities.robots.keys();
+    const next = iterator.next();
+    if (!next.done) {
+      return next.value;
+    }
+    return fallback;
   }
 
   private captureTelemetrySnapshot(force = false): void {
     const context = this.context;
     if (!context) {
-      if (force && this.telemetrySignature !== null) {
+      if (force && (this.telemetrySnapshotsByRobot.size > 0 || this.telemetryRobotId !== null)) {
+        this.telemetrySnapshotsByRobot.clear();
         this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-        this.telemetrySignature = null;
         this.telemetryRobotId = null;
-        this.notifyTelemetryListeners();
+        this.notifyTelemetryListeners(null, this.telemetrySnapshot);
       }
       return;
     }
 
-    const robotCore = context.getRobotCore();
-    if (!robotCore) {
-      return;
+    const activeRobotId = this.getActiveRobotId(context);
+    let hasActiveSnapshot = false;
+
+    for (const robotId of context.entities.robots.keys()) {
+      const robotCore = context.getRobotCore(robotId);
+      if (!robotCore) {
+        continue;
+      }
+      const snapshot = robotCore.getTelemetrySnapshot();
+      const signature = JSON.stringify(snapshot);
+      const existing = this.telemetrySnapshotsByRobot.get(robotId);
+      const hasChanged = force || !existing || existing.signature !== signature;
+      if (hasChanged) {
+        this.telemetrySnapshotsByRobot.set(robotId, { snapshot, signature });
+        this.notifyTelemetryListeners(robotId, snapshot);
+      }
+      if (robotId === activeRobotId) {
+        this.telemetrySnapshot = snapshot;
+        this.telemetryRobotId = robotId;
+        hasActiveSnapshot = true;
+      }
     }
 
-    const snapshot = robotCore.getTelemetrySnapshot();
-    const signature = JSON.stringify(snapshot);
-    const robotId = context.getSelectedRobot();
-    const hasChanged =
-      force ||
-      this.telemetrySignature !== signature ||
-      this.telemetryRobotId !== (robotId ?? null);
-
-    if (!hasChanged) {
-      return;
+    if (!hasActiveSnapshot) {
+      const activeEntry = this.telemetrySnapshotsByRobot.get(activeRobotId);
+      if (activeEntry) {
+        this.telemetrySnapshot = activeEntry.snapshot;
+        this.telemetryRobotId = activeRobotId;
+      } else if (force) {
+        this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
+        this.telemetryRobotId = null;
+        this.notifyTelemetryListeners(null, this.telemetrySnapshot);
+      }
     }
-
-    this.telemetrySnapshot = snapshot;
-    this.telemetrySignature = signature;
-    this.telemetryRobotId = robotId ?? null;
-    this.notifyTelemetryListeners();
   }
 
-  private notifyTelemetryListeners(): void {
+  private notifyTelemetryListeners(
+    robotId: string | null,
+    snapshot: SimulationTelemetrySnapshot,
+  ): void {
     for (const listener of this.telemetryListeners) {
-      listener(this.telemetrySnapshot, this.telemetryRobotId);
+      listener(snapshot, robotId);
     }
   }
 }

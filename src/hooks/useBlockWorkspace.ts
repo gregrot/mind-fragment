@@ -34,6 +34,18 @@ const parsePayload = (event: DragEvent<HTMLElement>): DragPayload | null => {
     if (parsed.source === 'workspace' && typeof parsed.instanceId === 'string') {
       return { source: 'workspace', instanceId: parsed.instanceId };
     }
+
+    if (
+      parsed.source === 'parameter'
+      && typeof parsed.ownerId === 'string'
+      && typeof parsed.parameterName === 'string'
+    ) {
+      return {
+        source: 'parameter',
+        ownerId: parsed.ownerId,
+        parameterName: parsed.parameterName,
+      };
+    }
   } catch (error) {
     console.warn('Failed to parse drag payload', error);
   }

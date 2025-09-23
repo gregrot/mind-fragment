@@ -44,7 +44,10 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     id: 'set-status',
     label: 'Set Status (true/false)',
     category: 'action',
-    summary: 'Explicitly set the status indicator to on or off.'
+    summary: 'Explicitly set the status indicator to on or off.',
+    parameters: {
+      value: { kind: 'boolean', defaultValue: true },
+    },
   },
   {
     id: 'gather-resource',
@@ -69,7 +72,11 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     label: 'Repeat',
     category: 'c',
     slots: ['do'],
-    summary: 'Run the enclosed blocks a number of times.'
+    summary: 'Run the enclosed blocks a number of times.',
+    parameters: {
+      count: { kind: 'number', defaultValue: 3 },
+    },
+    expressionInputs: ['count'],
   },
   {
     id: 'forever',
@@ -90,7 +97,11 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     label: 'If',
     category: 'c',
     slots: ['then', 'else'],
-    summary: 'Branch into THEN or ELSE slots based on a condition.'
+    summary: 'Branch into THEN or ELSE slots based on a condition.',
+    parameters: {
+      condition: { kind: 'boolean', defaultValue: true },
+    },
+    expressionInputs: ['condition'],
   }
 ];
 
@@ -114,8 +125,34 @@ export function createBlockInstance(blockType: string): BlockInstance {
     type: definition.id,
   };
 
-  if (blockType === 'set-status') {
-    instance.state = { value: true };
+  if (definition.parameters) {
+    instance.parameters = Object.entries(definition.parameters).reduce(
+      (accumulator, [parameterName, parameterDefinition]) => {
+        switch (parameterDefinition.kind) {
+          case 'boolean':
+            accumulator[parameterName] = {
+              kind: 'boolean',
+              value: parameterDefinition.defaultValue,
+            };
+            break;
+          case 'number':
+            accumulator[parameterName] = {
+              kind: 'number',
+              value: parameterDefinition.defaultValue,
+            };
+            break;
+          case 'string':
+          default:
+            accumulator[parameterName] = {
+              kind: 'string',
+              value: parameterDefinition.defaultValue,
+            };
+            break;
+        }
+        return accumulator;
+      },
+      {} as Record<string, NonNullable<BlockInstance['parameters']>[string]>,
+    );
   }
 
   if (definition.slots) {
@@ -123,6 +160,16 @@ export function createBlockInstance(blockType: string): BlockInstance {
       (slots, slotName) => {
         slots[slotName] = [];
         return slots;
+      },
+      {},
+    );
+  }
+
+  if (definition.expressionInputs) {
+    instance.expressionInputs = definition.expressionInputs.reduce<Record<string, BlockInstance[]>>(
+      (inputs, inputName) => {
+        inputs[inputName] = [];
+        return inputs;
       },
       {},
     );

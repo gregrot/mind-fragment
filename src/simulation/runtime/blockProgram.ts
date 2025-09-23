@@ -81,8 +81,8 @@ const compileBlock = (
     case 'toggle-status':
       return [{ kind: 'status-toggle', duration: 0 }];
     case 'set-status': {
-      const state = (block.state ?? {}) as { value?: unknown };
-      const value = typeof state.value === 'boolean' ? state.value : true;
+      const parameter = block.parameters?.value;
+      const value = parameter?.kind === 'boolean' ? parameter.value : true;
       return [{ kind: 'status-set', duration: 0, value }];
     }
     case 'gather-resource':
@@ -100,12 +100,15 @@ const compileBlock = (
         diagnostics.push({
           severity: 'info',
           message:
-            'Repeat blocks currently loop three times while parameter editing is under construction.',
+            'Repeat blocks currently loop their configured number of times while parameter editing is under construction.',
         });
         context.repeatInfoIssued = true;
       }
+      const countParameter = block.parameters?.count;
+      const rawCount = countParameter?.kind === 'number' ? countParameter.value : DEFAULT_REPEAT_COUNT;
+      const repeatCount = Math.max(0, Math.floor(rawCount));
       const repetitions: BlockInstruction[] = [];
-      for (let index = 0; index < DEFAULT_REPEAT_COUNT; index += 1) {
+      for (let index = 0; index < repeatCount; index += 1) {
         repetitions.push(...inner.map((instruction) => ({ ...instruction })));
       }
       return repetitions;

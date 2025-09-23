@@ -62,8 +62,13 @@ const DropZone = ({ className, target, onDrop, children }: DropZoneProps): JSX.E
       data-drop-target-kind={target.kind}
       data-drop-target-position={typeof target.position === 'number' ? String(target.position) : ''}
       data-drop-target-ancestors={ancestorIds}
-      data-drop-target-owner-id={target.kind === 'slot' ? target.ownerId : undefined}
+      data-drop-target-owner-id={
+        target.kind === 'slot' || target.kind === 'parameter' ? target.ownerId : undefined
+      }
       data-drop-target-slot-name={target.kind === 'slot' ? target.slotName : undefined}
+      data-drop-target-parameter-name={
+        target.kind === 'parameter' ? target.parameterName : undefined
+      }
       data-dropzone-active={isActive ? 'true' : undefined}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}

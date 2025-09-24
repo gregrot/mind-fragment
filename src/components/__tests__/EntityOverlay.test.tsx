@@ -10,6 +10,7 @@ import type { EntityOverlayData } from '../../types/overlay';
 import type { EntityId } from '../../simulation/ecs/world';
 import { registerInspector } from '../../overlay/inspectorRegistry';
 import EntityInfoInspector from '../inspectors/EntityInfoInspector';
+import { DragProvider } from '../../state/DragContext';
 
 const createOverlayData = (): EntityOverlayData => ({
   entityId: 5 as EntityId,
@@ -44,7 +45,9 @@ const OverlayHarness = ({ onClose }: { onClose: () => void }): JSX.Element => {
 const renderOverlay = (onClose: () => void) =>
   render(
     <EntityOverlayManagerProvider>
-      <OverlayHarness onClose={onClose} />
+      <DragProvider>
+        <OverlayHarness onClose={onClose} />
+      </DragProvider>
     </EntityOverlayManagerProvider>,
   );
 
@@ -114,7 +117,9 @@ describe('EntityOverlay', () => {
 
     render(
       <EntityOverlayManagerProvider>
-        <SimpleOverlayHarness onClose={vi.fn()} />
+        <DragProvider>
+          <SimpleOverlayHarness onClose={vi.fn()} />
+        </DragProvider>
       </EntityOverlayManagerProvider>,
     );
 

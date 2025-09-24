@@ -8,6 +8,7 @@ import {
   EntityOverlayManagerProvider,
   useEntityOverlayManager,
 } from './state/EntityOverlayManager';
+import { DragProvider } from './state/DragContext';
 import { ProgrammingInspectorProvider } from './state/ProgrammingInspectorContext';
 import EntityOverlay from './components/EntityOverlay';
 import { ensureDefaultInspectorsRegistered } from './overlay/defaultInspectors';
@@ -230,7 +231,9 @@ const AppContent = (): JSX.Element => {
         </button>
       </div>
       <ProgrammingInspectorProvider value={programmingContextValue}>
-        <EntityOverlay onClose={handleOverlayClose} />
+        <DragProvider>
+          <EntityOverlay onClose={handleOverlayClose} />
+        </DragProvider>
       </ProgrammingInspectorProvider>
       {ONBOARDING_ENABLED ? (
         <OnboardingFlow

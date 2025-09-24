@@ -33,6 +33,16 @@
   border-left-color: var(--color-block-operator-border);
 }
 
+.blockActive {
+  box-shadow: 0 0 0 2px rgba(100, 249, 255, 0.35);
+}
+
+.blockWarning {
+  border-left-color: var(--color-accent-amber);
+  box-shadow: 0 0 0 1px rgba(255, 178, 107, 0.35);
+  background: rgba(255, 178, 107, 0.08);
+}
+
 .blockHeader {
   display: flex;
   justify-content: space-between;

@@ -32,6 +32,8 @@ interface BlockViewProps {
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock?: (instanceId: string) => void;
   telemetry?: RobotTelemetryData;
+  activeBlockId?: string | null;
+  warningBlockIds?: Set<string>;
 }
 
 const BlockView = ({
@@ -42,6 +44,8 @@ const BlockView = ({
   onUpdateBlock,
   onRemoveBlock,
   telemetry,
+  activeBlockId,
+  warningBlockIds,
 }: BlockViewProps): JSX.Element | null => {
   const definition = BLOCK_MAP[block.type];
   if (!definition) {
@@ -74,6 +78,8 @@ const BlockView = ({
   const hasNestedBlocks = slotNames.length > 0;
 
   const blockClassNames = [styles.block, 'block'];
+  const isActive = typeof activeBlockId === 'string' && block.instanceId === activeBlockId;
+  const hasWarning = warningBlockIds?.has(block.instanceId) ?? false;
   switch (definition.category) {
     case 'action':
       blockClassNames.push(styles.blockAction);
@@ -93,6 +99,14 @@ const BlockView = ({
     default:
       blockClassNames.push(styles.blockAction);
       break;
+  }
+
+  if (isActive) {
+    blockClassNames.push(styles.blockActive);
+  }
+
+  if (hasWarning) {
+    blockClassNames.push(styles.blockWarning);
   }
 
   const blockClassName = blockClassNames.join(' ');
@@ -172,6 +186,8 @@ const BlockView = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       data-testid={`block-${definition.id}`}
+      data-state-active={isActive ? 'true' : undefined}
+      data-state-warning={hasWarning ? 'true' : undefined}
     >
       <header className={styles.blockHeader}>
         <span className={styles.blockTitle}>{definition.label}</span>
@@ -279,6 +295,8 @@ const BlockView = ({
                       onUpdateBlock={onUpdateBlock}
                       onRemoveBlock={onRemoveBlock}
                       telemetry={telemetry}
+                      activeBlockId={activeBlockId}
+                      warningBlockIds={warningBlockIds}
                     />
                   )}
                 />
@@ -313,6 +331,8 @@ const BlockView = ({
                     onUpdateBlock={onUpdateBlock}
                     onRemoveBlock={onRemoveBlock}
                     telemetry={telemetry}
+                    activeBlockId={activeBlockId}
+                    warningBlockIds={warningBlockIds}
                   />
                 )}
               />
@@ -334,6 +354,8 @@ const BlockView = ({
               onUpdateBlock={onUpdateBlock}
               onRemoveBlock={onRemoveBlock}
               telemetry={telemetry}
+              activeBlockId={activeBlockId}
+              warningBlockIds={warningBlockIds}
             />
           ))}
         </div>
@@ -352,6 +374,8 @@ interface SlotViewProps {
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock?: (instanceId: string) => void;
   telemetry?: RobotTelemetryData;
+  activeBlockId?: string | null;
+  warningBlockIds?: Set<string>;
 }
 
 const SlotView = ({
@@ -364,6 +388,8 @@ const SlotView = ({
   onUpdateBlock,
   onRemoveBlock,
   telemetry,
+  activeBlockId,
+  warningBlockIds,
 }: SlotViewProps): JSX.Element => {
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -443,6 +469,8 @@ const SlotView = ({
                     onUpdateBlock={onUpdateBlock}
                     onRemoveBlock={onRemoveBlock}
                     telemetry={telemetry}
+                    activeBlockId={activeBlockId}
+                    warningBlockIds={warningBlockIds}
                   />
                   <DropZone
                     className={dropTargetClassName}

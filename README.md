@@ -38,11 +38,11 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 The sci-fi theme references Orbitron and Rajdhani via local `@font-face` rules, but the font binaries are intentionally left out of source control. To install them locally:
 
 1. Download Orbitron and Rajdhani from [Google Fonts](https://fonts.google.com/). Include the Regular (400) and Bold (700) weights for each family when exporting.
-2. Unzip the downloads and copy the `.ttf` files into `public/fonts/`, renaming them to match the expected filenames:
-   - `public/fonts/orbitron-400.ttf`
-   - `public/fonts/orbitron-700.ttf`
-   - `public/fonts/rajdhani-400.ttf`
-   - `public/fonts/rajdhani-700.ttf`
+2. Unzip the downloads and copy the `.ttf` files into `src/styles/fonts/`, renaming them to match the expected filenames used by the theme:
+   - `src/styles/fonts/Orbitron-Regular.ttf`
+   - `src/styles/fonts/Orbitron-Bold.ttf`
+   - `src/styles/fonts/Rajdhani-Regular.ttf`
+   - (optional) supply an alternative Rajdhani bold weight as `src/styles/fonts/Rajdhani-Bold.ttf` — the CSS falls back to the regular weight if it is absent.
 3. Restart `npm run dev` so Vite picks up the new assets. The UI will fall back to system fonts if the files are absent, so you can still develop without them.
 
 ## Current Priorities

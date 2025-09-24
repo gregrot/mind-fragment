@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChassisInspector from '../ChassisInspector';
-import { EntityOverlayManagerProvider } from '../../../state/EntityOverlayManager';
+import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
 import { DragProvider, useDragContext } from '../../../state/DragContext';
 import type { EntityOverlayData } from '../../../types/overlay';
 import type { SlotSchema } from '../../../types/slots';
@@ -20,7 +20,10 @@ const createSlot = (id: string, index: number, occupantId: string | null): SlotS
   },
 });
 
-const createEntity = (slots: SlotSchema[]): EntityOverlayData => ({
+const createEntity = (
+  slots: SlotSchema[],
+  options?: { inventorySlots?: SlotSchema[] },
+): EntityOverlayData => ({
   entityId: 42 as EntityId,
   name: 'Test Robot',
   description: 'Prototype exploration unit',
@@ -29,9 +32,13 @@ const createEntity = (slots: SlotSchema[]): EntityOverlayData => ({
     capacity: slots.length,
     slots,
   },
+  inventory: options?.inventorySlots
+    ? { capacity: options.inventorySlots.length, slots: options.inventorySlots }
+    : undefined,
 });
 
 const dropTargets = new Map<string, DropTarget>();
+let managerApi: ReturnType<typeof useEntityOverlayManager> | null = null;
 
 const waitForDropTarget = async (targetId: string): Promise<DropTarget> => {
   await waitFor(() => {
@@ -75,10 +82,16 @@ const DragController = (): null => {
   return null;
 };
 
+const ManagerCapture = (): null => {
+  managerApi = useEntityOverlayManager();
+  return null;
+};
+
 const renderInspector = (entity: EntityOverlayData) =>
   render(
     <EntityOverlayManagerProvider>
       <DragProvider>
+        <ManagerCapture />
         <DragController />
         <ChassisInspector entity={entity} onClose={() => {}} />
       </DragProvider>
@@ -88,6 +101,7 @@ const renderInspector = (entity: EntityOverlayData) =>
 afterEach(() => {
   cleanup();
   dropTargets.clear();
+  managerApi = null;
 });
 
 describe('ChassisInspector', () => {
@@ -188,5 +202,85 @@ describe('ChassisInspector', () => {
       expect(screen.getByTestId('chassis-slot-core-0')).not.toHaveTextContent('Locomotion Thrusters Mk1');
       expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Locomotion Thrusters Mk1');
     });
+  });
+
+  it('equips modules dragged from inventory and updates inventory state', async () => {
+    const chassisSlots = [
+      createSlot('core-0', 0, 'core.movement'),
+      createSlot('extension-0', 1, null),
+      createSlot('utility-0', 2, null),
+    ];
+    const inventorySlots = [
+      createSlot('cargo-0', 0, 'arm.manipulator'),
+      createSlot('cargo-1', 1, null),
+    ];
+    const entity = createEntity(chassisSlots, { inventorySlots });
+
+    renderInspector(entity);
+
+    const targetId = `chassis-slot-${entity.entityId}-extension-0`;
+    const target = await waitForDropTarget(targetId);
+    const session: DragSession = {
+      source: {
+        type: 'inventory-slot',
+        id: 'cargo-0',
+        entityId: entity.entityId,
+        slotId: 'cargo-0',
+      },
+      payload: {
+        id: 'arm.manipulator',
+        itemType: 'inventory-item',
+      },
+    };
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(true);
+
+    act(() => {
+      target.onDrop(session, {
+        target,
+        snapPosition: null,
+        pointerPosition: null,
+        validation,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Precision Manipulator Rig');
+    });
+
+    await waitFor(() => {
+      const updated = managerApi?.getEntityData(entity.entityId);
+      expect(updated?.inventory?.slots.find((slot) => slot.id === 'cargo-0')?.occupantId).toBeNull();
+    });
+  });
+
+  it('rejects non-module inventory items when dragged onto chassis slots', async () => {
+    const chassisSlots = [
+      createSlot('core-0', 0, null),
+      createSlot('extension-0', 1, null),
+    ];
+    const inventorySlots = [createSlot('cargo-0', 0, 'resource.scrap')];
+    const entity = createEntity(chassisSlots, { inventorySlots });
+
+    renderInspector(entity);
+
+    const targetId = `chassis-slot-${entity.entityId}-core-0`;
+    const target = await waitForDropTarget(targetId);
+    const session: DragSession = {
+      source: {
+        type: 'inventory-slot',
+        id: 'cargo-0',
+        entityId: entity.entityId,
+        slotId: 'cargo-0',
+      },
+      payload: {
+        id: 'resource.scrap',
+        itemType: 'inventory-item',
+      },
+    };
+
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(false);
+    expect(validation.reason).toBe('module-required');
   });
 });

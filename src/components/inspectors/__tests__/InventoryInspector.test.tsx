@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import { afterEach, describe, expect, it } from 'vitest';
 import { useEffect } from 'react';
 import InventoryInspector from '../InventoryInspector';
-import { EntityOverlayManagerProvider } from '../../../state/EntityOverlayManager';
+import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
 import { DragProvider, useDragContext } from '../../../state/DragContext';
 import type { EntityOverlayData } from '../../../types/overlay';
 import type { SlotSchema } from '../../../types/slots';
@@ -27,14 +27,17 @@ const createSlot = (
   },
 });
 
-const createEntity = (slots: SlotSchema[]): EntityOverlayData => ({
+const createEntity = (
+  slots: SlotSchema[],
+  options?: { chassisSlots?: SlotSchema[] },
+): EntityOverlayData => ({
   entityId: 84 as EntityId,
   name: 'Test Robot',
   description: 'Prototype inventory unit',
   overlayType: 'complex',
   chassis: {
-    capacity: 0,
-    slots: [],
+    capacity: options?.chassisSlots ? options.chassisSlots.length : 0,
+    slots: options?.chassisSlots ?? [],
   },
   inventory: {
     capacity: slots.length,
@@ -43,6 +46,7 @@ const createEntity = (slots: SlotSchema[]): EntityOverlayData => ({
 });
 
 const dropTargets = new Map<string, DropTarget>();
+let managerApi: ReturnType<typeof useEntityOverlayManager> | null = null;
 
 const waitForDropTarget = async (targetId: string): Promise<DropTarget> => {
   await waitFor(() => {
@@ -88,10 +92,16 @@ const DragController = (): null => {
   return null;
 };
 
+const ManagerCapture = (): null => {
+  managerApi = useEntityOverlayManager();
+  return null;
+};
+
 const renderInspector = (entity: EntityOverlayData) =>
   render(
     <EntityOverlayManagerProvider>
       <DragProvider>
+        <ManagerCapture />
         <DragController />
         <InventoryInspector entity={entity} onClose={() => {}} />
       </DragProvider>
@@ -101,6 +111,7 @@ const renderInspector = (entity: EntityOverlayData) =>
 afterEach(() => {
   cleanup();
   dropTargets.clear();
+  managerApi = null;
 });
 
 describe('InventoryInspector', () => {
@@ -184,5 +195,129 @@ describe('InventoryInspector', () => {
       const mergedSlot = screen.getByTestId('inventory-slot-cargo-1');
       expect(within(mergedSlot).getByText('×8')).toBeInTheDocument();
     });
+  });
+
+  it('moves modules from chassis into inventory slots', async () => {
+    const inventorySlots = [
+      createSlot('cargo-0', 0, null),
+      createSlot('cargo-1', 1, null),
+    ];
+    const chassisSlots = [createSlot('core-0', 0, 'core.movement')];
+    const entity = createEntity(inventorySlots, { chassisSlots });
+
+    renderInspector(entity);
+
+    const targetId = `inventory-slot-${entity.entityId}-cargo-0`;
+    const target = await waitForDropTarget(targetId);
+    const session: DragSession = {
+      source: {
+        type: 'chassis-slot',
+        id: 'core-0',
+        entityId: entity.entityId,
+        slotId: 'core-0',
+      },
+      payload: {
+        id: 'core.movement',
+        itemType: 'module',
+      },
+    };
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(true);
+
+    act(() => {
+      target.onDrop(session, {
+        target,
+        snapPosition: null,
+        pointerPosition: null,
+        validation,
+      });
+    });
+
+    await waitFor(() => {
+      const slot = screen.getByTestId('inventory-slot-cargo-0');
+      expect(within(slot).getByText('Locomotion Thrusters Mk1')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const updated = managerApi?.getEntityData(entity.entityId);
+      expect(updated?.chassis?.slots.find((slot) => slot.id === 'core-0')?.occupantId).toBeNull();
+    });
+  });
+
+  it('swaps modules between chassis and inventory when dropping onto an occupied slot', async () => {
+    const inventorySlots = [
+      createSlot('cargo-0', 0, 'arm.manipulator'),
+      createSlot('cargo-1', 1, null),
+    ];
+    const chassisSlots = [createSlot('core-0', 0, 'core.movement')];
+    const entity = createEntity(inventorySlots, { chassisSlots });
+
+    renderInspector(entity);
+
+    const targetId = `inventory-slot-${entity.entityId}-cargo-0`;
+    const target = await waitForDropTarget(targetId);
+    const session: DragSession = {
+      source: {
+        type: 'chassis-slot',
+        id: 'core-0',
+        entityId: entity.entityId,
+        slotId: 'core-0',
+      },
+      payload: {
+        id: 'core.movement',
+        itemType: 'module',
+      },
+    };
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(true);
+
+    act(() => {
+      target.onDrop(session, {
+        target,
+        snapPosition: null,
+        pointerPosition: null,
+        validation,
+      });
+    });
+
+    await waitFor(() => {
+      const slot = screen.getByTestId('inventory-slot-cargo-0');
+      expect(within(slot).getByText('Locomotion Thrusters Mk1')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const updated = managerApi?.getEntityData(entity.entityId);
+      expect(updated?.chassis?.slots.find((slot) => slot.id === 'core-0')?.occupantId).toBe('arm.manipulator');
+    });
+  });
+
+  it('rejects chassis drops onto inventory slots with non-module items', async () => {
+    const inventorySlots = [
+      createSlot('cargo-0', 0, 'resource.scrap', 4),
+      createSlot('cargo-1', 1, null),
+    ];
+    const chassisSlots = [createSlot('core-0', 0, 'core.movement')];
+    const entity = createEntity(inventorySlots, { chassisSlots });
+
+    renderInspector(entity);
+
+    const targetId = `inventory-slot-${entity.entityId}-cargo-0`;
+    const target = await waitForDropTarget(targetId);
+    const session: DragSession = {
+      source: {
+        type: 'chassis-slot',
+        id: 'core-0',
+        entityId: entity.entityId,
+        slotId: 'core-0',
+      },
+      payload: {
+        id: 'core.movement',
+        itemType: 'module',
+      },
+    };
+
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(false);
+    expect(validation.reason).toBe('incompatible-item');
   });
 });

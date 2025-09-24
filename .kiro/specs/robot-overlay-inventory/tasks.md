@@ -55,7 +55,7 @@
   - Write tests for inventory inspector functionality
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9_
 
-- [ ] 8. Extend InventoryStore with slot schema support
+- [✅] 8. Extend InventoryStore with slot schema support
   - Add slot-based inventory access methods
   - Implement item stacking and splitting logic
   - Add inventory change event emission

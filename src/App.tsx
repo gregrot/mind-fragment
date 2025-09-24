@@ -33,26 +33,21 @@ interface InventoryOverlayView {
 }
 
 const buildInventoryOverlayData = (snapshot: InventorySnapshot): InventoryOverlayView => {
-  const entries = snapshot.entries ?? [];
-  const slotCount = Math.max(MINIMUM_INVENTORY_SLOTS, entries.length);
-  const slots: SlotSchema[] = [];
-
-  for (let index = 0; index < slotCount; index += 1) {
-    const entry = entries[index];
-    slots.push({
+  const sortedSlots = [...(snapshot.slots ?? [])].sort((a, b) => a.index - b.index);
+  const capacity = sortedSlots.length || Math.max(snapshot.slotCapacity ?? 0, MINIMUM_INVENTORY_SLOTS);
+  if (sortedSlots.length >= capacity) {
+    return { capacity, slots: sortedSlots };
+  }
+  const paddedSlots: SlotSchema[] = [...sortedSlots];
+  for (let index = sortedSlots.length; index < capacity; index += 1) {
+    paddedSlots.push({
       id: `inventory-${index}`,
       index,
-      occupantId: entry ? entry.resource : null,
-      stackCount: entry && entry.quantity > 1 ? entry.quantity : undefined,
-      metadata: {
-        stackable: true,
-        moduleSubtype: undefined,
-        locked: false,
-      },
+      occupantId: null,
+      metadata: { stackable: true, moduleSubtype: undefined, locked: false },
     });
   }
-
-  return { capacity: slotCount, slots };
+  return { capacity, slots: paddedSlots };
 };
 
 const areInventoryOverlaysEqual = (

@@ -22,6 +22,8 @@ const EMPTY_INVENTORY_SNAPSHOT: InventorySnapshot = {
   used: 0,
   available: 0,
   entries: [],
+  slots: [],
+  slotCapacity: 0,
 };
 
 const EMPTY_TELEMETRY_SNAPSHOT: SimulationTelemetrySnapshot = {

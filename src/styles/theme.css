@@ -35,7 +35,6 @@
   src:
     local('Rajdhani Bold'),
     local('Rajdhani'),
-    url('./fonts/Rajdhani-Bold.ttf') format('truetype'),
     url('./fonts/Rajdhani-Regular.ttf') format('truetype');
 }
 

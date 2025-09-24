@@ -42,7 +42,7 @@ The sci-fi theme references Orbitron and Rajdhani via local `@font-face` rules, 
    - `src/styles/fonts/Orbitron-Regular.ttf`
    - `src/styles/fonts/Orbitron-Bold.ttf`
    - `src/styles/fonts/Rajdhani-Regular.ttf`
-   - (optional) supply an alternative Rajdhani bold weight as `src/styles/fonts/Rajdhani-Bold.ttf` — the CSS falls back to the regular weight if it is absent.
+   - (optional) swap in a heavier Rajdhani variant by updating `src/styles/theme.css` — the default build maps the 700 weight to the regular file so pipelines succeed without an extra binary.
 3. Restart `npm run dev` so Vite picks up the new assets. The UI will fall back to system fonts if the files are absent, so you can still develop without them.
 
 ## Current Priorities

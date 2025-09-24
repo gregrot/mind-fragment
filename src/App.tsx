@@ -15,18 +15,89 @@ import { ensureDefaultInspectorsRegistered } from './overlay/defaultInspectors';
 import type { WorkspaceState } from './types/blocks';
 import type { EntityOverlayData } from './types/overlay';
 import type { EntityId } from './simulation/ecs/world';
+import type { ChassisSnapshot } from './simulation/robot';
+import type { InventorySnapshot } from './simulation/robot/inventory';
 import styles from './styles/App.module.css';
+import type { SlotSchema } from './types/slots';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
 
 ensureDefaultInspectorsRegistered();
 
-const buildRobotOverlayData = (robotId: string, entityId: EntityId): EntityOverlayData => ({
+const MINIMUM_INVENTORY_SLOTS = 10;
+
+interface InventoryOverlayView {
+  capacity: number;
+  slots: SlotSchema[];
+}
+
+const buildInventoryOverlayData = (snapshot: InventorySnapshot): InventoryOverlayView => {
+  const entries = snapshot.entries ?? [];
+  const slotCount = Math.max(MINIMUM_INVENTORY_SLOTS, entries.length);
+  const slots: SlotSchema[] = [];
+
+  for (let index = 0; index < slotCount; index += 1) {
+    const entry = entries[index];
+    slots.push({
+      id: `inventory-${index}`,
+      index,
+      occupantId: entry ? entry.resource : null,
+      stackCount: entry && entry.quantity > 1 ? entry.quantity : undefined,
+      metadata: {
+        stackable: true,
+        moduleSubtype: undefined,
+        locked: false,
+      },
+    });
+  }
+
+  return { capacity: slotCount, slots };
+};
+
+const areInventoryOverlaysEqual = (
+  a: InventoryOverlayView,
+  b: InventoryOverlayView,
+): boolean => {
+  if (a.capacity !== b.capacity) {
+    return false;
+  }
+  if (a.slots.length !== b.slots.length) {
+    return false;
+  }
+  for (let index = 0; index < a.slots.length; index += 1) {
+    const slotA = a.slots[index]!;
+    const slotB = b.slots[index]!;
+    if (
+      slotA.id !== slotB.id ||
+      slotA.index !== slotB.index ||
+      slotA.occupantId !== slotB.occupantId ||
+      (slotA.stackCount ?? null) !== (slotB.stackCount ?? null) ||
+      slotA.metadata.stackable !== slotB.metadata.stackable ||
+      slotA.metadata.locked !== slotB.metadata.locked ||
+      slotA.metadata.moduleSubtype !== slotB.metadata.moduleSubtype
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const buildRobotOverlayData = (
+  robotId: string,
+  entityId: EntityId,
+  chassis: ChassisSnapshot,
+  inventory: InventoryOverlayView,
+): EntityOverlayData => ({
   entityId,
   name: `Robot ${robotId}`,
   description: `Configure systems and programming for chassis ${robotId}.`,
   overlayType: 'complex',
+  chassis: {
+    capacity: chassis.capacity,
+    slots: chassis.slots,
+  },
+  inventory,
 });
 
 const AppContent = (): JSX.Element => {
@@ -45,13 +116,41 @@ const AppContent = (): JSX.Element => {
     openOverlay,
     closeOverlay,
     selectedEntityId: overlayEntityId,
+    getEntityData,
+    upsertEntityData,
   } = useEntityOverlayManager();
   const [robotPrograms, setRobotPrograms] = useState<Record<string, WorkspaceState>>({});
   const [workspaceRobotId, setWorkspaceRobotId] = useState<string>(
     () => selectedRobotId ?? DEFAULT_ROBOT_ID,
   );
+  const [chassisSnapshot, setChassisSnapshot] = useState<ChassisSnapshot>(() =>
+    simulationRuntime.getChassisSnapshot(selectedRobotId ?? DEFAULT_ROBOT_ID),
+  );
+  const [inventoryOverlay, setInventoryOverlay] = useState<InventoryOverlayView>(() =>
+    buildInventoryOverlayData(simulationRuntime.getInventorySnapshot()),
+  );
 
   const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
+
+  useEffect(() => simulationRuntime.subscribeChassis(setChassisSnapshot), []);
+
+  useEffect(
+    () =>
+      simulationRuntime.subscribeInventory((snapshot) => {
+        setInventoryOverlay((current) => {
+          const next = buildInventoryOverlayData(snapshot);
+          if (areInventoryOverlaysEqual(current, next)) {
+            return current;
+          }
+          return next;
+        });
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    setChassisSnapshot(simulationRuntime.getChassisSnapshot(selectedRobotId));
+  }, [selectedRobotId]);
 
   const resolveEntityId = useCallback(
     (entityId: EntityId | null): EntityId => {
@@ -69,9 +168,12 @@ const AppContent = (): JSX.Element => {
   const openOverlayForRobot = useCallback(
     (robotId: string, entityId: EntityId | null, initialTab?: 'systems' | 'programming' | 'info') => {
       const resolvedEntity = resolveEntityId(entityId);
-      openOverlay(buildRobotOverlayData(robotId, resolvedEntity), { initialTab });
+      const chassis = simulationRuntime.getChassisSnapshot(robotId);
+      openOverlay(buildRobotOverlayData(robotId, resolvedEntity, chassis, inventoryOverlay), {
+        initialTab,
+      });
     },
-    [openOverlay, resolveEntityId],
+    [inventoryOverlay, openOverlay, resolveEntityId],
   );
 
   const handleEntitySelect = useCallback(
@@ -187,6 +289,48 @@ const AppContent = (): JSX.Element => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleProgramRobot, handleTabShortcut]);
+
+  useEffect(() => {
+    if (overlayEntityId === null) {
+      return;
+    }
+    const entity = getEntityData(overlayEntityId);
+    if (!entity || entity.overlayType !== 'complex') {
+      return;
+    }
+    if (
+      entity.chassis &&
+      entity.chassis.capacity === chassisSnapshot.capacity &&
+      entity.chassis.slots === chassisSnapshot.slots
+    ) {
+      return;
+    }
+    upsertEntityData({
+      ...entity,
+      chassis: { capacity: chassisSnapshot.capacity, slots: chassisSnapshot.slots },
+    });
+  }, [chassisSnapshot, getEntityData, overlayEntityId, upsertEntityData]);
+
+  useEffect(() => {
+    if (overlayEntityId === null) {
+      return;
+    }
+    const entity = getEntityData(overlayEntityId);
+    if (!entity || entity.overlayType !== 'complex') {
+      return;
+    }
+    if (
+      entity.inventory &&
+      entity.inventory.capacity === inventoryOverlay.capacity &&
+      entity.inventory.slots === inventoryOverlay.slots
+    ) {
+      return;
+    }
+    upsertEntityData({
+      ...entity,
+      inventory: { capacity: inventoryOverlay.capacity, slots: inventoryOverlay.slots },
+    });
+  }, [getEntityData, inventoryOverlay, overlayEntityId, upsertEntityData]);
 
   const programmingContextValue = useMemo(
     () => ({

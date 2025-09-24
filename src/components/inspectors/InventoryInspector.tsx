@@ -10,11 +10,11 @@ import ModuleIcon from '../ModuleIcon';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useEntityOverlayManager } from '../../state/EntityOverlayManager';
 import { useDragContext } from '../../state/DragContext';
-import type { DragSession, DropValidationResult } from '../../types/drag';
 import type { SlotSchema } from '../../types/slots';
+import type { DragSession, DropValidationResult } from '../../types/drag';
 import type { ModuleBlueprint } from '../../simulation/robot/modules/moduleLibrary';
 import { MODULE_LIBRARY } from '../../simulation/robot/modules/moduleLibrary';
-import styles from '../../styles/ChassisInspector.module.css';
+import styles from '../../styles/InventoryInspector.module.css';
 
 const MODULE_BLUEPRINT_MAP = new Map<string, ModuleBlueprint>(
   MODULE_LIBRARY.map((module) => [module.id, module]),
@@ -25,35 +25,58 @@ const sortSlots = (slots: SlotSchema[]): SlotSchema[] => {
 };
 
 const getSlotTargetId = (entityId: InspectorProps['entity']['entityId'], slotId: string): string => {
-  return `chassis-slot-${entityId}-${slotId}`;
+  return `inventory-slot-${entityId}-${slotId}`;
 };
 
-const resolveBlueprint = (moduleId: string | null): ModuleBlueprint | null => {
-  if (!moduleId) {
+const resolveBlueprint = (itemId: string | null): ModuleBlueprint | null => {
+  if (!itemId) {
     return null;
   }
-  return MODULE_BLUEPRINT_MAP.get(moduleId) ?? null;
+  return MODULE_BLUEPRINT_MAP.get(itemId) ?? null;
 };
 
-const describeSlotType = (slot: SlotSchema): string => {
-  if (slot.metadata.locked) {
-    return 'Locked slot';
+const formatItemId = (itemId: string, blueprint: ModuleBlueprint | null): string => {
+  if (blueprint) {
+    return blueprint.title;
   }
-  if (slot.metadata.moduleSubtype) {
-    return `${slot.metadata.moduleSubtype} slot`;
+  const segments = itemId.split(/[./_-]/).filter(Boolean);
+  if (segments.length === 0) {
+    return 'Unknown item';
   }
-  return 'Universal slot';
+  const label = segments[segments.length - 1]!;
+  return label.charAt(0).toUpperCase() + label.slice(1);
 };
 
-interface ChassisSlotProps {
+const getStackCount = (slot: SlotSchema): number => {
+  if (!slot.occupantId) {
+    return 0;
+  }
+  return slot.stackCount ?? 1;
+};
+
+const getInitials = (label: string): string => {
+  if (!label) {
+    return '?';
+  }
+  const cleaned = label.replace(/[^\p{L}\p{N}]+/gu, '').toUpperCase();
+  if (cleaned.length >= 2) {
+    return cleaned.slice(0, 2);
+  }
+  if (cleaned.length === 1) {
+    return cleaned;
+  }
+  return '??';
+};
+
+interface InventorySlotProps {
   entityId: InspectorProps['entity']['entityId'];
   slot: SlotSchema;
+  displayName: string;
   blueprint: ModuleBlueprint | null;
-  hovered: boolean;
+  stackCount: number;
   activeTargetId: string | null;
   validation: DropValidationResult | null;
   isDragging: boolean;
-  onHoverChange: (slotId: string | null) => void;
   onStartDrag: (event: ReactPointerEvent<HTMLButtonElement>, slot: SlotSchema) => void;
   onDrop: (slotId: string, session: DragSession) => void;
   registerDropTarget: ReturnType<typeof useDragContext>['registerDropTarget'];
@@ -61,29 +84,29 @@ interface ChassisSlotProps {
   validateDrop: (slot: SlotSchema, session: DragSession) => DropValidationResult;
 }
 
-const ChassisSlot = ({
+const InventorySlot = ({
   entityId,
   slot,
+  displayName,
   blueprint,
-  hovered,
+  stackCount,
   activeTargetId,
   validation,
   isDragging,
-  onHoverChange,
   onStartDrag,
   onDrop,
   registerDropTarget,
   setActiveTarget,
   validateDrop,
-}: ChassisSlotProps): JSX.Element => {
+}: InventorySlotProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const tooltipId = `chassis-slot-tooltip-${entityId}-${slot.id}`;
   const targetId = getSlotTargetId(entityId, slot.id);
+  const isEmpty = !slot.occupantId;
 
   useEffect(() => {
     const unregister = registerDropTarget({
       id: targetId,
-      type: 'chassis-slot',
+      type: 'inventory-slot',
       metadata: { entityId, slotId: slot.id },
       accepts: (session) => validateDrop(slot, session),
       onDrop: (session) => onDrop(slot.id, session),
@@ -111,8 +134,11 @@ const ChassisSlot = ({
     return validation.canDrop ? 'active-valid' : 'active-invalid';
   }, [activeTargetId, targetId, validation]);
 
-  const slotTypeLabel = describeSlotType(slot);
-  const occupantName = blueprint?.title ?? slot.occupantId ?? 'Empty slot';
+  const ariaLabel = isEmpty
+    ? `Empty inventory slot ${slot.index + 1}`
+    : stackCount > 1
+    ? `${displayName} (×${stackCount})`
+    : displayName;
 
   const handlePointerEnter = useCallback(() => {
     if (isDragging) {
@@ -126,53 +152,47 @@ const ChassisSlot = ({
     }
   }, [activeTargetId, isDragging, setActiveTarget, targetId]);
 
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+
   return (
     <div
       ref={containerRef}
       className={styles.slot}
       data-drop-state={dropState}
       data-slot-locked={slot.metadata.locked ? 'true' : undefined}
-      data-testid={`chassis-slot-${slot.id}`}
+      data-testid={`inventory-slot-${slot.id}`}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      aria-describedby={slot.occupantId ? tooltipId : undefined}
     >
       <p className={styles.slotLabel}>{`Slot ${slot.index + 1}`}</p>
-      <p className={styles.slotType}>{slotTypeLabel}</p>
       <button
         type="button"
-        className={styles.moduleButton}
+        className={styles.itemButton}
         onPointerDown={(event) => onStartDrag(event, slot)}
-        onMouseEnter={() => onHoverChange(slot.id)}
-        onMouseLeave={() => onHoverChange(null)}
-        onFocus={() => onHoverChange(slot.id)}
-        onBlur={() => onHoverChange(null)}
-        disabled={!slot.occupantId || slot.metadata.locked}
-        aria-label={occupantName}
+        disabled={isEmpty || slot.metadata.locked}
+        aria-label={ariaLabel}
       >
-        {blueprint ? (
-          <ModuleIcon variant={blueprint.icon} />
-        ) : (
-          <span className={styles.emptyLabel}>Add module</span>
-        )}
-        {slot.occupantId ? <span className={styles.moduleName}>{occupantName}</span> : null}
-      </button>
-      {hovered && blueprint ? (
-        <div role="tooltip" id={tooltipId} className={styles.tooltip}>
-          <p className={styles.tooltipTitle}>{blueprint.title}</p>
-          <p className={styles.tooltipSummary}>{blueprint.summary}</p>
-          <ul className={styles.tooltipStats}>
-            <li>{`Provides: ${blueprint.provides.length > 0 ? blueprint.provides.join(', ') : 'None'}`}</li>
-            <li>{`Requires: ${blueprint.requires.length > 0 ? blueprint.requires.join(', ') : 'None'}`}</li>
-            <li>{`Capacity: ${blueprint.capacityCost}`}</li>
-          </ul>
+        <div className={styles.itemVisual}>
+          {blueprint ? (
+            <ModuleIcon variant={blueprint.icon} />
+          ) : isEmpty ? (
+            <span className={styles.emptyGlyph}>＋</span>
+          ) : (
+            <span className={styles.placeholderIcon}>{initials}</span>
+          )}
+          {stackCount > 1 ? <span className={styles.stackBadge}>{`×${stackCount}`}</span> : null}
         </div>
-      ) : null}
+        {isEmpty ? (
+          <span className={styles.emptyLabel}>Empty slot</span>
+        ) : (
+          <span className={styles.itemName}>{displayName}</span>
+        )}
+      </button>
     </div>
   );
 };
 
-const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
+const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
   const manager = useEntityOverlayManager();
   const {
     registerDropTarget,
@@ -187,14 +207,13 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
   } = useDragContext();
 
   const pointerCleanupRef = useRef<(() => void) | null>(null);
-  const [hoveredSlotId, setHoveredSlotId] = useState<string | null>(null);
 
-  const initialSlots = useMemo(() => sortSlots(entity.chassis?.slots ?? []), [entity.chassis?.slots]);
+  const initialSlots = useMemo(() => sortSlots(entity.inventory?.slots ?? []), [entity.inventory?.slots]);
   const [slots, setSlots] = useState<SlotSchema[]>(initialSlots);
 
   useEffect(() => {
-    setSlots(sortSlots(entity.chassis?.slots ?? []));
-  }, [entity.chassis?.slots]);
+    setSlots(sortSlots(entity.inventory?.slots ?? []));
+  }, [entity.inventory?.slots]);
 
   useEffect(() => {
     return () => {
@@ -204,20 +223,23 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const validateDrop = useCallback(
     (slot: SlotSchema, session: DragSession): DropValidationResult => {
-      if (session.payload.itemType !== 'module') {
-        return { canDrop: false, reason: 'unsupported-item' };
-      }
       if (slot.metadata.locked && session.source.slotId !== slot.id) {
         return { canDrop: false, reason: 'slot-locked' };
       }
-      if (session.source.type === 'chassis-slot') {
-        if (session.source.entityId !== entity.entityId) {
+      if (session.payload.itemType !== 'inventory-item' && session.payload.itemType !== 'module') {
+        return { canDrop: false, reason: 'unsupported-item' };
+      }
+      if (session.source.type === 'inventory-slot') {
+        if (session.source.entityId && session.source.entityId !== entity.entityId) {
           return { canDrop: false, reason: 'different-entity' };
         }
         return { canDrop: true };
       }
-      if (slot.metadata.locked) {
-        return { canDrop: false, reason: 'slot-locked' };
+      if (session.source.type === 'chassis-slot') {
+        if (session.source.entityId && session.source.entityId !== entity.entityId) {
+          return { canDrop: false, reason: 'different-entity' };
+        }
+        return { canDrop: true };
       }
       return { canDrop: true };
     },
@@ -226,8 +248,8 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const handleDropOnSlot = useCallback(
     (targetSlotId: string, session: DragSession) => {
-      const chassis = entity.chassis;
-      if (!chassis) {
+      const inventory = entity.inventory;
+      if (!inventory) {
         return;
       }
 
@@ -240,7 +262,7 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
         const targetSlot = next[targetIndex]!;
 
-        if (session.source.type === 'chassis-slot' && session.source.slotId) {
+        if (session.source.type === 'inventory-slot' && session.source.slotId) {
           const sourceIndex = next.findIndex((slot) => slot.id === session.source.slotId);
           if (sourceIndex === -1) {
             return currentSlots;
@@ -250,15 +272,42 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
           }
 
           const sourceSlot = next[sourceIndex]!;
-          const destinationSlot = next[targetIndex]!;
+          if (!sourceSlot.occupantId) {
+            return currentSlots;
+          }
 
-          next[sourceIndex] = { ...sourceSlot, occupantId: destinationSlot.occupantId };
-          next[targetIndex] = { ...destinationSlot, occupantId: session.payload.id };
+          const sourceCount = getStackCount(sourceSlot);
+          const targetCount = getStackCount(targetSlot);
+          const canMerge =
+            targetSlot.metadata.stackable &&
+            sourceSlot.metadata.stackable &&
+            targetSlot.occupantId &&
+            targetSlot.occupantId === sourceSlot.occupantId;
+
+          if (canMerge) {
+            next[sourceIndex] = { ...sourceSlot, occupantId: null, stackCount: undefined };
+            next[targetIndex] = {
+              ...targetSlot,
+              occupantId: targetSlot.occupantId,
+              stackCount: targetCount + sourceCount > 1 ? targetCount + sourceCount : undefined,
+            };
+          } else {
+            next[sourceIndex] = {
+              ...sourceSlot,
+              occupantId: targetSlot.occupantId,
+              stackCount: targetSlot.stackCount,
+            };
+            next[targetIndex] = {
+              ...targetSlot,
+              occupantId: sourceSlot.occupantId,
+              stackCount: sourceSlot.stackCount,
+            };
+          }
 
           const sorted = sortSlots(next);
           const updatedEntity = {
             ...entity,
-            chassis: { capacity: chassis.capacity, slots: sorted },
+            inventory: { capacity: inventory.capacity, slots: sorted },
           };
           Promise.resolve().then(() => {
             manager.upsertEntityData(updatedEntity);
@@ -266,15 +315,27 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
           return sorted;
         }
 
-        if (targetSlot.occupantId === session.payload.id) {
-          return currentSlots;
+        const incomingId = session.payload.id;
+        const incomingCount = session.payload.stackCount ?? 1;
+
+        if (targetSlot.metadata.stackable && targetSlot.occupantId === incomingId) {
+          const total = getStackCount(targetSlot) + Math.max(incomingCount, 0);
+          next[targetIndex] = {
+            ...targetSlot,
+            stackCount: total > 1 ? total : undefined,
+          };
+        } else {
+          next[targetIndex] = {
+            ...targetSlot,
+            occupantId: incomingId,
+            stackCount: incomingCount > 1 ? incomingCount : undefined,
+          };
         }
 
-        next[targetIndex] = { ...targetSlot, occupantId: session.payload.id };
         const sorted = sortSlots(next);
         const updatedEntity = {
           ...entity,
-          chassis: { capacity: chassis.capacity, slots: sorted },
+          inventory: { capacity: inventory.capacity, slots: sorted },
         };
         Promise.resolve().then(() => {
           manager.upsertEntityData(updatedEntity);
@@ -285,15 +346,16 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
     [entity, manager],
   );
 
-  const createPreview = useCallback((blueprint: ModuleBlueprint | null) => {
-    if (!blueprint) {
-      return undefined;
-    }
+  const createPreview = useCallback((label: string, blueprint: ModuleBlueprint | null) => {
     return {
       render: () => (
         <div className={styles.preview}>
-          <ModuleIcon variant={blueprint.icon} />
-          <span className={styles.previewName}>{blueprint.title}</span>
+          {blueprint ? (
+            <ModuleIcon variant={blueprint.icon} />
+          ) : (
+            <span className={styles.previewAvatar}>{getInitials(label)}</span>
+          )}
+          <span className={styles.previewName}>{label}</span>
         </div>
       ),
       width: 120,
@@ -315,16 +377,17 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
       }
 
       event.preventDefault();
-      setHoveredSlotId(null);
 
       const blueprint = resolveBlueprint(slot.occupantId);
-      const preview = createPreview(blueprint);
+      const label = formatItemId(slot.occupantId, blueprint);
+      const preview = createPreview(label, blueprint);
       const pointer = { x: event.clientX, y: event.clientY } as const;
+      const stackCount = getStackCount(slot);
 
       startDrag(
         {
           source: {
-            type: 'chassis-slot',
+            type: 'inventory-slot',
             id: slot.id,
             entityId: entity.entityId,
             slotId: slot.id,
@@ -332,13 +395,11 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
           },
           payload: {
             id: slot.occupantId,
-            itemType: 'module',
-            metadata: { source: 'chassis' },
+            itemType: 'inventory-item',
+            stackCount,
+            metadata: { source: 'inventory' },
           },
           preview,
-          onDropCancel: () => {
-            setHoveredSlotId(null);
-          },
         },
         { pointer },
       );
@@ -376,34 +437,36 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
     [cancelDrag, createPreview, drop, entity.entityId, startDrag, updatePointer],
   );
 
-  if (!entity.chassis) {
+  if (!entity.inventory) {
     return (
-      <section className={styles.inspector} aria-label="Chassis inspector">
-        <p className={styles.placeholder}>Chassis data is not available for this entity.</p>
+      <section className={styles.inspector} aria-label="Inventory inspector">
+        <p className={styles.placeholder}>Inventory data is not available for this entity.</p>
       </section>
     );
   }
 
   return (
-    <section className={styles.inspector} aria-label="Chassis inspector" data-testid="chassis-inspector">
+    <section className={styles.inspector} aria-label="Inventory inspector" data-testid="inventory-inspector">
       <header className={styles.header}>
-        <h3 className={styles.title}>Chassis Configuration</h3>
-        <p className={styles.summary}>Arrange installed modules and review their capabilities.</p>
+        <h3 className={styles.title}>Inventory Management</h3>
+        <p className={styles.summary}>Organise stored resources and spare modules for deployment.</p>
       </header>
       <div className={styles.grid}>
         {slots.map((slot) => {
           const blueprint = resolveBlueprint(slot.occupantId);
+          const displayName = slot.occupantId ? formatItemId(slot.occupantId, blueprint) : 'Empty slot';
+          const stackCount = getStackCount(slot);
           return (
-            <ChassisSlot
+            <InventorySlot
               key={slot.id}
               entityId={entity.entityId}
               slot={slot}
+              displayName={displayName}
               blueprint={blueprint}
-              hovered={hoveredSlotId === slot.id}
+              stackCount={stackCount}
               activeTargetId={activeTargetId}
               validation={validation}
               isDragging={isDragging}
-              onHoverChange={setHoveredSlotId}
               onStartDrag={handleStartDrag}
               onDrop={handleDropOnSlot}
               registerDropTarget={registerDropTarget}
@@ -417,4 +480,4 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
   );
 };
 
-export default ChassisInspector;
+export default InventoryInspector;

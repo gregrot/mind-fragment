@@ -1,9 +1,16 @@
-import { ModuleStack, type ModuleMetadata, type ModuleSnapshot } from './moduleStack';
+import {
+  ModuleStack,
+  type ModuleMetadata,
+  type ModuleSnapshot,
+  type ModuleSlotOccupant,
+  DEFAULT_SLOT,
+} from './moduleStack';
 import { ModuleBus, ModulePort } from './moduleBus';
 import { RobotState, type RobotStateSnapshot, type RobotStateOptions, robotStateUtils } from './robotState';
 import type { RobotModule } from './RobotModule';
 import { InventoryStore } from './inventory';
 import { ResourceField, createDefaultResourceNodes } from '../resources/resourceField';
+import type { SlotMetadata, SlotSchema } from '../../types/slots';
 
 const DEFAULT_CAPACITY = 8;
 
@@ -12,6 +19,7 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 interface RobotChassisOptions {
   capacity?: number;
   state?: RobotStateOptions;
+  slotSchema?: SlotDefinitionInit[];
 }
 
 interface ActuatorRequest {
@@ -29,6 +37,45 @@ interface ActuatorResolutionContext {
 }
 
 type ActuatorHandler = (context: ActuatorResolutionContext) => void;
+
+export interface ChassisSnapshot {
+  capacity: number;
+  slots: SlotSchema[];
+}
+
+interface SlotDefinitionInit {
+  slot: string;
+  index: number;
+  metadata?: Partial<SlotMetadata>;
+}
+
+interface SlotDefinition {
+  id: string;
+  slot: string;
+  index: number;
+  metadata: SlotMetadata;
+}
+
+type SlotListener = (snapshot: ChassisSnapshot) => void;
+
+const DEFAULT_CHASSIS_SLOTS: SlotDefinitionInit[] = [
+  { slot: 'core', index: 0 },
+  { slot: 'extension', index: 0 },
+  { slot: 'sensor', index: 0 },
+];
+
+const createSlotId = (slot: string, index: number): string => `${slot}-${index}`;
+
+const formatModuleSubtype = (slot: string): string | undefined => {
+  if (!slot || slot === DEFAULT_SLOT) {
+    return undefined;
+  }
+  const parts = slot.split(/[-_\s]+/).filter(Boolean);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+};
 
 export interface ModuleUpdateContext {
   stepSeconds: number;
@@ -61,13 +108,20 @@ export class RobotChassis {
   private readonly actuatorHandlers = new Map<string, ActuatorHandler>();
   private readonly pendingActuators = new Map<string, ActuatorRequest[]>();
   private tickCounter = 0;
+  private readonly slotDefinitions = new Map<string, SlotDefinition>();
+  private readonly slotListeners = new Set<SlotListener>();
 
-  constructor({ capacity = DEFAULT_CAPACITY, state = {} }: RobotChassisOptions = {}) {
+  constructor({ capacity = DEFAULT_CAPACITY, state = {}, slotSchema }: RobotChassisOptions = {}) {
     this.state = new RobotState(state);
     this.moduleStack = new ModuleStack({ capacity });
     this.bus = new ModuleBus();
     this.inventory = new InventoryStore();
     this.resourceField = new ResourceField(createDefaultResourceNodes());
+
+    const initialSlots = Array.isArray(slotSchema) && slotSchema.length > 0 ? slotSchema : DEFAULT_CHASSIS_SLOTS;
+    for (const definition of initialSlots) {
+      this.registerSlotDefinition(definition);
+    }
 
     this.registerActuatorHandler('movement.linear', ({ request }) => {
       const payload = request.payload as { x?: number; y?: number } | undefined;
@@ -80,6 +134,85 @@ export class RobotChassis {
       const value = Number.isFinite(payload?.value) ? payload!.value! : 0;
       this.state.setAngularVelocity(value);
     });
+  }
+
+  private registerSlotDefinition({ slot, index, metadata }: SlotDefinitionInit): void {
+    const id = createSlotId(slot, index);
+    if (this.slotDefinitions.has(id)) {
+      return;
+    }
+    const resolvedMetadata = this.createSlotMetadata(slot, metadata);
+    this.slotDefinitions.set(id, {
+      id,
+      slot,
+      index,
+      metadata: resolvedMetadata,
+    });
+  }
+
+  private createSlotMetadata(slot: string, overrides?: Partial<SlotMetadata>): SlotMetadata {
+    return {
+      stackable: overrides?.stackable ?? false,
+      locked: overrides?.locked ?? false,
+      moduleSubtype: overrides?.moduleSubtype ?? formatModuleSubtype(slot),
+    } satisfies SlotMetadata;
+  }
+
+  private ensureSlotDefinition(slot: string, index: number): void {
+    const id = createSlotId(slot, index);
+    if (this.slotDefinitions.has(id)) {
+      return;
+    }
+    this.registerSlotDefinition({ slot, index });
+  }
+
+  private getOrderedSlotDefinitions(): SlotDefinition[] {
+    return [...this.slotDefinitions.values()].sort((a, b) => {
+      const slotComparison = a.slot.localeCompare(b.slot);
+      if (slotComparison !== 0) {
+        return slotComparison;
+      }
+      if (a.index !== b.index) {
+        return a.index - b.index;
+      }
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  private buildSlotSchema(definition: SlotDefinition, occupant: ModuleSlotOccupant | null): SlotSchema {
+    return {
+      id: definition.id,
+      index: definition.index,
+      occupantId: occupant?.moduleId ?? null,
+      metadata: { ...definition.metadata },
+    } satisfies SlotSchema;
+  }
+
+  private notifySlotListeners(): void {
+    if (this.slotListeners.size === 0) {
+      return;
+    }
+    const snapshot = this.getSlotSchemaSnapshot();
+    for (const listener of this.slotListeners) {
+      listener(snapshot);
+    }
+  }
+
+  getSlotSchemaSnapshot(): ChassisSnapshot {
+    const definitions = this.getOrderedSlotDefinitions();
+    const slots: SlotSchema[] = definitions.map((definition) => {
+      const occupant = this.moduleStack.getSlotOccupant(definition.slot, definition.index);
+      return this.buildSlotSchema(definition, occupant);
+    });
+    return { capacity: this.moduleStack.capacity, slots } satisfies ChassisSnapshot;
+  }
+
+  subscribeSlots(listener: SlotListener): () => void {
+    this.slotListeners.add(listener);
+    listener(this.getSlotSchemaSnapshot());
+    return () => {
+      this.slotListeners.delete(listener);
+    };
   }
 
   getStateSnapshot(): RobotStateSnapshot {
@@ -107,6 +240,7 @@ export class RobotChassis {
 
   attachModule(module: RobotModule): ModuleMetadata {
     const meta = this.moduleStack.attach(module);
+    this.ensureSlotDefinition(meta.slot, meta.index);
     const port = this.bus.registerModule(module.definition.id, (moduleId, channel, payload, priority) =>
       this.queueActuatorRequest(moduleId, channel, payload, priority),
     );
@@ -118,6 +252,7 @@ export class RobotChassis {
         resourceField: this.resourceField,
       } as ModuleRuntimeContext,
     );
+    this.notifySlotListeners();
     return meta;
   }
 
@@ -129,6 +264,7 @@ export class RobotChassis {
 
     module.onDetach?.();
     this.bus.unregisterModule(moduleId);
+    this.notifySlotListeners();
     return module;
   }
 

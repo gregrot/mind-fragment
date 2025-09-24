@@ -1,4 +1,5 @@
 import ChassisInspector from '../components/inspectors/ChassisInspector';
+import InventoryInspector from '../components/inspectors/InventoryInspector';
 import EntityInfoInspector from '../components/inspectors/EntityInfoInspector';
 import RobotProgrammingInspector from '../components/inspectors/RobotProgrammingInspector';
 import { getInspectorDefinitions, registerInspector } from './inspectorRegistry';
@@ -20,6 +21,17 @@ export const ensureDefaultInspectorsRegistered = (): void => {
       component: ChassisInspector,
       shouldRender: (entity) => entity.overlayType === 'complex' && Boolean(entity.chassis),
       order: 10,
+    });
+  });
+
+  ensureInspectorRegistered('robot-inventory', () => {
+    registerInspector({
+      id: 'robot-inventory',
+      label: 'Inventory',
+      group: 'systems',
+      component: InventoryInspector,
+      shouldRender: (entity) => entity.overlayType === 'complex' && Boolean(entity.inventory),
+      order: 20,
     });
   });
 

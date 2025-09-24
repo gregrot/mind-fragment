@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RobotChassis, type ModuleActionContext, type ModuleUpdateContext } from '../RobotChassis';
 import { RobotModule } from '../RobotModule';
 import type { ModulePort } from '../moduleBus';
+import type { ChassisSnapshot } from '../RobotChassis';
 
 interface LinearMovementOptions {
   id: string;
@@ -187,5 +188,65 @@ describe('Module messaging and actuator resolution', () => {
     const stateAfterSecondTick = chassis.getStateSnapshot();
     expect(stateAfterSecondTick.position.x).toBeCloseTo(10);
     expect(stateAfterSecondTick.orientation).toBeGreaterThan(stateAfterTick.orientation);
+  });
+});
+
+describe('Chassis slot schema integration', () => {
+  it('exposes slot schema snapshots with default metadata', () => {
+    const chassis = new RobotChassis({ capacity: 6 });
+
+    const snapshot = chassis.getSlotSchemaSnapshot();
+    expect(snapshot.capacity).toBe(6);
+    expect(snapshot.slots).toEqual([
+      {
+        id: 'core-0',
+        index: 0,
+        occupantId: null,
+        metadata: { stackable: false, locked: false, moduleSubtype: 'Core' },
+      },
+      {
+        id: 'extension-0',
+        index: 0,
+        occupantId: null,
+        metadata: { stackable: false, locked: false, moduleSubtype: 'Extension' },
+      },
+      {
+        id: 'sensor-0',
+        index: 0,
+        occupantId: null,
+        metadata: { stackable: false, locked: false, moduleSubtype: 'Sensor' },
+      },
+    ]);
+  });
+
+  it('notifies listeners when slot occupancy changes', () => {
+    const chassis = new RobotChassis({ capacity: 4 });
+    const power = new PowerCoreModule();
+    const cooling = new TelemetryCoolingModule();
+
+    const snapshots: ChassisSnapshot[] = [];
+    const unsubscribe = chassis.subscribeSlots((snapshot) => {
+      snapshots.push(snapshot);
+    });
+
+    expect(snapshots).toHaveLength(1);
+    const initial = snapshots[0]!;
+    expect(initial.slots.find((slot) => slot.id === 'core-0')?.occupantId).toBeNull();
+
+    chassis.attachModule(power);
+    const afterPower = snapshots[snapshots.length - 1]!;
+    expect(afterPower.slots.find((slot) => slot.id === 'core-0')?.occupantId).toBe('core.power');
+
+    chassis.attachModule(cooling);
+    const afterCooling = snapshots[snapshots.length - 1]!;
+    const supportSlot = afterCooling.slots.find((slot) => slot.id === 'support-0');
+    expect(supportSlot?.occupantId).toBe('support.cooling');
+    expect(supportSlot?.metadata).toEqual({ stackable: false, locked: false, moduleSubtype: 'Support' });
+
+    chassis.detachModule('support.cooling');
+    const afterDetach = snapshots[snapshots.length - 1]!;
+    expect(afterDetach.slots.find((slot) => slot.id === 'support-0')?.occupantId).toBeNull();
+
+    unsubscribe();
   });
 });

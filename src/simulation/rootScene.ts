@@ -11,6 +11,7 @@ import {
 import { createSimulationWorld, DEFAULT_ROBOT_ID, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { EntityId } from './ecs/world';
 import type { InventorySnapshot } from './robot/inventory';
+import type { ChassisSnapshot } from './robot';
 
 interface TickPayload {
   deltaMS: number;
@@ -24,10 +25,16 @@ type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
   robotId: string | null,
 ) => void;
+type ChassisListener = (snapshot: ChassisSnapshot) => void;
 
 const EMPTY_TELEMETRY_SNAPSHOT: SimulationTelemetrySnapshot = {
   values: {},
   actions: {},
+};
+
+const EMPTY_CHASSIS_SNAPSHOT: ChassisSnapshot = {
+  capacity: 0,
+  slots: [],
 };
 
 export class RootScene {
@@ -290,6 +297,14 @@ export class RootScene {
     return robotCore.getInventorySnapshot();
   }
 
+  getChassisSnapshot(robotId: string = this.getActiveRobotId()): ChassisSnapshot {
+    const robotCore = this.context?.getRobotCore(robotId);
+    if (!robotCore) {
+      return EMPTY_CHASSIS_SNAPSHOT;
+    }
+    return robotCore.getSlotSchemaSnapshot();
+  }
+
   subscribeInventory(listener: (snapshot: InventorySnapshot) => void): () => void {
     listener(this.getInventorySnapshot());
 
@@ -311,6 +326,48 @@ export class RootScene {
     return () => {
       unsubscribed = true;
       cancelReady();
+      teardown?.();
+      teardown = null;
+    };
+  }
+
+  subscribeChassis(listener: ChassisListener): () => void {
+    listener(this.getChassisSnapshot());
+
+    let unsubscribed = false;
+    let teardown: (() => void) | null = null;
+    let selectionUnsubscribe: (() => void) | null = null;
+
+    const cancelReady = this.onContextReady((context) => {
+      if (unsubscribed) {
+        return;
+      }
+
+      const attach = (robotId: string | null) => {
+        if (unsubscribed) {
+          return;
+        }
+        const targetId = robotId ?? this.getActiveRobotId(context);
+        const robotCore = context.getRobotCore(targetId);
+        if (!robotCore) {
+          return;
+        }
+        teardown?.();
+        teardown = robotCore.subscribeSlots(listener);
+      };
+
+      selectionUnsubscribe = this.subscribeRobotSelection((robotId) => {
+        attach(robotId);
+      });
+
+      attach(this.pendingSelection);
+    });
+
+    return () => {
+      unsubscribed = true;
+      cancelReady();
+      selectionUnsubscribe?.();
+      selectionUnsubscribe = null;
       teardown?.();
       teardown = null;
     };

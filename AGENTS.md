@@ -28,3 +28,8 @@ These guidelines apply to the entire repository.
 - Every non-documentation task must include appropriate automated coverage. Add or extend unit tests and Playwright scenarios alongside the feature work, and run `npm test`, `npm run typecheck`, and `npx playwright test` before concluding the task.
 - The codebase now uses TypeScript. Run `npm run typecheck` alongside existing checks when modifying source files, and prefer `npx tsx` for executing Node-based tooling.
 - Playwright UI checks run in CI. When setting up the environment locally, run `npx playwright install --with-deps` after installing npm packages so the browsers and system dependencies are present.
+
+## Planning Prompts
+- When planning a task or spotting assumptions, draft targeted clarification questions and point the user to the `npm run ask` helper.
+- Share the `npm run ask -- --questions '<json>'` command (or `--file` alternative) so the user can quickly gather their answers with the questionnaire tool.
+- Incorporate the returned responses directly into the plan before committing to an implementation direction.

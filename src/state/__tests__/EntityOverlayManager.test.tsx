@@ -26,6 +26,20 @@ describe('EntityOverlayManager', () => {
     expect(result.current.selectedEntityId).toBe(1);
   });
 
+  it('opens an overlay and defaults to the info tab for simple entities', () => {
+    const { result } = renderHook(() => useEntityOverlayManager(), {
+      wrapper: EntityOverlayManagerProvider,
+    });
+
+    act(() => {
+      result.current.openOverlay(createOverlayData(8 as EntityId, 'simple'));
+    });
+
+    expect(result.current.isOpen).toBe(true);
+    expect(result.current.activeTab).toBe('info');
+    expect(result.current.selectedEntityId).toBe(8);
+  });
+
   it('supports specifying an initial tab when opening', () => {
     const { result } = renderHook(() => useEntityOverlayManager(), {
       wrapper: EntityOverlayManagerProvider,

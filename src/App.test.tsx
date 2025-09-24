@@ -63,17 +63,20 @@ const dispatchCancelableTouchMove = (
   return preventDefaultSpy;
 };
 
-const renderAppWithOverlay = () => {
+const renderAppWithOverlay = async () => {
   render(<App />);
   const programButtons = screen.getAllByTestId('select-robot');
   const programButton = programButtons[programButtons.length - 1];
-  fireEvent.click(programButton);
-  expect(screen.getAllByTestId('robot-programming-overlay').length).toBeGreaterThan(0);
+  await act(async () => {
+    fireEvent.click(programButton);
+  });
+  const overlays = await screen.findAllByTestId('entity-overlay');
+  expect(overlays.length).toBeGreaterThan(0);
 };
 
 describe('block workspace drag and drop', () => {
-  it('allows dragging a palette block into the workspace root', () => {
-    renderAppWithOverlay();
+  it('allows dragging a palette block into the workspace root', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -87,8 +90,8 @@ describe('block workspace drag and drop', () => {
     expect(within(workspace).getByTestId('block-repeat')).toBeInTheDocument();
   });
 
-  it('supports dropping blocks into C-shaped slots', () => {
-    renderAppWithOverlay();
+  it('supports dropping blocks into C-shaped slots', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -112,8 +115,8 @@ describe('block workspace drag and drop', () => {
     expect(within(repeatBlock).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('moves existing blocks between containers', () => {
-    renderAppWithOverlay();
+  it('moves existing blocks between containers', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -148,8 +151,8 @@ describe('block workspace drag and drop', () => {
     expect(within(updatedRepeat).queryByTestId('block-move')).toBeNull();
   });
 
-  it('allows event blocks to host starting behaviours', () => {
-    renderAppWithOverlay();
+  it('allows event blocks to host starting behaviours', async () => {
+    await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -173,8 +176,8 @@ describe('block workspace drag and drop', () => {
     expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('populates both branches of a parallel block', () => {
-    renderAppWithOverlay();
+  it('populates both branches of a parallel block', async () => {
+    await renderAppWithOverlay();
 
     const [parallelPaletteItem] = screen.getAllByTestId('palette-parallel');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -206,8 +209,8 @@ describe('block workspace drag and drop', () => {
     expect(within(parallelBlock).getByTestId('block-turn')).toBeInTheDocument();
   });
 
-  it('prevents dropping a block into its own descendant', () => {
-    renderAppWithOverlay();
+  it('prevents dropping a block into its own descendant', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -240,7 +243,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('restores saved workspaces when switching between robots', async () => {
-    renderAppWithOverlay();
+    await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const initialDropzone = getWorkspaceDropzone();
@@ -308,7 +311,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('allows dropping a palette block into the workspace root via touch', async () => {
-    renderAppWithOverlay();
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -327,7 +330,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('places palette blocks into nested slots when using touch input', async () => {
-    renderAppWithOverlay();
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -355,8 +358,8 @@ describe('block workspace drag and drop', () => {
     restoreElementFromPoint();
   });
 
-  it('prevents default behaviour while dragging a palette block with touch', () => {
-    renderAppWithOverlay();
+  it('prevents default behaviour while dragging a palette block with touch', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
 
@@ -369,7 +372,7 @@ describe('block workspace drag and drop', () => {
   });
 
   it('prevents default behaviour while dragging a workspace block with touch', async () => {
-    renderAppWithOverlay();
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -390,7 +393,7 @@ describe('block workspace drag and drop', () => {
     expect(preventDefault).toHaveBeenCalled();
   });
   it('compiles user-authored literals, signals, and operator expressions when Run Program is pressed', async () => {
-    renderAppWithOverlay();
+    await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();

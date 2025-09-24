@@ -9,6 +9,7 @@ import {
   type SimulationTelemetrySnapshot,
 } from './runtime/ecsBlackboard';
 import { createSimulationWorld, DEFAULT_ROBOT_ID, type SimulationWorldContext } from './runtime/simulationWorld';
+import type { EntityId } from './ecs/world';
 import type { InventorySnapshot } from './robot/inventory';
 
 interface TickPayload {
@@ -18,7 +19,7 @@ interface TickPayload {
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
-type RobotSelectionListener = (robotId: string | null) => void;
+type RobotSelectionListener = (robotId: string | null, entityId: EntityId | null) => void;
 type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
   robotId: string | null,
@@ -330,7 +331,11 @@ export class RootScene {
 
   subscribeRobotSelection(listener: RobotSelectionListener): () => void {
     this.selectionListeners.add(listener);
-    listener(this.pendingSelection);
+    const entityId =
+      this.pendingSelection && this.context
+        ? this.context.getRobotEntity(this.pendingSelection) ?? null
+        : null;
+    listener(this.pendingSelection, entityId);
     return () => {
       this.selectionListeners.delete(listener);
     };
@@ -472,8 +477,10 @@ export class RootScene {
         }
       }
     }
+    const entityId =
+      robotId && this.context ? this.context.getRobotEntity(robotId) ?? null : null;
     for (const listener of this.selectionListeners) {
-      listener(robotId);
+      listener(robotId, entityId);
     }
     this.updateProgramStatusForSelection();
     this.captureTelemetrySnapshot(true);

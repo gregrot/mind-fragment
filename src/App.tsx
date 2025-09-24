@@ -1,19 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import SimulationShell from './simulation/SimulationShell';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
-import SimulationOverlay, { type OverlayTab } from './components/SimulationOverlay';
 import OnboardingFlow from './onboarding/OnboardingFlow';
 import { useRobotSelection } from './hooks/useRobotSelection';
 import { simulationRuntime } from './state/simulationRuntime';
+import {
+  EntityOverlayManagerProvider,
+  useEntityOverlayManager,
+} from './state/EntityOverlayManager';
+import { ProgrammingInspectorProvider } from './state/ProgrammingInspectorContext';
+import EntityOverlay from './components/EntityOverlay';
+import { ensureDefaultInspectorsRegistered } from './overlay/defaultInspectors';
 import type { WorkspaceState } from './types/blocks';
+import type { EntityOverlayData } from './types/overlay';
+import type { EntityId } from './simulation/ecs/world';
 import styles from './styles/App.module.css';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
 
-const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+ensureDefaultInspectorsRegistered();
 
-const App = (): JSX.Element => {
+const buildRobotOverlayData = (robotId: string, entityId: EntityId): EntityOverlayData => ({
+  entityId,
+  name: `Robot ${robotId}`,
+  description: `Configure systems and programming for chassis ${robotId}.`,
+  overlayType: 'complex',
+});
+
+const AppContent = (): JSX.Element => {
   const {
     workspace,
     handleDrop,
@@ -22,56 +37,74 @@ const App = (): JSX.Element => {
     updateBlockInstance,
     removeBlockInstance,
   } = useBlockWorkspace();
-  const { selectedRobotId, clearSelection } = useRobotSelection();
-  const [isOverlayOpen, setOverlayOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<OverlayTab>('inventory');
+  const { selectedRobotId, selectedEntityId, clearSelection } = useRobotSelection();
+  const {
+    isOpen,
+    activeTab,
+    openOverlay,
+    closeOverlay,
+    selectedEntityId: overlayEntityId,
+  } = useEntityOverlayManager();
   const [robotPrograms, setRobotPrograms] = useState<Record<string, WorkspaceState>>({});
   const [workspaceRobotId, setWorkspaceRobotId] = useState<string>(
     () => selectedRobotId ?? DEFAULT_ROBOT_ID,
   );
+
   const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
 
-  const openOverlay = useCallback((tab: OverlayTab) => {
-    setActiveTab(tab);
-    setOverlayOpen(true);
-  }, []);
-
-  const handleTabChange = useCallback(
-    (tab: OverlayTab) => {
-      if (tab === 'programming' && !selectedRobotId) {
-        simulationRuntime.setSelectedRobot(DEFAULT_ROBOT_ID);
+  const resolveEntityId = useCallback(
+    (entityId: EntityId | null): EntityId => {
+      if (entityId !== null && entityId !== undefined) {
+        return entityId;
       }
-      setActiveTab(tab);
+      if (overlayEntityId !== null) {
+        return overlayEntityId;
+      }
+      return 0 as EntityId;
     },
-    [selectedRobotId],
+    [overlayEntityId],
   );
 
-  const handleProgramRobot = useCallback(() => {
-    simulationRuntime.setSelectedRobot(DEFAULT_ROBOT_ID);
-    openOverlay('programming');
-  }, [openOverlay]);
+  const openOverlayForRobot = useCallback(
+    (robotId: string, entityId: EntityId | null, initialTab?: 'systems' | 'programming' | 'info') => {
+      const resolvedEntity = resolveEntityId(entityId);
+      openOverlay(buildRobotOverlayData(robotId, resolvedEntity), { initialTab });
+    },
+    [openOverlay, resolveEntityId],
+  );
 
-  const handleRobotSelect = useCallback(() => {
-    openOverlay('programming');
-  }, [openOverlay]);
+  const handleEntitySelect = useCallback(
+    ({ robotId, entityId }: { robotId: string; entityId: EntityId }) => {
+      openOverlayForRobot(robotId, entityId, 'systems');
+    },
+    [openOverlayForRobot],
+  );
+
+  const handleEntityClear = useCallback(() => {
+    closeOverlay();
+  }, [closeOverlay]);
+
+  const handleProgramRobot = useCallback(() => {
+    const robotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
+    const resolvedEntity = resolveEntityId(selectedEntityId ?? overlayEntityId ?? null);
+    simulationRuntime.setSelectedRobot(robotId, resolvedEntity);
+    openOverlayForRobot(robotId, resolvedEntity, 'programming');
+  }, [openOverlayForRobot, overlayEntityId, resolveEntityId, selectedEntityId, selectedRobotId]);
+
+  const handleTabShortcut = useCallback(
+    (tab: 'systems' | 'info' | 'programming') => {
+      const robotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
+      const resolvedEntity = resolveEntityId(selectedEntityId ?? overlayEntityId ?? null);
+      simulationRuntime.setSelectedRobot(robotId, resolvedEntity);
+      openOverlayForRobot(robotId, resolvedEntity, tab);
+    },
+    [openOverlayForRobot, overlayEntityId, resolveEntityId, selectedEntityId, selectedRobotId],
+  );
 
   const handleOverlayClose = useCallback(() => {
-    setOverlayOpen(false);
+    closeOverlay();
     clearSelection();
-  }, [clearSelection]);
-
-  useEffect(() => {
-    if (selectedRobotId) {
-      if (!isOverlayOpen) {
-        setActiveTab('programming');
-      }
-      return;
-    }
-
-    if (isOverlayOpen && activeTab === 'programming') {
-      setOverlayOpen(false);
-    }
-  }, [activeTab, isOverlayOpen, selectedRobotId]);
+  }, [clearSelection, closeOverlay]);
 
   useEffect(() => {
     if (workspaceRobotId === activeRobotId) {
@@ -116,7 +149,7 @@ const App = (): JSX.Element => {
         return true;
       }
 
-      return EDITABLE_TAGS.has(target.tagName);
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
     };
 
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -132,26 +165,18 @@ const App = (): JSX.Element => {
 
       const key = event.key.toLowerCase();
 
-      if (key === 'escape') {
-        handleOverlayClose();
+      if (key === 's') {
+        handleTabShortcut('systems');
         return;
       }
 
       if (key === 'i') {
-        if (isOverlayOpen && activeTab === 'inventory') {
-          setOverlayOpen(false);
-        } else {
-          openOverlay('inventory');
-        }
+        handleTabShortcut('info');
         return;
       }
 
-      if (key === 'c') {
-        if (isOverlayOpen && activeTab === 'catalog') {
-          setOverlayOpen(false);
-        } else {
-          openOverlay('catalog');
-        }
+      if (key === 'p') {
+        handleProgramRobot();
       }
     };
 
@@ -160,51 +185,53 @@ const App = (): JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeTab, handleOverlayClose, isOverlayOpen, openOverlay]);
+  }, [handleProgramRobot, handleTabShortcut]);
+
+  const programmingContextValue = useMemo(
+    () => ({
+      workspace,
+      onDrop: handleDrop,
+      onTouchDrop: handleTouchDrop,
+      onUpdateBlock: updateBlockInstance,
+      onRemoveBlock: removeBlockInstance,
+      robotId: activeRobotId,
+    }),
+    [activeRobotId, handleDrop, handleTouchDrop, removeBlockInstance, updateBlockInstance, workspace],
+  );
 
   return (
     <div className={styles.appShell}>
-      <SimulationShell onRobotSelect={handleRobotSelect} />
+      <SimulationShell onEntitySelect={handleEntitySelect} onEntityClear={handleEntityClear} />
       <div className={styles.controlBar} role="toolbar" aria-label="Simulation interface controls">
         <button
           type="button"
           className={styles.controlButton}
-          onClick={() => openOverlay('inventory')}
-          data-active={isOverlayOpen && activeTab === 'inventory'}
+          onClick={() => handleTabShortcut('systems')}
+          data-active={isOpen && activeTab === 'systems'}
         >
-          Inventory
+          Systems
         </button>
         <button
           type="button"
           className={styles.controlButton}
-          onClick={() => openOverlay('catalog')}
-          data-active={isOverlayOpen && activeTab === 'catalog'}
+          onClick={() => handleTabShortcut('info')}
+          data-active={isOpen && activeTab === 'info'}
         >
-          Catalogue
+          Info
         </button>
         <button
           type="button"
           className={`${styles.controlButton} ${styles.controlButtonPrimary}`}
           onClick={handleProgramRobot}
-          data-active={isOverlayOpen && activeTab === 'programming'}
+          data-active={isOpen && activeTab === 'programming'}
           data-testid="select-robot"
         >
           Program robot
         </button>
       </div>
-      <SimulationOverlay
-        isOpen={isOverlayOpen}
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onClose={handleOverlayClose}
-        onConfirm={handleOverlayClose}
-        workspace={workspace}
-        onDrop={handleDrop}
-        onTouchDrop={handleTouchDrop}
-        onUpdateBlock={updateBlockInstance}
-        onRemoveBlock={removeBlockInstance}
-        robotId={activeRobotId}
-      />
+      <ProgrammingInspectorProvider value={programmingContextValue}>
+        <EntityOverlay onClose={handleOverlayClose} />
+      </ProgrammingInspectorProvider>
       {ONBOARDING_ENABLED ? (
         <OnboardingFlow
           replaceWorkspace={replaceWorkspace}
@@ -212,6 +239,14 @@ const App = (): JSX.Element => {
         />
       ) : null}
     </div>
+  );
+};
+
+const App = (): JSX.Element => {
+  return (
+    <EntityOverlayManagerProvider>
+      <AppContent />
+    </EntityOverlayManagerProvider>
   );
 };
 

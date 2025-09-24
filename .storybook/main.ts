@@ -35,6 +35,12 @@ const config: StorybookConfig = {
       config.resolve.extensions = extensions;
     }
 
+    if (config.output) {
+      config.output.publicPath = './';
+    } else {
+      config.output = { publicPath: './' };
+    }
+
     return config;
   },
 };

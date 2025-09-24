@@ -5,6 +5,7 @@ import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import { DEFAULT_ROBOT_ID } from '../simulation/runtime/simulationWorld';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
 import type { InventorySnapshot } from '../simulation/robot/inventory';
+import type { ChassisSnapshot } from '../simulation/robot';
 import type { EntityId } from '../simulation/ecs/world';
 
 type StatusListener = (status: ProgramRunnerStatus) => void;
@@ -14,6 +15,7 @@ type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
   robotId: string | null,
 ) => void;
+type ChassisListener = (snapshot: ChassisSnapshot) => void;
 
 const EMPTY_INVENTORY_SNAPSHOT: InventorySnapshot = {
   capacity: 0,
@@ -27,18 +29,26 @@ const EMPTY_TELEMETRY_SNAPSHOT: SimulationTelemetrySnapshot = {
   actions: {},
 };
 
+const EMPTY_CHASSIS_SNAPSHOT: ChassisSnapshot = {
+  capacity: 0,
+  slots: [],
+};
+
 class SimulationRuntime {
   private scene: RootScene | null = null;
   private readonly pendingPrograms = new Map<string, CompiledProgram>();
   private readonly statusListeners = new Map<string, Set<StatusListener>>();
   private readonly statusByRobot = new Map<string, ProgramRunnerStatus>();
   private readonly inventoryListeners = new Set<InventoryListener>();
+  private readonly chassisListeners = new Set<ChassisListener>();
   private readonly selectionListeners = new Set<SelectionListener>();
   private readonly telemetryListeners = new Set<TelemetryListener>();
   private unsubscribeScene: (() => void) | null = null;
   private sceneInventoryUnsubscribe: (() => void) | null = null;
+  private sceneChassisUnsubscribe: (() => void) | null = null;
   private sceneTelemetryUnsubscribe: (() => void) | null = null;
   private inventorySnapshot: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT;
+  private chassisSnapshot: ChassisSnapshot = EMPTY_CHASSIS_SNAPSHOT;
   private telemetrySnapshot: SimulationTelemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
   private telemetryRobotId: string | null = null;
   private readonly telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
@@ -53,6 +63,7 @@ class SimulationRuntime {
 
     this.unsubscribeScene?.();
     this.teardownInventorySubscription();
+    this.teardownChassisSubscription();
     this.sceneTelemetryUnsubscribe?.();
     this.telemetrySnapshots.clear();
     this.scene = scene;
@@ -63,6 +74,8 @@ class SimulationRuntime {
     const activeRobotId = this.selectedRobotId ?? DEFAULT_ROBOT_ID;
     this.updateInventorySnapshot(scene.getInventorySnapshot(activeRobotId));
     this.ensureInventorySubscription();
+    this.updateChassisSnapshot(scene.getChassisSnapshot(activeRobotId));
+    this.ensureChassisSubscription();
     this.sceneTelemetryUnsubscribe = scene.subscribeTelemetry((snapshot, robotId) => {
       this.handleSceneTelemetry(snapshot, robotId);
     });
@@ -90,6 +103,7 @@ class SimulationRuntime {
     this.unsubscribeScene?.();
     this.unsubscribeScene = null;
     this.teardownInventorySubscription();
+    this.teardownChassisSubscription();
     this.sceneTelemetryUnsubscribe?.();
     this.sceneTelemetryUnsubscribe = null;
     this.scene = null;
@@ -98,6 +112,7 @@ class SimulationRuntime {
       this.updateStatus(robotId, 'idle');
     }
     this.updateInventorySnapshot(EMPTY_INVENTORY_SNAPSHOT);
+    this.updateChassisSnapshot(EMPTY_CHASSIS_SNAPSHOT);
     this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, null);
     this.telemetrySnapshots.clear();
     this.updateSelectedRobot(null, null);
@@ -159,6 +174,29 @@ class SimulationRuntime {
 
   getInventorySnapshot(): InventorySnapshot {
     return this.inventorySnapshot;
+  }
+
+  subscribeChassis(listener: ChassisListener): () => void {
+    this.chassisListeners.add(listener);
+    listener(this.chassisSnapshot);
+    this.ensureChassisSubscription();
+    return () => {
+      this.chassisListeners.delete(listener);
+      if (this.chassisListeners.size === 0) {
+        this.teardownChassisSubscription();
+      }
+    };
+  }
+
+  getChassisSnapshot(robotId: string | null = this.selectedRobotId): ChassisSnapshot {
+    const targetRobotId = this.normaliseRobotId(robotId);
+    if (targetRobotId === this.normaliseRobotId(this.selectedRobotId)) {
+      return this.chassisSnapshot;
+    }
+    if (this.scene) {
+      return this.scene.getChassisSnapshot(targetRobotId);
+    }
+    return EMPTY_CHASSIS_SNAPSHOT;
   }
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
@@ -258,12 +296,36 @@ class SimulationRuntime {
     }
   }
 
+  private updateChassisSnapshot(snapshot: ChassisSnapshot): void {
+    this.chassisSnapshot = snapshot;
+    for (const listener of this.chassisListeners) {
+      listener(snapshot);
+    }
+  }
+
+  private ensureChassisSubscription(): void {
+    if (!this.scene || this.chassisListeners.size === 0 || this.sceneChassisUnsubscribe) {
+      return;
+    }
+    this.sceneChassisUnsubscribe = this.scene.subscribeChassis((snapshot) => {
+      this.updateChassisSnapshot(snapshot);
+    });
+  }
+
+  private teardownChassisSubscription(): void {
+    if (this.sceneChassisUnsubscribe) {
+      this.sceneChassisUnsubscribe();
+      this.sceneChassisUnsubscribe = null;
+    }
+  }
+
   private updateSelectedRobot(selectedRobotId: string | null, entityId: EntityId | null): void {
     if (this.selectedRobotId === selectedRobotId && this.selectedEntityId === entityId) {
       return;
     }
     this.selectedRobotId = selectedRobotId;
     this.selectedEntityId = entityId;
+    this.applyChassisForSelection(selectedRobotId);
     for (const listener of this.selectionListeners) {
       listener({ robotId: selectedRobotId, entityId });
     }
@@ -285,6 +347,15 @@ class SimulationRuntime {
       return;
     }
     this.notifyTelemetryListeners(snapshot, robotId);
+  }
+
+  private applyChassisForSelection(robotId: string | null): void {
+    const targetRobotId = this.normaliseRobotId(robotId);
+    if (this.scene) {
+      this.updateChassisSnapshot(this.scene.getChassisSnapshot(targetRobotId));
+      return;
+    }
+    this.updateChassisSnapshot(EMPTY_CHASSIS_SNAPSHOT);
   }
 
   private applyTelemetryForSelection(robotId: string | null): void {

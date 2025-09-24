@@ -1,22 +1,9 @@
 import type { EntityId } from '../simulation/ecs/world';
+import type { SlotSchema } from './slots';
 
 export type OverlayType = 'complex' | 'simple';
 
 export type InspectorTabId = 'systems' | 'programming' | 'info';
-
-export interface SlotMetadata {
-  stackable: boolean;
-  moduleSubtype?: string;
-  locked: boolean;
-}
-
-export interface SlotSchema {
-  id: string;
-  index: number;
-  occupantId: string | null;
-  stackCount?: number;
-  metadata: SlotMetadata;
-}
 
 export interface EntityOverlayData {
   entityId: EntityId;

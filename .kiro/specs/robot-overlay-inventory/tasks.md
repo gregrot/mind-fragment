@@ -39,7 +39,7 @@
   - Write tests for chassis inspector functionality
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
 
-- [ ] 6. Extend RobotChassis with slot schema support
+- [✅] 6. Extend RobotChassis with slot schema support
   - Add slot-based access methods to ModuleStack
   - Implement slot schema conversion utilities
   - Add module attachment/detachment event handling
@@ -47,7 +47,7 @@
   - Write tests for chassis data integration
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 7. Implement InventoryInspector component
+- [✅] 7. Implement InventoryInspector component
   - Create inventory slot rendering with item display
   - Add stack count visualization and management
   - Implement inventory-specific drag-and-drop handlers

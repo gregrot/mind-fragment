@@ -1,6 +1,6 @@
 import type { RobotModule, ResolvedRobotModuleDefinition } from './RobotModule';
 
-const DEFAULT_SLOT = 'stack';
+export const DEFAULT_SLOT = 'stack';
 
 const ensureNumber = (value: unknown, fallback: number): number =>
   Number.isFinite(value) ? (value as number) : fallback;
@@ -25,6 +25,13 @@ export interface ModuleSnapshot {
   provides: string[];
   requires: string[];
   capacityCost: number;
+}
+
+export interface ModuleSlotOccupant {
+  slot: string;
+  index: number;
+  moduleId: string;
+  metadata: ModuleMetadata;
 }
 
 export class ModuleStack {
@@ -58,6 +65,35 @@ export class ModuleStack {
 
   hasCapability(capability: string): boolean {
     return this.capabilities.has(capability);
+  }
+
+  getSlotOccupant(slot: string, index: number): ModuleSlotOccupant | null {
+    for (const [moduleId, metadata] of this.moduleMeta.entries()) {
+      if (metadata.slot === slot && metadata.index === index) {
+        return {
+          slot,
+          index,
+          moduleId,
+          metadata: { ...metadata },
+        };
+      }
+    }
+    return null;
+  }
+
+  listSlotOccupants(): ModuleSlotOccupant[] {
+    return this.modules.map((module) => {
+      const metadata = this.moduleMeta.get(module.definition.id);
+      if (!metadata) {
+        throw new Error(`No metadata found for module ${module.definition.id}.`);
+      }
+      return {
+        slot: metadata.slot,
+        index: metadata.index,
+        moduleId: module.definition.id,
+        metadata: { ...metadata },
+      };
+    });
   }
 
   attach(module: RobotModule): ModuleMetadata {

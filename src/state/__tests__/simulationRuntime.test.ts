@@ -4,6 +4,7 @@ import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram
 import { DEFAULT_ROBOT_ID } from '../../simulation/runtime/simulationWorld';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
+import type { ChassisSnapshot } from '../../simulation/robot';
 import type { ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 
@@ -11,6 +12,8 @@ const createSceneStub = () => {
   const statusListeners: Array<(status: ProgramRunnerStatus, robotId: string) => void> = [];
   const telemetryListeners: Array<(snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void> = [];
   const telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
+  const chassisListeners: Array<(snapshot: ChassisSnapshot) => void> = [];
+  let chassisSnapshot: ChassisSnapshot = { capacity: 0, slots: [] };
   let selectedRobotId: string | null = null;
   return {
     subscribeProgramStatus: vi.fn((listener: (status: ProgramRunnerStatus, robotId: string) => void) => {
@@ -37,6 +40,17 @@ const createSceneStub = () => {
       };
     }),
     getTelemetrySnapshot: vi.fn((robotId: string = DEFAULT_ROBOT_ID) => telemetrySnapshots.get(robotId) ?? { values: {}, actions: {} }),
+    subscribeChassis: vi.fn((listener: (snapshot: ChassisSnapshot) => void) => {
+      chassisListeners.push(listener);
+      listener(chassisSnapshot);
+      return () => {
+        const index = chassisListeners.indexOf(listener);
+        if (index >= 0) {
+          chassisListeners.splice(index, 1);
+        }
+      };
+    }),
+    getChassisSnapshot: vi.fn(() => chassisSnapshot),
     getSelectedRobot: vi.fn(() => selectedRobotId),
     selectRobot: vi.fn((robotId: string) => {
       selectedRobotId = robotId;
@@ -55,9 +69,16 @@ const createSceneStub = () => {
         listener(snapshot, robotId);
       }
     },
+    triggerChassis: (snapshot: ChassisSnapshot) => {
+      chassisSnapshot = snapshot;
+      for (const listener of chassisListeners) {
+        listener(snapshot);
+      }
+    },
   } as unknown as RootScene & {
     triggerStatus: (robotId: string, status: ProgramRunnerStatus) => void;
     triggerTelemetry: (robotId: string, snapshot: SimulationTelemetrySnapshot) => void;
+    triggerChassis: (snapshot: ChassisSnapshot) => void;
   };
 };
 

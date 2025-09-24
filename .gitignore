@@ -6,3 +6,4 @@ yarn-error.log*
 pnpm-lock.yaml
 dist
 .vite
+storybook-static/

@@ -10,6 +10,33 @@ const config: StorybookConfig = {
   docs: {
     autodocs: 'tag',
   },
+  webpackFinal: async (config) => {
+    config.module?.rules?.push({
+      test: /\.tsx?$/,
+      exclude: /node_modules/,
+      use: [
+        {
+          loader: 'ts-loader',
+          options: {
+            transpileOnly: true,
+          },
+        },
+      ],
+    });
+
+    if (config.resolve) {
+      const extensions = config.resolve.extensions ?? [];
+      if (!extensions.includes('.ts')) {
+        extensions.push('.ts');
+      }
+      if (!extensions.includes('.tsx')) {
+        extensions.push('.tsx');
+      }
+      config.resolve.extensions = extensions;
+    }
+
+    return config;
+  },
 };
 
 export default config;

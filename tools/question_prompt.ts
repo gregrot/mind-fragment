@@ -33,6 +33,9 @@ interface CliOptions {
 function printUsage(scriptName: string): void {
   const usage = `Usage: tsx ${scriptName} --questions '<json>' [--output responses.json]\n` +
     `       tsx ${scriptName} --file questions.json [--output responses.json]\n\n` +
+    `Most workflows should prefer the npm script:\n` +
+    `  npm run ask -- --file questions.json\n` +
+    `  npm run ask -- --questions '[{ "id": "goal", "prompt": "What do you need?" }]'\n\n` +
     `Provide the questions as a JSON array. Each entry should include:\n` +
     `  - id (string, required)\n` +
     `  - prompt (string, required)\n` +
@@ -90,6 +93,10 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 async function loadQuestions(options: CliOptions): Promise<Question[]> {
+  if (options.questionsJson && options.questionsFile) {
+    throw new Error('Provide either --questions or --file, not both.');
+  }
+
   if (options.questionsJson) {
     return parseQuestions(options.questionsJson, 'command line');
   }

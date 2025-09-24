@@ -18,6 +18,7 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 ### Planning
 - [Block Programming Plan](docs/planning/block-programming.md) — Architectural goals, player flow, and implementation priorities for the editor and runtime we need to recreate first.
 - [Programmable Robot MVP Task List](docs/planning/programmable-robot-mvp.md) — Task breakdown for delivering a PixiJS-powered, modular robot sandbox that players can programme.
+- [Robot Overlay, Chassis, and Inventory Spec](docs/planning/robot-overlay-and-inventory.md) — Interaction spec covering the rebuilt inspector overlay, chassis slots, inventory rules, and drag-and-drop behaviour.
 - [ECS Blackboard Planning Notes](docs/planning/simulation/ecs-blackboard.md) — Survey of lightweight blackboard patterns and the facts/events our ECS runtime should expose.
 - [Release Notes — Parameterised Block Editor](docs/planning/release-notes.md) — Running log of editor/runtime shifts so downstream tasks inherit the latest schema expectations.
 

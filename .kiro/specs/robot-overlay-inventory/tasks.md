@@ -63,7 +63,7 @@
   - Write tests for inventory data integration
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 9. Implement cross-inspector drag operations
+- [✅] 9. Implement cross-inspector drag operations
   - Add chassis-to-inventory drag handling
   - Add inventory-to-chassis drag handling
   - Implement module equipping from inventory

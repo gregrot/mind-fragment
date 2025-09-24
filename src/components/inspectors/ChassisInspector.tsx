@@ -35,6 +35,16 @@ const resolveBlueprint = (moduleId: string | null): ModuleBlueprint | null => {
   return MODULE_BLUEPRINT_MAP.get(moduleId) ?? null;
 };
 
+const isModulePayload = (session: DragSession): boolean => {
+  if (session.payload.itemType === 'module') {
+    return true;
+  }
+  if (session.payload.itemType === 'inventory-item') {
+    return resolveBlueprint(session.payload.id) !== null;
+  }
+  return false;
+};
+
 const describeSlotType = (slot: SlotSchema): string => {
   if (slot.metadata.locked) {
     return 'Locked slot';
@@ -204,16 +214,19 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const validateDrop = useCallback(
     (slot: SlotSchema, session: DragSession): DropValidationResult => {
-      if (session.payload.itemType !== 'module') {
+      if (session.payload.itemType === 'inventory-item' && resolveBlueprint(session.payload.id) === null) {
+        return { canDrop: false, reason: 'module-required' };
+      }
+      if (!isModulePayload(session)) {
         return { canDrop: false, reason: 'unsupported-item' };
       }
       if (slot.metadata.locked && session.source.slotId !== slot.id) {
         return { canDrop: false, reason: 'slot-locked' };
       }
-      if (session.source.type === 'chassis-slot') {
-        if (session.source.entityId !== entity.entityId) {
-          return { canDrop: false, reason: 'different-entity' };
-        }
+      if (session.source.entityId && session.source.entityId !== entity.entityId) {
+        return { canDrop: false, reason: 'different-entity' };
+      }
+      if (session.source.type === 'inventory-slot') {
         return { canDrop: true };
       }
       if (slot.metadata.locked) {
@@ -226,60 +239,85 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const handleDropOnSlot = useCallback(
     (targetSlotId: string, session: DragSession) => {
-      const chassis = entity.chassis;
+      const latestEntity = manager.getEntityData(entity.entityId) ?? entity;
+      const chassis = latestEntity.chassis;
       if (!chassis) {
         return;
       }
 
-      setSlots((currentSlots) => {
-        const next = currentSlots.map((slot) => ({ ...slot }));
-        const targetIndex = next.findIndex((slot) => slot.id === targetSlotId);
-        if (targetIndex === -1) {
-          return currentSlots;
+      const nextChassisSlots = chassis.slots.map((slot) => ({ ...slot }));
+      const targetIndex = nextChassisSlots.findIndex((slot) => slot.id === targetSlotId);
+      if (targetIndex === -1) {
+        return;
+      }
+
+      const targetSlot = nextChassisSlots[targetIndex]!;
+      let updatedInventorySlots: SlotSchema[] | undefined;
+
+      if (session.source.type === 'chassis-slot' && session.source.slotId) {
+        const sourceIndex = nextChassisSlots.findIndex((slot) => slot.id === session.source.slotId);
+        if (sourceIndex === -1 || sourceIndex === targetIndex) {
+          return;
         }
 
-        const targetSlot = next[targetIndex]!;
+        const sourceSlot = nextChassisSlots[sourceIndex]!;
+        const destinationSlot = nextChassisSlots[targetIndex]!;
 
-        if (session.source.type === 'chassis-slot' && session.source.slotId) {
-          const sourceIndex = next.findIndex((slot) => slot.id === session.source.slotId);
-          if (sourceIndex === -1) {
-            return currentSlots;
-          }
-          if (sourceIndex === targetIndex) {
-            return currentSlots;
-          }
-
-          const sourceSlot = next[sourceIndex]!;
-          const destinationSlot = next[targetIndex]!;
-
-          next[sourceIndex] = { ...sourceSlot, occupantId: destinationSlot.occupantId };
-          next[targetIndex] = { ...destinationSlot, occupantId: session.payload.id };
-
-          const sorted = sortSlots(next);
-          const updatedEntity = {
-            ...entity,
-            chassis: { capacity: chassis.capacity, slots: sorted },
-          };
-          Promise.resolve().then(() => {
-            manager.upsertEntityData(updatedEntity);
-          });
-          return sorted;
+        nextChassisSlots[sourceIndex] = { ...sourceSlot, occupantId: destinationSlot.occupantId };
+        nextChassisSlots[targetIndex] = { ...destinationSlot, occupantId: session.payload.id };
+      } else if (session.source.type === 'inventory-slot' && session.source.slotId) {
+        const inventory = latestEntity.inventory;
+        if (!inventory) {
+          return;
         }
 
-        if (targetSlot.occupantId === session.payload.id) {
-          return currentSlots;
+        const inventorySlots = inventory.slots.map((slot) => ({ ...slot }));
+        const sourceIndex = inventorySlots.findIndex((slot) => slot.id === session.source.slotId);
+        if (sourceIndex === -1) {
+          return;
         }
 
-        next[targetIndex] = { ...targetSlot, occupantId: session.payload.id };
-        const sorted = sortSlots(next);
-        const updatedEntity = {
-          ...entity,
-          chassis: { capacity: chassis.capacity, slots: sorted },
+        const sourceSlot = inventorySlots[sourceIndex]!;
+        if (!sourceSlot.occupantId) {
+          return;
+        }
+
+        inventorySlots[sourceIndex] = {
+          ...sourceSlot,
+          occupantId: targetSlot.occupantId ?? null,
+          stackCount: undefined,
         };
-        Promise.resolve().then(() => {
-          manager.upsertEntityData(updatedEntity);
-        });
-        return sorted;
+
+        nextChassisSlots[targetIndex] = { ...targetSlot, occupantId: session.payload.id };
+        updatedInventorySlots = inventorySlots;
+      } else {
+        if (targetSlot.occupantId === session.payload.id) {
+          return;
+        }
+
+        nextChassisSlots[targetIndex] = { ...targetSlot, occupantId: session.payload.id };
+      }
+
+      const sortedChassis = sortSlots(nextChassisSlots);
+      setSlots(sortedChassis);
+
+      const updatedEntity = {
+        ...latestEntity,
+        chassis: { capacity: chassis.capacity, slots: sortedChassis },
+      };
+
+      if (latestEntity.inventory) {
+        const nextInventory = updatedInventorySlots
+          ? sortSlots(updatedInventorySlots)
+          : latestEntity.inventory.slots;
+        updatedEntity.inventory = {
+          capacity: latestEntity.inventory.capacity,
+          slots: nextInventory,
+        };
+      }
+
+      Promise.resolve().then(() => {
+        manager.upsertEntityData(updatedEntity);
       });
     },
     [entity, manager],

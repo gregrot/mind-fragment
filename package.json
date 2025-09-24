@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "ask": "tsx tools/question_prompt.ts",
     "postinstall": "npx playwright install --with-deps"
   },
   "dependencies": {

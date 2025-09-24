@@ -25,7 +25,7 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
   const programButton = toolbar.getByRole('button', { name: 'Program robot' });
   await expect(programButton).toBeVisible();
   await programButton.click();
-  const overlay = page.getByTestId('robot-programming-overlay');
+  const overlay = page.getByTestId('entity-overlay');
   await expect(overlay).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Programming' })).toHaveAttribute('aria-selected', 'true');
   await overlay.getByRole('button', { name: 'Close' }).click();

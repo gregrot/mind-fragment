@@ -5,10 +5,11 @@ import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import { DEFAULT_ROBOT_ID } from '../simulation/runtime/simulationWorld';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
 import type { InventorySnapshot } from '../simulation/robot/inventory';
+import type { EntityId } from '../simulation/ecs/world';
 
 type StatusListener = (status: ProgramRunnerStatus) => void;
 type InventoryListener = (snapshot: InventorySnapshot) => void;
-type SelectionListener = (selectedRobotId: string | null) => void;
+type SelectionListener = (selection: { robotId: string | null; entityId: EntityId | null }) => void;
 type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
   robotId: string | null,
@@ -42,6 +43,7 @@ class SimulationRuntime {
   private telemetryRobotId: string | null = null;
   private readonly telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
   private selectedRobotId: string | null = null;
+  private selectedEntityId: EntityId | null = null;
   private hasAutoStartedDefault = false;
 
   registerScene(scene: RootScene): void {
@@ -98,7 +100,7 @@ class SimulationRuntime {
     this.updateInventorySnapshot(EMPTY_INVENTORY_SNAPSHOT);
     this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, null);
     this.telemetrySnapshots.clear();
-    this.updateSelectedRobot(null);
+    this.updateSelectedRobot(null, null);
     this.hasAutoStartedDefault = false;
   }
 
@@ -185,7 +187,7 @@ class SimulationRuntime {
 
   subscribeSelectedRobot(listener: SelectionListener): () => void {
     this.selectionListeners.add(listener);
-    listener(this.selectedRobotId);
+    listener({ robotId: this.selectedRobotId, entityId: this.selectedEntityId });
     return () => {
       this.selectionListeners.delete(listener);
     };
@@ -195,15 +197,19 @@ class SimulationRuntime {
     return this.selectedRobotId;
   }
 
-  setSelectedRobot(robotId: string): void {
+  getSelectedEntityId(): EntityId | null {
+    return this.selectedEntityId;
+  }
+
+  setSelectedRobot(robotId: string, entityId?: EntityId | null): void {
     this.scene?.selectRobot(robotId);
-    this.updateSelectedRobot(robotId);
+    this.updateSelectedRobot(robotId, entityId ?? null);
     this.applyTelemetryForSelection(robotId);
   }
 
   clearSelectedRobot(): void {
     this.scene?.clearRobotSelection();
-    this.updateSelectedRobot(null);
+    this.updateSelectedRobot(null, null);
     this.applyTelemetryForSelection(null);
   }
 
@@ -252,13 +258,14 @@ class SimulationRuntime {
     }
   }
 
-  private updateSelectedRobot(selectedRobotId: string | null): void {
-    if (this.selectedRobotId === selectedRobotId) {
+  private updateSelectedRobot(selectedRobotId: string | null, entityId: EntityId | null): void {
+    if (this.selectedRobotId === selectedRobotId && this.selectedEntityId === entityId) {
       return;
     }
     this.selectedRobotId = selectedRobotId;
+    this.selectedEntityId = entityId;
     for (const listener of this.selectionListeners) {
-      listener(selectedRobotId);
+      listener({ robotId: selectedRobotId, entityId });
     }
   }
 

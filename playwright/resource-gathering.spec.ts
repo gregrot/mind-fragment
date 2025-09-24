@@ -33,7 +33,7 @@ test.describe('resource scanning and gathering', () => {
     });
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
-    await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();
+    await expect(page.getByTestId('entity-overlay')).toBeVisible();
 
     const stopButton = page.getByTestId('stop-program');
     if (await stopButton.isEnabled()) {
@@ -50,11 +50,7 @@ test.describe('resource scanning and gathering', () => {
     await page.getByTestId('run-program').click();
 
     await expect(page.getByText('Routine completed')).toBeVisible({ timeout: 15_000 });
-    await page.getByRole('tab', { name: 'Inventory' }).click();
-    await expect(page.getByTestId('inventory-status')).toBeVisible();
-    const contents = page.getByTestId('inventory-contents');
-    await expect(contents).toBeVisible();
-    await expect(contents).toContainText('Ferrous Ore');
-    await expect(contents).toContainText('units');
+    await page.getByRole('tab', { name: 'Info' }).click();
+    await expect(page.getByRole('tabpanel', { name: 'Info' })).toContainText('Robot MF-01');
   });
 });

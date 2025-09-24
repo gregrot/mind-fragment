@@ -38,7 +38,7 @@ test.describe('block workspace drag-and-drop', () => {
     });
     await page.goto('/');
     await page.getByTestId('select-robot').last().click();
-    await expect(page.getByTestId('robot-programming-overlay')).toBeVisible();
+    await expect(page.getByTestId('entity-overlay')).toBeVisible();
 
     const stopButton = page.getByTestId('stop-program');
     if (await stopButton.isEnabled()) {

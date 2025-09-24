@@ -7,6 +7,7 @@ export type InspectorTabId = 'systems' | 'programming' | 'info';
 
 export interface EntityOverlayData {
   entityId: EntityId;
+  robotId?: string;
   name: string;
   description?: string;
   overlayType: OverlayType;
@@ -20,7 +21,7 @@ export interface EntityOverlayData {
   };
   programState?: {
     isRunning: boolean;
-    activeBlockId?: string;
+    activeBlockId?: string | null;
   };
   properties?: Record<string, unknown>;
 }

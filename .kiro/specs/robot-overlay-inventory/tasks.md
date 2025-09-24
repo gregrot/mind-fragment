@@ -71,7 +71,7 @@
   - Write tests for cross-inspector drag scenarios
   - _Requirements: 2.5, 2.6, 3.8, 3.9_
 
-- [ ] 10. Create ProgramInspector integration
+- [✅] 10. Create ProgramInspector integration
   - Adapt existing RobotProgrammingPanel for inspector framework
   - Add execution state awareness and read-only mode
   - Implement program lock state messaging and controls
@@ -79,7 +79,7 @@
   - Write tests for programming inspector integration
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 11. Implement immediate persistence system
+- [✅] 11. Implement immediate persistence system
   - Add automatic save triggers for all overlay changes
   - Create change event emission for system synchronization
   - Implement optimistic updates with error handling

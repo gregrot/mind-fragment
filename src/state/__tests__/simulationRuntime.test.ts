@@ -7,6 +7,7 @@ import type { RootScene } from '../../simulation/rootScene';
 import type { ChassisSnapshot } from '../../simulation/robot';
 import type { ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
+import type { SlotSchema } from '../../types/slots';
 
 const createSceneStub = () => {
   const statusListeners: Array<(status: ProgramRunnerStatus, robotId: string) => void> = [];
@@ -195,6 +196,45 @@ describe('simulationRuntime', () => {
     expect(simulationRuntime.getTelemetrySnapshot('MF-02')).toEqual(mf02Telemetry);
 
     simulationRuntime.unregisterScene(scene);
+  });
+
+  it('applies inventory overlay updates to the runtime snapshot', () => {
+    const slots: SlotSchema[] = [
+      { id: 'inventory-0', index: 0, occupantId: 'core.movement', stackCount: 1, metadata: { stackable: false, locked: false } },
+      { id: 'inventory-1', index: 1, occupantId: 'resource.ore', stackCount: 3, metadata: { stackable: true, locked: false } },
+      { id: 'inventory-2', index: 2, occupantId: null, metadata: { stackable: true, locked: false } },
+    ];
+
+    simulationRuntime.applyInventoryOverlayUpdate({ capacity: 4, slots });
+
+    const snapshot = simulationRuntime.getInventorySnapshot();
+    expect(snapshot.slotCapacity).toBe(4);
+    expect(snapshot.used).toBe(4);
+    expect(snapshot.available).toBe(0);
+    expect(snapshot.entries).toEqual([
+      { resource: 'core.movement', quantity: 1 },
+      { resource: 'resource.ore', quantity: 3 },
+    ]);
+    expect(snapshot.slots).toHaveLength(3);
+
+    simulationRuntime.applyInventoryOverlayUpdate({ capacity: 0, slots: [] });
+  });
+
+  it('applies chassis overlay updates to the runtime snapshot', () => {
+    const slots: SlotSchema[] = [
+      { id: 'chassis-0', index: 0, occupantId: 'core.movement', metadata: { stackable: false, locked: false } },
+      { id: 'chassis-1', index: 1, occupantId: 'sensor.survey', metadata: { stackable: false, locked: false } },
+    ];
+
+    simulationRuntime.applyChassisOverlayUpdate({ capacity: 2, slots });
+
+    const snapshot = simulationRuntime.getChassisSnapshot();
+    expect(snapshot.capacity).toBe(2);
+    expect(snapshot.slots).toHaveLength(2);
+    expect(snapshot.slots[0]?.occupantId).toBe('core.movement');
+    expect(snapshot.slots[1]?.occupantId).toBe('sensor.survey');
+
+    simulationRuntime.applyChassisOverlayUpdate({ capacity: 0, slots: [] });
   });
 });
 

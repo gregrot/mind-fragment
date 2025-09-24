@@ -13,9 +13,13 @@ interface RobotProgrammingPanelProps {
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock: (instanceId: string) => void;
-  onClose: () => void;
-  onConfirm: () => void;
   robotId: string;
+  isReadOnly?: boolean;
+  lockMessage?: string;
+  onRequestStop?: () => void;
+  moduleWarnings?: string[];
+  activeBlockId?: string | null;
+  warningBlockIds?: Set<string>;
 }
 
 const RobotProgrammingPanel = ({
@@ -24,15 +28,20 @@ const RobotProgrammingPanel = ({
   onTouchDrop,
   onUpdateBlock,
   onRemoveBlock,
-  onClose,
-  onConfirm,
   robotId,
+  isReadOnly = false,
+  lockMessage,
+  onRequestStop,
+  moduleWarnings,
+  activeBlockId,
+  warningBlockIds,
 }: RobotProgrammingPanelProps): JSX.Element => {
   const paletteRef = useRef<HTMLDivElement | null>(null);
   const telemetry = useRobotTelemetry();
-  const handleConfirm = useCallback(() => {
-    onConfirm();
-  }, [onConfirm]);
+  const resolvedLockMessage = lockMessage
+    ?? 'The routine is executing. Stop the program to edit blocks.';
+  const hasWarnings = Array.isArray(moduleWarnings) && moduleWarnings.length > 0;
+  const warningItems = moduleWarnings ?? [];
 
   useLayoutEffect(() => {
     const paletteList = paletteRef.current?.querySelector('[data-testid=\"block-palette-list\"]') as HTMLElement | null;
@@ -52,32 +61,61 @@ const RobotProgrammingPanel = ({
         </p>
       </div>
       <div className={styles.layout} data-testid="programming-layout">
-        <aside className={styles.palette} ref={paletteRef}>
+        <aside
+          className={styles.palette}
+          ref={paletteRef}
+          data-read-only={isReadOnly ? 'true' : undefined}
+        >
           <h4>Block palette</h4>
           <BlockPalette blocks={BLOCK_LIBRARY} onTouchDrop={onTouchDrop} />
         </aside>
-        <section className={styles.workspace}>
+        <section className={styles.workspace} data-read-only={isReadOnly ? 'true' : undefined}>
           <h4>Workspace</h4>
-          <Workspace
-            blocks={workspace}
-            onDrop={onDrop}
-            onTouchDrop={onTouchDrop}
-            onUpdateBlock={onUpdateBlock}
-            onRemoveBlock={onRemoveBlock}
-            telemetry={telemetry}
-          />
+          {isReadOnly ? (
+            <div className={styles.lockNotice} role="status" data-testid="program-lock-notice">
+              <div>
+                <strong className={styles.lockTitle}>Program running</strong>
+                <p className={styles.lockMessage}>{resolvedLockMessage}</p>
+              </div>
+              {onRequestStop ? (
+                <button
+                  type="button"
+                  className={styles.lockAction}
+                  onClick={() => onRequestStop?.()}
+                >
+                  Stop program
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {hasWarnings ? (
+            <div className={styles.warningPanel} role="alert" data-testid="module-warning-panel">
+              <h5 className={styles.warningTitle}>Missing modules detected</h5>
+              <ul className={styles.warningList}>
+                {warningItems.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className={styles.workspaceSurface}>
+            {isReadOnly ? <div className={styles.readOnlyOverlay} aria-hidden="true" /> : null}
+            <Workspace
+              blocks={workspace}
+              onDrop={onDrop}
+              onTouchDrop={onTouchDrop}
+              onUpdateBlock={onUpdateBlock}
+              onRemoveBlock={onRemoveBlock}
+              telemetry={telemetry}
+              activeBlockId={activeBlockId}
+              warningBlockIds={warningBlockIds}
+            />
+          </div>
         </section>
       </div>
       <footer className={styles.footer}>
         <RuntimeControls workspace={workspace} robotId={robotId} />
-        <div className={styles.actions}>
-          <button type="button" className={styles.secondary} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" className={styles.primary} onClick={handleConfirm}>
-            Deploy routine
-          </button>
-        </div>
+        <p className={styles.autosaveHint}>Changes save automatically while you edit.</p>
       </footer>
     </div>
   );

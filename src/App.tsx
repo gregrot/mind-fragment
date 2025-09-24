@@ -19,6 +19,7 @@ import type { ChassisSnapshot } from './simulation/robot';
 import type { InventorySnapshot } from './simulation/robot/inventory';
 import styles from './styles/App.module.css';
 import type { SlotSchema } from './types/slots';
+import type { ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
@@ -31,6 +32,20 @@ interface InventoryOverlayView {
   capacity: number;
   slots: SlotSchema[];
 }
+
+const resolveActiveBlockId = (workspace: WorkspaceState): string | null => {
+  if (workspace.length === 0) {
+    return null;
+  }
+
+  const startBlock = workspace.find((block) => block.type === 'start');
+  if (startBlock) {
+    const firstAction = startBlock.slots?.do?.[0];
+    return firstAction?.instanceId ?? startBlock.instanceId;
+  }
+
+  return workspace[0]?.instanceId ?? null;
+};
 
 const buildInventoryOverlayData = (snapshot: InventorySnapshot): InventoryOverlayView => {
   const sortedSlots = [...(snapshot.slots ?? [])].sort((a, b) => a.index - b.index);
@@ -83,8 +98,10 @@ const buildRobotOverlayData = (
   entityId: EntityId,
   chassis: ChassisSnapshot,
   inventory: InventoryOverlayView,
+  programState: EntityOverlayData['programState'],
 ): EntityOverlayData => ({
   entityId,
+  robotId,
   name: `Robot ${robotId}`,
   description: `Configure systems and programming for chassis ${robotId}.`,
   overlayType: 'complex',
@@ -93,6 +110,7 @@ const buildRobotOverlayData = (
     slots: chassis.slots,
   },
   inventory,
+  programState,
 });
 
 const AppContent = (): JSX.Element => {
@@ -147,6 +165,30 @@ const AppContent = (): JSX.Element => {
     setChassisSnapshot(simulationRuntime.getChassisSnapshot(selectedRobotId));
   }, [selectedRobotId]);
 
+  const getWorkspaceForRobot = useCallback(
+    (robotId: string): WorkspaceState => {
+      if (robotId === workspaceRobotId) {
+        return workspace;
+      }
+      return robotPrograms[robotId] ?? [];
+    },
+    [robotPrograms, workspace, workspaceRobotId],
+  );
+
+  const buildProgramStateForRobot = useCallback(
+    (
+      robotId: string,
+      statusOverride?: ProgramRunnerStatus,
+    ): EntityOverlayData['programState'] => {
+      const workspaceForRobot = getWorkspaceForRobot(robotId);
+      const status = statusOverride ?? simulationRuntime.getStatus(robotId);
+      const isRunning = status === 'running';
+      const activeBlockId = isRunning ? resolveActiveBlockId(workspaceForRobot) : null;
+      return { isRunning, activeBlockId };
+    },
+    [getWorkspaceForRobot],
+  );
+
   const resolveEntityId = useCallback(
     (entityId: EntityId | null): EntityId => {
       if (entityId !== null && entityId !== undefined) {
@@ -164,11 +206,12 @@ const AppContent = (): JSX.Element => {
     (robotId: string, entityId: EntityId | null, initialTab?: 'systems' | 'programming' | 'info') => {
       const resolvedEntity = resolveEntityId(entityId);
       const chassis = simulationRuntime.getChassisSnapshot(robotId);
-      openOverlay(buildRobotOverlayData(robotId, resolvedEntity, chassis, inventoryOverlay), {
+      const programState = buildProgramStateForRobot(robotId);
+      openOverlay(buildRobotOverlayData(robotId, resolvedEntity, chassis, inventoryOverlay, programState), {
         initialTab,
       });
     },
-    [inventoryOverlay, openOverlay, resolveEntityId],
+    [buildProgramStateForRobot, inventoryOverlay, openOverlay, resolveEntityId],
   );
 
   const handleEntitySelect = useCallback(
@@ -300,10 +343,13 @@ const AppContent = (): JSX.Element => {
     ) {
       return;
     }
-    upsertEntityData({
-      ...entity,
-      chassis: { capacity: chassisSnapshot.capacity, slots: chassisSnapshot.slots },
-    });
+    upsertEntityData(
+      {
+        ...entity,
+        chassis: { capacity: chassisSnapshot.capacity, slots: chassisSnapshot.slots },
+      },
+      { silent: true },
+    );
   }, [chassisSnapshot, getEntityData, overlayEntityId, upsertEntityData]);
 
   useEffect(() => {
@@ -321,11 +367,66 @@ const AppContent = (): JSX.Element => {
     ) {
       return;
     }
-    upsertEntityData({
-      ...entity,
-      inventory: { capacity: inventoryOverlay.capacity, slots: inventoryOverlay.slots },
-    });
+    upsertEntityData(
+      {
+        ...entity,
+        inventory: { capacity: inventoryOverlay.capacity, slots: inventoryOverlay.slots },
+      },
+      { silent: true },
+    );
   }, [getEntityData, inventoryOverlay, overlayEntityId, upsertEntityData]);
+
+  useEffect(() => {
+    if (overlayEntityId === null) {
+      return;
+    }
+    const entity = getEntityData(overlayEntityId);
+    if (!entity || entity.overlayType !== 'complex' || !entity.robotId) {
+      return;
+    }
+    const nextProgramState = buildProgramStateForRobot(entity.robotId);
+    const previousProgramState = entity.programState ?? { isRunning: false, activeBlockId: null };
+    if (
+      previousProgramState.isRunning !== nextProgramState?.isRunning
+      || previousProgramState.activeBlockId !== nextProgramState?.activeBlockId
+    ) {
+      upsertEntityData({ ...entity, programState: nextProgramState }, { silent: true });
+    }
+  }, [
+    buildProgramStateForRobot,
+    getEntityData,
+    overlayEntityId,
+    robotPrograms,
+    upsertEntityData,
+    workspace,
+  ]);
+
+  useEffect(() => {
+    const unsubscribe = simulationRuntime.subscribeStatus(activeRobotId, (status) => {
+      if (overlayEntityId === null) {
+        return;
+      }
+      const entity = getEntityData(overlayEntityId);
+      if (!entity || entity.overlayType !== 'complex' || entity.robotId !== activeRobotId) {
+        return;
+      }
+      const nextProgramState = buildProgramStateForRobot(activeRobotId, status);
+      const previousProgramState = entity.programState ?? { isRunning: false, activeBlockId: null };
+      if (
+        previousProgramState.isRunning !== nextProgramState?.isRunning
+        || previousProgramState.activeBlockId !== nextProgramState?.activeBlockId
+      ) {
+        upsertEntityData({ ...entity, programState: nextProgramState }, { silent: true });
+      }
+    });
+    return unsubscribe;
+  }, [
+    activeRobotId,
+    buildProgramStateForRobot,
+    getEntityData,
+    overlayEntityId,
+    upsertEntityData,
+  ]);
 
   const programmingContextValue = useMemo(
     () => ({

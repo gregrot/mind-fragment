@@ -1,13 +1,13 @@
 # Implementation Plan
 
-- [ ] 1. Create core overlay infrastructure and data models
+- [✅] 1. Create core overlay infrastructure and data models
   - Implement EntityOverlayManager context and provider
   - Create base Inspector interface and registration system
   - Define unified SlotSchema and EntityOverlayData types
   - Write unit tests for overlay state management
   - _Requirements: 1.1, 1.5, 6.1, 6.2_
 
-- [ ] 2. Implement entity selection and overlay lifecycle
+- [✅] 2. Implement entity selection and overlay lifecycle
   - Add entity click handlers to ECS systems
   - Create EntityOverlay modal component with tab navigation
   - Implement overlay opening/closing with focus management
@@ -15,7 +15,7 @@
   - Write tests for overlay lifecycle and accessibility
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 3. Create simple entity info bubble system
+- [✅] 3. Create simple entity info bubble system
   - Implement EntityInfoInspector component
   - Add simple entity detection logic
   - Create info bubble layout and styling
@@ -23,7 +23,7 @@
   - Write tests for simple entity display
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 4. Build drag-and-drop infrastructure
+- [✅] 4. Build drag-and-drop infrastructure
   - Create DragContext and DropTarget interfaces
   - Implement drag preview system with live thumbnails
   - Add drop validation and snap-to-grid logic

@@ -5,6 +5,7 @@ import { getInspectorsForEntity } from '../overlay/inspectorRegistry';
 import type { InspectorDefinition } from '../overlay/inspectorRegistry';
 import type { InspectorTabId } from '../types/overlay';
 import styles from '../styles/SimulationOverlay.module.css';
+import DragPreviewLayer from './DragPreviewLayer';
 
 const TAB_LABELS: Record<InspectorTabId, string> = {
   systems: 'Systems',
@@ -207,6 +208,7 @@ const EntityOverlay = ({ onClose }: EntityOverlayProps): JSX.Element | null => {
             </button>
           </header>
         </div>
+        <DragPreviewLayer />
       </div>
     );
   }
@@ -301,6 +303,7 @@ const EntityOverlay = ({ onClose }: EntityOverlayProps): JSX.Element | null => {
           ))}
         </div>
       </div>
+      <DragPreviewLayer />
     </div>
   );
 };

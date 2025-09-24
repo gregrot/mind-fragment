@@ -1,0 +1,14 @@
+.layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.preview {
+  position: absolute;
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

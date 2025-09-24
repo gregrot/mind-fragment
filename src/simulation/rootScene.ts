@@ -292,7 +292,7 @@ export class RootScene {
   getInventorySnapshot(robotId: string = this.getActiveRobotId()): InventorySnapshot {
     const robotCore = this.context?.getRobotCore(robotId);
     if (!robotCore) {
-      return { capacity: 0, used: 0, available: 0, entries: [] };
+      return { capacity: 0, used: 0, available: 0, entries: [], slots: [], slotCapacity: 0 };
     }
     return robotCore.getInventorySnapshot();
   }

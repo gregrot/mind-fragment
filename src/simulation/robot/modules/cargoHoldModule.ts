@@ -143,6 +143,8 @@ export class CargoHoldModule extends RobotModule {
         used: 0,
         available: this.defaultCapacity,
         entries: [],
+        slots: [],
+        slotCapacity: 0,
       });
     }
   }

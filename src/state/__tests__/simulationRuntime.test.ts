@@ -28,7 +28,14 @@ const createSceneStub = () => {
     getProgramStatus: vi.fn(() => 'idle' as const),
     runProgram: vi.fn(),
     stopProgram: vi.fn(),
-    getInventorySnapshot: vi.fn(() => ({ capacity: 0, used: 0, available: 0, entries: [] })),
+    getInventorySnapshot: vi.fn(() => ({
+      capacity: 0,
+      used: 0,
+      available: 0,
+      entries: [],
+      slots: [],
+      slotCapacity: 0,
+    })),
     subscribeInventory: vi.fn(() => () => {}),
     subscribeTelemetry: vi.fn((listener: (snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void) => {
       telemetryListeners.push(listener);

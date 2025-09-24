@@ -33,6 +33,15 @@ export interface ResourceNode {
   metadata?: Record<string, unknown>;
 }
 
+export interface UpsertNodeOptions {
+  id?: string;
+  type: string;
+  position: Vector2;
+  quantity: number;
+  mergeDistance?: number;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ResourceHit {
   id: string;
   type: string;
@@ -72,36 +81,119 @@ export interface HarvestResult {
   distance: number;
 }
 
+export type ResourceFieldEvent =
+  | { type: 'added'; node: ResourceNode }
+  | { type: 'updated'; node: ResourceNode }
+  | { type: 'depleted'; node: ResourceNode }
+  | { type: 'restored'; node: ResourceNode }
+  | { type: 'removed'; nodeId: string };
+
+type ResourceFieldListener = (event: ResourceFieldEvent) => void;
+
 const DEFAULT_FIELD_OF_VIEW = Math.PI / 2;
 const DEFAULT_MAX_RESULTS = 6;
 const DEFAULT_MAX_DISTANCE = 200;
+const DEFAULT_MERGE_DISTANCE = 32;
 
 export class ResourceField {
   private readonly nodes = new Map<string, ResourceNode>();
+  private readonly listeners = new Set<ResourceFieldListener>();
+  private generatedNodeCounter = 0;
 
   constructor(initialNodes: ResourceNode[] = []) {
     for (const node of initialNodes) {
       if (!node?.id) {
         continue;
       }
-      this.nodes.set(node.id, {
-        id: node.id,
-        type: node.type,
-        position: { x: node.position.x, y: node.position.y },
-        quantity: Math.max(node.quantity, 0),
-        metadata: node.metadata ? { ...node.metadata } : undefined,
-      });
+      this.nodes.set(node.id, this.cloneNode(node));
     }
   }
 
   list(): ResourceNode[] {
-    return [...this.nodes.values()].map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: { ...node.position },
-      quantity: node.quantity,
-      metadata: node.metadata ? { ...node.metadata } : undefined,
-    }));
+    return [...this.nodes.values()].map((node) => this.cloneNode(node));
+  }
+
+  subscribe(listener: ResourceFieldListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  upsertNode({
+    id,
+    type,
+    position,
+    quantity,
+    mergeDistance = DEFAULT_MERGE_DISTANCE,
+    metadata,
+  }: UpsertNodeOptions): ResourceNode {
+    const trimmedType = type?.trim();
+    if (!trimmedType) {
+      throw new Error('Resource node requires a type.');
+    }
+
+    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+      throw new Error('Resource node requires a position.');
+    }
+
+    const safeQuantity = Number.isFinite(quantity) ? Math.max(quantity, 0) : 0;
+    if (safeQuantity <= 0) {
+      throw new Error('Resource node quantity must be greater than zero.');
+    }
+
+    const safePosition: Vector2 = {
+      x: Number.isFinite(position.x) ? (position.x as number) : 0,
+      y: Number.isFinite(position.y) ? (position.y as number) : 0,
+    };
+
+    const mergeRadius = Number.isFinite(mergeDistance) ? Math.max(mergeDistance, 0) : DEFAULT_MERGE_DISTANCE;
+    const requestedId = id?.trim();
+    const searchType = trimmedType.toLowerCase();
+
+    let existing: ResourceNode | null = null;
+    if (requestedId && this.nodes.has(requestedId)) {
+      existing = this.nodes.get(requestedId) ?? null;
+    } else if (mergeRadius > 0) {
+      for (const node of this.nodes.values()) {
+        if (node.type.toLowerCase() !== searchType) {
+          continue;
+        }
+        const distance = distanceBetween(node.position, safePosition);
+        if (distance <= mergeRadius) {
+          existing = node;
+          break;
+        }
+      }
+    }
+
+    const baseNode = existing ? this.cloneNode(existing) : null;
+    const targetId = baseNode?.id ?? this.generateNodeId(requestedId, trimmedType);
+    const nextNode: ResourceNode = {
+      id: targetId,
+      type: baseNode?.type ?? trimmedType,
+      position: safePosition,
+      quantity: (baseNode?.quantity ?? 0) + safeQuantity,
+      metadata: metadata
+        ? { ...(baseNode?.metadata ?? {}), ...metadata }
+        : baseNode?.metadata
+        ? { ...baseNode.metadata }
+        : undefined,
+    };
+
+    const sanitised = this.cloneNode(nextNode);
+    this.nodes.set(sanitised.id, sanitised);
+    this.notifyListeners({ type: existing ? 'updated' : 'added', node: this.cloneNode(sanitised) });
+    return this.cloneNode(sanitised);
+  }
+
+  removeNode(nodeId: string): boolean {
+    if (!this.nodes.has(nodeId)) {
+      return false;
+    }
+    this.nodes.delete(nodeId);
+    this.notifyListeners({ type: 'removed', nodeId });
+    return true;
   }
 
   scan({
@@ -209,6 +301,14 @@ export class ResourceField {
     const harvested = Math.min(requested, node.quantity);
     node.quantity -= harvested;
 
+    if (harvested > 0) {
+      if (node.quantity > 0) {
+        this.notifyListeners({ type: 'updated', node: this.cloneNode(node) });
+      } else {
+        this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
+      }
+    }
+
     return {
       status: node.quantity > 0 ? 'ok' : 'depleted',
       nodeId,
@@ -224,8 +324,49 @@ export class ResourceField {
     if (!node || !Number.isFinite(amount) || amount <= 0) {
       return node?.quantity ?? 0;
     }
+    const previous = node.quantity;
     node.quantity += amount;
+    this.notifyListeners({ type: previous <= 0 ? 'restored' : 'updated', node: this.cloneNode(node) });
     return node.quantity;
+  }
+
+  private generateNodeId(preferredId: string | undefined, type: string): string {
+    const trimmedPreferred = preferredId?.trim();
+    if (trimmedPreferred && !this.nodes.has(trimmedPreferred)) {
+      return trimmedPreferred;
+    }
+
+    const base = type
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'resource';
+
+    let attempt = this.generatedNodeCounter;
+    while (true) {
+      attempt += 1;
+      const candidate = `node-${base}-${attempt.toString(36)}`;
+      if (!this.nodes.has(candidate)) {
+        this.generatedNodeCounter = attempt;
+        return candidate;
+      }
+    }
+  }
+
+  private notifyListeners(event: ResourceFieldEvent): void {
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  private cloneNode(node: ResourceNode): ResourceNode {
+    return {
+      id: node.id,
+      type: node.type,
+      position: { x: node.position.x, y: node.position.y },
+      quantity: Math.max(node.quantity, 0),
+      metadata: node.metadata ? { ...node.metadata } : undefined,
+    };
   }
 }
 

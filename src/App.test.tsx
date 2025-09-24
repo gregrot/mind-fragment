@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { simulationRuntime } from './state/simulationRuntime';
+import type { BlockInstruction, ExpressionNode } from './simulation/runtime/blockProgram';
+
+afterEach(() => {
+  cleanup();
+});
 
 const createDataTransfer = (): DataTransfer => {
   const store = new Map<string, string>();
@@ -25,17 +30,53 @@ const getWorkspaceDropzone = (): HTMLElement => {
   return zones[zones.length - 1];
 };
 
-const renderAppWithOverlay = () => {
+const stubElementFromPoint = (element: Element | null) => {
+  const doc = document as Document & {
+    elementFromPoint?: (x: number, y: number) => Element | null;
+  };
+  const original = doc.elementFromPoint;
+  doc.elementFromPoint = () => element;
+  return () => {
+    if (original) {
+      doc.elementFromPoint = original;
+    } else {
+      doc.elementFromPoint = () => null;
+    }
+  };
+};
+
+const dispatchCancelableTouchMove = (
+  element: Element,
+): ReturnType<typeof vi.fn> => {
+  const moveEvent = new Event('touchmove', { bubbles: true, cancelable: true });
+  Object.defineProperty(moveEvent, 'touches', {
+    value: [{ clientX: 15, clientY: 15 } as unknown as Touch],
+    configurable: true,
+  });
+  const originalPreventDefault = moveEvent.preventDefault.bind(moveEvent);
+  const preventDefaultSpy = vi.fn(() => originalPreventDefault());
+  Object.defineProperty(moveEvent, 'preventDefault', {
+    value: preventDefaultSpy,
+    configurable: true,
+  });
+  fireEvent(element, moveEvent);
+  return preventDefaultSpy;
+};
+
+const renderAppWithOverlay = async () => {
   render(<App />);
   const programButtons = screen.getAllByTestId('select-robot');
   const programButton = programButtons[programButtons.length - 1];
-  fireEvent.click(programButton);
-  expect(screen.getAllByTestId('robot-programming-overlay').length).toBeGreaterThan(0);
+  await act(async () => {
+    fireEvent.click(programButton);
+  });
+  const overlays = await screen.findAllByTestId('entity-overlay');
+  expect(overlays.length).toBeGreaterThan(0);
 };
 
 describe('block workspace drag and drop', () => {
-  it('allows dragging a palette block into the workspace root', () => {
-    renderAppWithOverlay();
+  it('allows dragging a palette block into the workspace root', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -49,8 +90,8 @@ describe('block workspace drag and drop', () => {
     expect(within(workspace).getByTestId('block-repeat')).toBeInTheDocument();
   });
 
-  it('supports dropping blocks into C-shaped slots', () => {
-    renderAppWithOverlay();
+  it('supports dropping blocks into C-shaped slots', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -74,8 +115,8 @@ describe('block workspace drag and drop', () => {
     expect(within(repeatBlock).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('moves existing blocks between containers', () => {
-    renderAppWithOverlay();
+  it('moves existing blocks between containers', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -110,8 +151,8 @@ describe('block workspace drag and drop', () => {
     expect(within(updatedRepeat).queryByTestId('block-move')).toBeNull();
   });
 
-  it('allows event blocks to host starting behaviours', () => {
-    renderAppWithOverlay();
+  it('allows event blocks to host starting behaviours', async () => {
+    await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -135,8 +176,8 @@ describe('block workspace drag and drop', () => {
     expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('populates both branches of a parallel block', () => {
-    renderAppWithOverlay();
+  it('populates both branches of a parallel block', async () => {
+    await renderAppWithOverlay();
 
     const [parallelPaletteItem] = screen.getAllByTestId('palette-parallel');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -168,8 +209,8 @@ describe('block workspace drag and drop', () => {
     expect(within(parallelBlock).getByTestId('block-turn')).toBeInTheDocument();
   });
 
-  it('prevents dropping a block into its own descendant', () => {
-    renderAppWithOverlay();
+  it('prevents dropping a block into its own descendant', async () => {
+    await renderAppWithOverlay();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -201,21 +242,20 @@ describe('block workspace drag and drop', () => {
     expect(within(repeatBlocks[0]).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('compiles and reports a routine when Run Program is pressed', () => {
-    renderAppWithOverlay();
+  it('restores saved workspaces when switching between robots', async () => {
+    await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
-    const workspaceDropzone = getWorkspaceDropzone();
+    const initialDropzone = getWorkspaceDropzone();
     const startTransfer = createDataTransfer();
 
     fireEvent.dragStart(startPaletteItem, { dataTransfer: startTransfer });
-    fireEvent.dragOver(workspaceDropzone, { dataTransfer: startTransfer });
-    fireEvent.drop(workspaceDropzone, { dataTransfer: startTransfer });
+    fireEvent.dragOver(initialDropzone, { dataTransfer: startTransfer });
+    fireEvent.drop(initialDropzone, { dataTransfer: startTransfer });
 
-    const workspace = getWorkspaceDropzone();
-    const startBlock = within(workspace).getByTestId('block-start');
-    const doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
-
+    let workspace = getWorkspaceDropzone();
+    let startBlock = within(workspace).getByTestId('block-start');
+    let doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
     const [movePaletteItem] = screen.getAllByTestId('palette-move');
     const moveTransfer = createDataTransfer();
 
@@ -225,21 +265,270 @@ describe('block workspace drag and drop', () => {
 
     expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
 
+    act(() => {
+      simulationRuntime.setSelectedRobot('MF-02');
+    });
+
+    await waitFor(() => {
+      const switchedWorkspace = getWorkspaceDropzone();
+      expect(within(switchedWorkspace).queryByTestId('block-start')).toBeNull();
+    });
+
+    const [secondStartPaletteItem] = screen.getAllByTestId('palette-start');
+    const secondDropzone = getWorkspaceDropzone();
+    const secondStartTransfer = createDataTransfer();
+
+    fireEvent.dragStart(secondStartPaletteItem, { dataTransfer: secondStartTransfer });
+    fireEvent.dragOver(secondDropzone, { dataTransfer: secondStartTransfer });
+    fireEvent.drop(secondDropzone, { dataTransfer: secondStartTransfer });
+
+    workspace = getWorkspaceDropzone();
+    startBlock = within(workspace).getByTestId('block-start');
+    doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+    const [turnPaletteItem] = screen.getAllByTestId('palette-turn');
+    const turnTransfer = createDataTransfer();
+
+    fireEvent.dragStart(turnPaletteItem, { dataTransfer: turnTransfer });
+    fireEvent.dragOver(doSlotDropzone, { dataTransfer: turnTransfer });
+    fireEvent.drop(doSlotDropzone, { dataTransfer: turnTransfer });
+
+    expect(within(startBlock).getByTestId('block-turn')).toBeInTheDocument();
+
+    act(() => {
+      simulationRuntime.setSelectedRobot('MF-01');
+    });
+
+    await waitFor(() => {
+      const restoredWorkspace = getWorkspaceDropzone();
+      const restoredStart = within(restoredWorkspace).getByTestId('block-start');
+      expect(within(restoredStart).getByTestId('block-move')).toBeInTheDocument();
+      expect(within(restoredStart).queryByTestId('block-turn')).toBeNull();
+    });
+
+    act(() => {
+      simulationRuntime.clearSelectedRobot();
+    });
+  });
+
+  it('allows dropping a palette block into the workspace root via touch', async () => {
+    await renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const restoreElementFromPoint = stubElementFromPoint(workspaceDropzone);
+
+    fireEvent.touchStart(repeatPaletteItem, {
+      touches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+    fireEvent.touchEnd(repeatPaletteItem, {
+      changedTouches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+
+    const workspace = getWorkspaceDropzone();
+    await within(workspace).findByTestId('block-repeat');
+    restoreElementFromPoint();
+  });
+
+  it('places palette blocks into nested slots when using touch input', async () => {
+    await renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const repeatTransfer = createDataTransfer();
+
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: repeatTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const repeatBlock = await within(workspace).findByTestId('block-repeat');
+    const doSlotDropzone = within(repeatBlock).getByTestId('slot-do-dropzone');
+
+    const [movePaletteItem] = screen.getAllByTestId('palette-move');
+    const restoreElementFromPoint = stubElementFromPoint(doSlotDropzone);
+
+    fireEvent.touchStart(movePaletteItem, {
+      touches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+    fireEvent.touchEnd(movePaletteItem, {
+      changedTouches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+
+    await within(repeatBlock).findByTestId('block-move');
+    restoreElementFromPoint();
+  });
+
+  it('prevents default behaviour while dragging a palette block with touch', async () => {
+    await renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+
+    fireEvent.touchStart(repeatPaletteItem, {
+      touches: [{ clientX: 5, clientY: 5 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatPaletteItem);
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('prevents default behaviour while dragging a workspace block with touch', async () => {
+    await renderAppWithOverlay();
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const repeatTransfer = createDataTransfer();
+
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: repeatTransfer });
+
+    const workspace = getWorkspaceDropzone();
+    const repeatBlock = await within(workspace).findByTestId('block-repeat');
+
+    fireEvent.touchStart(repeatBlock, {
+      touches: [{ clientX: 10, clientY: 10 } as unknown as Touch],
+    });
+
+    const preventDefault = dispatchCancelableTouchMove(repeatBlock);
+    expect(preventDefault).toHaveBeenCalled();
+  });
+  it('compiles user-authored literals, signals, and operator expressions when Run Program is pressed', async () => {
+    await renderAppWithOverlay();
+
+    const [startPaletteItem] = screen.getAllByTestId('palette-start');
+    const workspaceDropzone = getWorkspaceDropzone();
+    const startTransfer = createDataTransfer();
+
+    fireEvent.dragStart(startPaletteItem, { dataTransfer: startTransfer });
+    fireEvent.dragOver(workspaceDropzone, { dataTransfer: startTransfer });
+    fireEvent.drop(workspaceDropzone, { dataTransfer: startTransfer });
+
+    await waitFor(() => {
+      const workspace = getWorkspaceDropzone();
+      expect(within(workspace).getByTestId('block-start')).toBeInTheDocument();
+    });
+
+    const workspace = getWorkspaceDropzone();
+    const startBlock = within(workspace).getByTestId('block-start');
+    const startDoDropzone = within(startBlock).getByTestId('slot-do-dropzone');
+
+    const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
+    const repeatTransfer = createDataTransfer();
+    fireEvent.dragStart(repeatPaletteItem, { dataTransfer: repeatTransfer });
+    fireEvent.dragOver(startDoDropzone, { dataTransfer: repeatTransfer });
+    fireEvent.drop(startDoDropzone, { dataTransfer: repeatTransfer });
+
+    await waitFor(() => {
+      const latestWorkspace = getWorkspaceDropzone();
+      const refreshedStart = within(latestWorkspace).getByTestId('block-start');
+      expect(within(refreshedStart).getByTestId('block-repeat')).toBeInTheDocument();
+    });
+
+    const repeatBlock = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+    const repeatDoDropzone = within(repeatBlock).getByTestId('slot-do-dropzone');
+    const [movePaletteItem] = screen.getAllByTestId('palette-move');
+    const moveTransfer = createDataTransfer();
+
+    fireEvent.dragStart(movePaletteItem, { dataTransfer: moveTransfer });
+    fireEvent.dragOver(repeatDoDropzone, { dataTransfer: moveTransfer });
+    fireEvent.drop(repeatDoDropzone, { dataTransfer: moveTransfer });
+
+    await waitFor(() => {
+      const latestRepeat = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+      expect(within(latestRepeat).getByTestId('block-move')).toBeInTheDocument();
+    });
+
+    const countExpressionDropzone = within(getWorkspaceDropzone()).getByTestId(
+      'block-repeat-parameter-count-expression-dropzone',
+    );
+    const [operatorPaletteItem] = screen.getAllByTestId('palette-operator-add');
+    const operatorTransfer = createDataTransfer();
+
+    fireEvent.dragStart(operatorPaletteItem, { dataTransfer: operatorTransfer });
+    fireEvent.dragOver(countExpressionDropzone, { dataTransfer: operatorTransfer });
+    fireEvent.drop(countExpressionDropzone, { dataTransfer: operatorTransfer });
+
+    await waitFor(() => {
+      const updatedRepeat = within(getWorkspaceDropzone()).getByTestId('block-repeat');
+      expect(within(updatedRepeat).getByTestId('block-operator-add')).toBeInTheDocument();
+    });
+
+    const operatorBlock = within(getWorkspaceDropzone()).getByTestId('block-operator-add');
+    const literalInputs = within(operatorBlock).getAllByTestId(
+      'block-literal-number-parameter-value',
+    ) as HTMLInputElement[];
+
+    fireEvent.change(literalInputs[0], { target: { value: '4' } });
+    fireEvent.blur(literalInputs[0]);
+    fireEvent.change(literalInputs[1], { target: { value: '2' } });
+    fireEvent.blur(literalInputs[1]);
+
+    expect(literalInputs[0].value).toBe('4');
+    expect(literalInputs[1].value).toBe('2');
+
+    const [broadcastPaletteItem] = screen.getAllByTestId('palette-broadcast-signal');
+    const broadcastTransfer = createDataTransfer();
+    const refreshedStartBlock = within(getWorkspaceDropzone()).getByTestId('block-start');
+    const refreshedDoDropzone = within(refreshedStartBlock).getAllByTestId('slot-do-dropzone')[0];
+
+    fireEvent.dragStart(broadcastPaletteItem, { dataTransfer: broadcastTransfer });
+    fireEvent.dragOver(refreshedDoDropzone, { dataTransfer: broadcastTransfer });
+    fireEvent.drop(refreshedDoDropzone, { dataTransfer: broadcastTransfer });
+
+    await waitFor(() => {
+      const latestStart = within(getWorkspaceDropzone()).getByTestId('block-start');
+      expect(within(latestStart).getAllByTestId('block-broadcast-signal').length).toBeGreaterThan(0);
+    });
+
+    const startWithSignal = within(getWorkspaceDropzone()).getByTestId('block-start');
+    const broadcastBlocks = within(startWithSignal).getAllByTestId('block-broadcast-signal');
+    const broadcastBlock = broadcastBlocks[broadcastBlocks.length - 1];
+    const signalSelect = within(broadcastBlock).getByTestId(
+      'block-broadcast-signal-parameter-signal',
+    ) as HTMLSelectElement;
+
+    fireEvent.change(signalSelect, { target: { value: 'alert.signal' } });
+    expect(signalSelect.value).toBe('alert.signal');
+
     const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
     const runButtons = screen.getAllByTestId('run-program');
-    let matchedProgram: { instructions: unknown[] } | null = null;
+    let matchedProgram: { instructions: BlockInstruction[] } | null = null;
+    let matchedRobotId: string | undefined;
 
     for (const button of runButtons) {
       runSpy.mockClear();
       fireEvent.click(button);
-      const [program] = runSpy.mock.calls[0] ?? [];
+      const [robotId, program] = runSpy.mock.calls[0] ?? [];
       if (program?.instructions?.length) {
         matchedProgram = program;
+        matchedRobotId = robotId;
         break;
       }
     }
 
-    expect(matchedProgram?.instructions).toHaveLength(1);
+    expect(matchedRobotId).toBe('MF-01');
+
+    const instructions = matchedProgram?.instructions ?? [];
+    expect(instructions).toHaveLength(1);
+    const loopInstruction = instructions[0];
+    if (!loopInstruction || loopInstruction.kind !== 'loop' || loopInstruction.mode !== 'counted') {
+      throw new Error('Expected a counted loop to be emitted.');
+    }
+
+    const expression = loopInstruction.iterations.expression;
+    expect(expression?.kind).toBe('operator');
+    if (expression?.kind === 'operator') {
+      expect(expression.operator).toBe('add');
+      const literalInputs = expression.inputs.filter(
+        (input): input is Extract<ExpressionNode, { kind: 'literal' }> => input.kind === 'literal',
+      );
+      const literalValues = literalInputs.map((input) => ({ value: input.value, source: input.source }));
+      expect(literalValues).toEqual([
+        { value: 4, source: 'user' },
+        { value: 2, source: 'user' },
+      ]);
+    }
+
     runSpy.mockRestore();
   });
 });

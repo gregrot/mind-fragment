@@ -8,6 +8,9 @@
   flex-direction: column;
   gap: var(--space-3);
   color: var(--color-text-primary);
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .blockAction {
@@ -22,6 +25,14 @@
   border-left-color: var(--color-accent-amber);
 }
 
+.blockValue {
+  border-left-color: var(--color-block-value-border);
+}
+
+.blockOperator {
+  border-left-color: var(--color-block-operator-border);
+}
+
 .blockHeader {
   display: flex;
   justify-content: space-between;
@@ -33,10 +44,103 @@
   font-size: var(--font-size-md);
 }
 
+.blockDeleteButton {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  line-height: 0;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.blockDeleteButton:hover,
+.blockDeleteButton:focus-visible {
+  background: var(--color-surface-overlay);
+  color: var(--color-accent-cyan);
+  outline: none;
+}
+
+.blockDeleteButton:active {
+  transform: scale(0.96);
+}
+
+.blockDeleteIcon {
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+}
+
 .blockSummary {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+.blockControlRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.blockControlLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex: 1 1 auto;
+}
+
+.blockControlInputs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.blockToggle {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.blockToggle:hover,
+.blockToggle:focus {
+  border-color: var(--color-accent-cyan);
+  background: var(--color-surface-overlay);
+  outline: none;
+}
+
+.blockInput,
+.blockSelect {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  min-width: 4rem;
+}
+
+.blockInput:focus,
+.blockInput:focus-visible,
+.blockSelect:focus,
+.blockSelect:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-cyan);
+  box-shadow: 0 0 0 1px rgba(100, 249, 255, 0.35);
+}
+
+.blockSelect {
+  padding-right: var(--space-4);
 }
 
 .blockSlots {
@@ -68,7 +172,44 @@
   min-height: 2.75rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0;
+}
+
+.slotDropTarget {
+  min-height: 0.75rem;
+  margin: var(--space-2) 0;
+}
+
+.slotDropTarget::after {
+  content: '';
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: rgba(100, 249, 255, 0.18);
+  opacity: 0;
+  transition: opacity var(--transition-base), background var(--transition-base);
+}
+
+.slotDropTarget[data-dropzone-active='true']::after {
+  opacity: 1;
+  background: var(--color-accent-cyan);
+}
+
+.slotDropTargetLeading {
+  margin-top: 0;
+}
+
+.slotDropTargetTrailing {
+  margin-bottom: 0;
+}
+
+.slotDropTargetEmpty {
+  min-height: 3.5rem;
+  margin: var(--space-2) 0;
+  border-color: var(--color-slot-border);
+  background: rgba(155, 107, 255, 0.12);
 }
 
 .slotPlaceholder {
@@ -77,4 +218,173 @@
   background: var(--color-slot-placeholder);
   color: var(--color-slot-text);
   font-size: var(--font-size-sm);
+}
+
+.valueInputContainer {
+  display: flex;
+  align-items: stretch;
+  min-height: 2.25rem;
+}
+
+.valueInputDropZoneEmpty {
+  min-width: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--color-slot-border);
+  border-radius: var(--radius-sm);
+  background: rgba(155, 107, 255, 0.12);
+  color: var(--color-slot-text);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.valueInputDropZoneEmpty[data-dropzone-active='true'] {
+  border-color: var(--color-accent-cyan);
+  background: rgba(100, 249, 255, 0.12);
+  color: var(--color-text-primary);
+}
+
+.valueInputPlaceholder {
+  pointer-events: none;
+}
+
+.valueInputFilled {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.valueInputFilled .block {
+  margin: 0;
+}
+
+.valueInputDropTarget {
+  width: 0.5rem;
+  min-width: 0.5rem;
+  min-height: 2rem;
+  position: relative;
+}
+
+.valueInputDropTarget::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: rgba(100, 249, 255, 0.18);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--transition-base), background var(--transition-base);
+}
+
+.valueInputDropTarget[data-dropzone-active='true']::after {
+  opacity: 1;
+  background: var(--color-accent-cyan);
+}
+
+.valueInputDropTargetLeading {
+  margin-left: 0;
+}
+
+.valueInputDropTargetTrailing {
+  margin-right: 0;
+}
+
+@media (max-width: 720px) {
+  .block {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .blockTitle {
+    font-size: var(--font-size-sm);
+  }
+
+  .blockSummary {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockControlInputs {
+    gap: var(--space-1);
+  }
+
+  .blockSlots {
+    gap: var(--space-2);
+  }
+
+  .blockSlot {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .slotBody {
+    gap: 0;
+  }
+
+  .slotPlaceholder {
+    font-size: var(--font-size-xs);
+    padding: var(--space-2);
+  }
+
+  .valueInputContainer {
+    min-height: 2rem;
+  }
+
+  .valueInputDropZoneEmpty {
+    min-width: 5rem;
+    font-size: var(--font-size-xxs);
+  }
+}
+
+@media (max-width: 520px) {
+  .block {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+
+  .blockHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .blockTitle {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockSummary {
+    font-size: var(--font-size-xs);
+  }
+
+  .blockSlots {
+    gap: var(--space-1);
+  }
+
+  .blockSlot {
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+
+  .slotBody {
+    min-height: 2rem;
+    gap: var(--space-1);
+  }
+
+  .slotPlaceholder {
+    font-size: var(--font-size-xs);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .valueInputContainer {
+    min-height: 1.75rem;
+  }
+
+  .valueInputDropZoneEmpty {
+    min-width: 4.5rem;
+  }
 }

@@ -1,0 +1,111 @@
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-panel-outline);
+  box-shadow: var(--shadow-medium);
+  color: var(--color-text-primary);
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.summarySimple {
+  text-align: center;
+  align-items: center;
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+}
+
+.description {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.summaryDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.entityName {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.summaryHint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.properties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.property {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-panel-outline);
+  box-shadow: var(--shadow-soft);
+}
+
+.propertyLabel {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.propertyValue {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.placeholder {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 640px) {
+  .info {
+    padding: var(--space-5);
+  }
+
+  .properties {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

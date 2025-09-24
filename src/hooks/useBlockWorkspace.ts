@@ -1,7 +1,7 @@
-import { type DragEvent, useCallback, useState } from 'react';
+import { type Dispatch, type DragEvent, type SetStateAction, useCallback, useState } from 'react';
 import { createBlockInstance, BLOCK_MAP } from '../blocks/library';
-import { insertBlock, removeBlock } from '../state/blockUtils';
-import type { DragPayload, DropTarget, WorkspaceState } from '../types/blocks';
+import { insertBlock, removeBlock, updateBlock } from '../state/blockUtils';
+import type { BlockInstance, DragPayload, DropTarget, WorkspaceState } from '../types/blocks';
 
 const PAYLOAD_MIME = 'application/json';
 
@@ -34,6 +34,18 @@ const parsePayload = (event: DragEvent<HTMLElement>): DragPayload | null => {
     if (parsed.source === 'workspace' && typeof parsed.instanceId === 'string') {
       return { source: 'workspace', instanceId: parsed.instanceId };
     }
+
+    if (
+      parsed.source === 'parameter'
+      && typeof parsed.ownerId === 'string'
+      && typeof parsed.parameterName === 'string'
+    ) {
+      return {
+        source: 'parameter',
+        ownerId: parsed.ownerId,
+        parameterName: parsed.parameterName,
+      };
+    }
   } catch (error) {
     console.warn('Failed to parse drag payload', error);
   }
@@ -44,50 +56,90 @@ const parsePayload = (event: DragEvent<HTMLElement>): DragPayload | null => {
 export function useBlockWorkspace(): {
   workspace: WorkspaceState;
   handleDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
+  handleTouchDrop: (payload: DragPayload, target: DropTarget) => void;
+  replaceWorkspace: Dispatch<SetStateAction<WorkspaceState>>;
+  updateBlockInstance: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
+  removeBlockInstance: (instanceId: string) => void;
 } {
   const [workspace, setWorkspace] = useState<WorkspaceState>([]);
+
+  const applyDropPayload = useCallback(
+    (payload: DragPayload | null, target: DropTarget) => {
+      if (!payload) {
+        return;
+      }
+
+      if (isPalettePayload(payload)) {
+        if (!BLOCK_MAP[payload.blockType]) {
+          return;
+        }
+
+        setWorkspace((current) => {
+          const instance = createBlockInstance(payload.blockType);
+          const result = insertBlock(current, target, instance);
+          return result.inserted ? result.blocks : current;
+        });
+        return;
+      }
+
+      if (isWorkspacePayload(payload)) {
+        if (target.ancestorIds.includes(payload.instanceId)) {
+          return;
+        }
+
+        setWorkspace((current) => {
+          const removal = removeBlock(current, payload.instanceId);
+          if (!removal.removed) {
+            return current;
+          }
+
+          const result = insertBlock(removal.blocks, target, removal.removed);
+          return result.inserted ? result.blocks : removal.blocks;
+        });
+      }
+    },
+    [],
+  );
 
   const handleDrop = useCallback((event: DragEvent<HTMLElement>, target: DropTarget) => {
     event.preventDefault();
     event.stopPropagation();
 
     const payload = parsePayload(event);
+    applyDropPayload(payload, target);
+  }, [applyDropPayload]);
+
+  const handleTouchDrop = useCallback((payload: DragPayload, target: DropTarget) => {
     if (!payload) {
       return;
     }
 
-    if (isPalettePayload(payload)) {
-      if (!BLOCK_MAP[payload.blockType]) {
-        return;
-      }
+    applyDropPayload(payload, target);
+  }, [applyDropPayload]);
 
+  const updateBlockInstance = useCallback(
+    (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => {
       setWorkspace((current) => {
-        const instance = createBlockInstance(payload.blockType);
-        const result = insertBlock(current, target, instance);
-        return result.inserted ? result.blocks : current;
+        const result = updateBlock(current, instanceId, updater);
+        return result.changed ? result.blocks : current;
       });
-      return;
-    }
+    },
+    [],
+  );
 
-    if (isWorkspacePayload(payload)) {
-      if (target.ancestorIds.includes(payload.instanceId)) {
-        return;
-      }
-
-      setWorkspace((current) => {
-        const removal = removeBlock(current, payload.instanceId);
-        if (!removal.removed) {
-          return current;
-        }
-
-        const result = insertBlock(removal.blocks, target, removal.removed);
-        return result.inserted ? result.blocks : removal.blocks;
-      });
-    }
+  const removeBlockInstance = useCallback((instanceId: string) => {
+    setWorkspace((current) => {
+      const result = removeBlock(current, instanceId);
+      return result.removed ? result.blocks : current;
+    });
   }, []);
 
   return {
     workspace,
     handleDrop,
+    handleTouchDrop,
+    replaceWorkspace: setWorkspace,
+    updateBlockInstance,
+    removeBlockInstance,
   };
 }

@@ -35,10 +35,29 @@ This document outlines how the block-based programming pillar should function wi
 - Each robot ticks its programme on a shared scheduler; frame budget determined by chassis tier.
 - Heat accumulation is tracked per block. Excess heat triggers warnings, then auto-throttling or failsafe handover.
 - Failsafe routines are authored via a constrained palette unlocked early; they run when signal drops or heat caps out.
+- `MoveTo` routines now pull the most recent survey hit from runtime memory, steering towards the chosen index and falling back to literal coordinates when the buffer is empty.
 
 ### Content Layer
 - Story arcs introduce unique block modifiers (e.g., Nomads grant `MoveTo` → `AvoidBiome(type)`).
 - Ethical decisions adjust available modifiers and mission scripting, aligning with the Discretion/Impact axis.
+
+## Parameter Schema Refresh
+- **New Work:** The runtime now compiles parameter bindings that differentiate between literal input and authored expressions, preserving the player’s intent in metadata (`source: 'user' | 'default'`). Numeric fields expose optional min/max/step hints so UI editors can nudge players toward safe ranges.
+- **New Work:** Each block may declare both `parameters` and `expressionInputs`. Parameters hold the current literal, while expression inputs store an ordered list of child blocks (values, operators, or signals) that can override the literal at runtime.
+- **Carry-over:** Signals retain their role as named channels exposed by robot modules, but the editor now surfaces telemetry-driven options alongside palette defaults.
+
+### Value Blocks & Operator Chains
+- **New Work:** Literal Number/Boolean blocks advertise their current value directly in the workspace, and edits flag the binding as player-authored. Operator blocks (`Add`, `Greater Than`, `Logical AND`) accept nested expression trees so complex repeat counts or conditions can be composed inline.
+- **New Work:** Parameter drop-zones expose copy-friendly guidance (“Drop value blocks here”, “Drop operator blocks here”) and support reordering, letting players combine literals, operators, and signals without leaving the canvas.
+- **Carry-over:** Control blocks (Repeat, If, Parallel) still own the surrounding structure, but they now inherit expression defaults (e.g., Repeat spawns a literal-number child set to its default count) to reduce empty states.
+
+### Signal Selection Workflow
+- **New Work:** Signal parameters resolve against live telemetry snapshots, merging module-provided options with any fallback entries defined in the palette. Unknown signal IDs trigger diagnostics so the compile step highlights stale references.
+- **New Work:** Editor select boxes emit accessible labels and honour “None” for optional channels. Playwright coverage exercises selecting an alternate signal before running the programme to keep regressions visible.
+
+### Tooling & Regression Coverage
+- **New Work:** Vitest suites now cover editing literals, dropping operator blocks into parameter expressions, and verifying compiled instructions respect user-specified values. Playwright flows mirror the same interactions end-to-end so we catch integration slips.
+- **Carry-over:** Running `npm test`, `npm run typecheck`, and targeted Playwright specs remains mandatory before shipping block-editor work.
 
 ## Module → Block Families
 | Module | Primary Blocks | Modifiers & Notes |

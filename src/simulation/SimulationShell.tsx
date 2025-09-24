@@ -2,13 +2,15 @@ import { useEffect, useRef } from 'react';
 import { Application } from 'pixi.js';
 import { RootScene } from './rootScene';
 import { simulationRuntime } from '../state/simulationRuntime';
+import type { EntityId } from './ecs/world';
 import styles from '../styles/SimulationShell.module.css';
 
 interface SimulationShellProps {
-  onRobotSelect?: () => void;
+  onEntitySelect?: (selection: { robotId: string; entityId: EntityId }) => void;
+  onEntityClear?: () => void;
 }
 
-const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element => {
+const SimulationShell = ({ onEntitySelect, onEntityClear }: SimulationShellProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -21,6 +23,7 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
     let disposed = false;
     let cleanupResize: (() => void) | undefined;
     let selectionCleanup: (() => void) | undefined;
+    let hasAnnouncedFirstRobot = false;
 
     const init = async () => {
       const container = containerRef.current;
@@ -56,13 +59,20 @@ const SimulationShell = ({ onRobotSelect }: SimulationShellProps): JSX.Element =
       simulationRuntime.registerScene(rootScene);
       rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
 
-      selectionCleanup = rootScene.subscribeRobotSelection((robotId) => {
+      selectionCleanup = rootScene.subscribeRobotSelection((robotId, entityId) => {
         if (robotId) {
-          simulationRuntime.setSelectedRobot(robotId);
-          onRobotSelect?.();
-        } else {
-          simulationRuntime.clearSelectedRobot();
+          simulationRuntime.setSelectedRobot(robotId, entityId ?? undefined);
+          if (hasAnnouncedFirstRobot) {
+            if (entityId !== null && entityId !== undefined) {
+              onEntitySelect?.({ robotId, entityId });
+            }
+          } else {
+            hasAnnouncedFirstRobot = true;
+          }
+          return;
         }
+        simulationRuntime.clearSelectedRobot();
+        onEntityClear?.();
       });
 
       const handleResize = () => {

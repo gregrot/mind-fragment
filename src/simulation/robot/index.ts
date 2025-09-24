@@ -1,4 +1,4 @@
-export { RobotChassis, robotChassisUtils } from './RobotChassis';
+export { RobotChassis, robotChassisUtils, type ChassisSnapshot } from './RobotChassis';
 export { RobotModule } from './RobotModule';
 export { RobotState, robotStateUtils } from './robotState';
 export {
@@ -9,3 +9,4 @@ export {
   type ModuleBlueprint,
   type ModuleIconVariant,
 } from './modules/moduleLibrary';
+export { SimpleNavigator, type SimpleNavigatorOptions, type SteeringCommand } from './modules/navigator';

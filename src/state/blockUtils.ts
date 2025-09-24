@@ -31,6 +31,8 @@ const removeFromBlocks = (blocks: BlockInstance[], instanceId: string): RemoveRe
       continue;
     }
 
+    let updatedBlock: BlockInstance | null = null;
+
     if (block.slots) {
       const nextSlots: Record<string, BlockInstance[]> = {};
       let slotChanged = false;
@@ -47,13 +49,39 @@ const removeFromBlocks = (blocks: BlockInstance[], instanceId: string): RemoveRe
       }
 
       if (slotChanged) {
-        nextBlocks.push({ ...block, slots: nextSlots });
-        changed = true;
-        continue;
+        updatedBlock = { ...(updatedBlock ?? block), slots: nextSlots };
       }
     }
 
-    nextBlocks.push(block);
+    if (block.expressionInputs) {
+      const nextInputs: Record<string, BlockInstance[]> = {};
+      let inputChanged = false;
+
+      for (const [inputName, inputBlocks] of Object.entries(block.expressionInputs)) {
+        const result = removeFromBlocks(inputBlocks, instanceId);
+        if (result.removed && !removed) {
+          removed = result.removed;
+        }
+        if (result.changed) {
+          inputChanged = true;
+        }
+        nextInputs[inputName] = result.changed ? result.blocks : inputBlocks;
+      }
+
+      if (inputChanged) {
+        updatedBlock = {
+          ...(updatedBlock ?? block),
+          expressionInputs: nextInputs,
+        };
+      }
+    }
+
+    if (updatedBlock) {
+      nextBlocks.push(updatedBlock);
+      changed = true;
+    } else {
+      nextBlocks.push(block);
+    }
   }
 
   return { blocks: nextBlocks, removed, changed };
@@ -97,48 +125,98 @@ const insertIntoBlocks = (
     }
 
     if (block.instanceId === target.ownerId) {
-      const slotBlocks = block.slots?.[target.slotName] ?? [];
-      const insertionIndex = clampIndex(target.position, slotBlocks.length);
-      const updatedSlotBlocks = [...slotBlocks];
-      updatedSlotBlocks.splice(insertionIndex, 0, blockToInsert);
-      const updatedBlock: BlockInstance = {
-        ...block,
-        slots: {
-          ...(block.slots ?? {}),
-          [target.slotName]: updatedSlotBlocks,
-        },
-      };
-      nextBlocks.push(updatedBlock);
-      inserted = true;
-      continue;
-    }
-
-    if (!block.slots) {
-      nextBlocks.push(block);
-      continue;
-    }
-
-    const nextSlots: Record<string, BlockInstance[]> = {};
-    let slotChanged = false;
-
-    for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
-      if (inserted) {
-        nextSlots[slotName] = slotBlocks;
+      if (target.kind === 'slot') {
+        const slotBlocks = block.slots?.[target.slotName] ?? [];
+        const insertionIndex = clampIndex(target.position, slotBlocks.length);
+        const updatedSlotBlocks = [...slotBlocks];
+        updatedSlotBlocks.splice(insertionIndex, 0, blockToInsert);
+        const updatedBlock: BlockInstance = {
+          ...block,
+          slots: {
+            ...(block.slots ?? {}),
+            [target.slotName]: updatedSlotBlocks,
+          },
+        };
+        nextBlocks.push(updatedBlock);
+        inserted = true;
         continue;
       }
 
-      const result = insertIntoBlocks(slotBlocks, target, blockToInsert);
-      if (result.inserted) {
+      if (target.kind === 'parameter' || target.kind === 'parameter-expression') {
+        const inputBlocks = block.expressionInputs?.[target.parameterName] ?? [];
+        const insertionIndex = clampIndex(target.position, inputBlocks.length);
+        const updatedInputBlocks = [...inputBlocks];
+        updatedInputBlocks.splice(insertionIndex, 0, blockToInsert);
+        const updatedBlock: BlockInstance = {
+          ...block,
+          expressionInputs: {
+            ...(block.expressionInputs ?? {}),
+            [target.parameterName]: updatedInputBlocks,
+          },
+        };
+        nextBlocks.push(updatedBlock);
         inserted = true;
-        slotChanged = true;
-        nextSlots[slotName] = result.blocks;
-      } else {
-        nextSlots[slotName] = slotBlocks;
+        continue;
       }
     }
 
-    if (slotChanged) {
-      nextBlocks.push({ ...block, slots: nextSlots });
+    let updatedBlock: BlockInstance | null = null;
+
+    if (block.slots) {
+      const nextSlots: Record<string, BlockInstance[]> = {};
+      let slotChanged = false;
+
+      for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
+        if (inserted) {
+          nextSlots[slotName] = slotBlocks;
+          continue;
+        }
+
+        const result = insertIntoBlocks(slotBlocks, target, blockToInsert);
+        if (result.inserted) {
+          inserted = true;
+          slotChanged = true;
+          nextSlots[slotName] = result.blocks;
+        } else {
+          nextSlots[slotName] = slotBlocks;
+        }
+      }
+
+      if (slotChanged) {
+        updatedBlock = { ...(updatedBlock ?? block), slots: nextSlots };
+      }
+    }
+
+    if (block.expressionInputs) {
+      const nextInputs: Record<string, BlockInstance[]> = {};
+      let inputChanged = false;
+
+      for (const [inputName, inputBlocks] of Object.entries(block.expressionInputs)) {
+        if (inserted) {
+          nextInputs[inputName] = inputBlocks;
+          continue;
+        }
+
+        const result = insertIntoBlocks(inputBlocks, target, blockToInsert);
+        if (result.inserted) {
+          inserted = true;
+          inputChanged = true;
+          nextInputs[inputName] = result.blocks;
+        } else {
+          nextInputs[inputName] = inputBlocks;
+        }
+      }
+
+      if (inputChanged) {
+        updatedBlock = {
+          ...(updatedBlock ?? block),
+          expressionInputs: nextInputs,
+        };
+      }
+    }
+
+    if (updatedBlock) {
+      nextBlocks.push(updatedBlock);
     } else {
       nextBlocks.push(block);
     }
@@ -162,3 +240,79 @@ export const insertBlock = (
     inserted: result.inserted,
   };
 };
+
+const updateBlocks = (
+  blocks: BlockInstance[],
+  instanceId: string,
+  updater: (block: BlockInstance) => BlockInstance,
+): { blocks: BlockInstance[]; changed: boolean } => {
+  let changed = false;
+  const nextBlocks = blocks.map((block) => {
+    if (changed) {
+      return block;
+    }
+
+    if (block.instanceId === instanceId) {
+      changed = true;
+      return updater(block);
+    }
+
+    let updatedBlock: BlockInstance | null = null;
+
+    if (block.slots) {
+      const nextSlots: Record<string, BlockInstance[]> = {};
+      let slotChanged = false;
+
+      for (const [slotName, slotBlocks] of Object.entries(block.slots)) {
+        const result = updateBlocks(slotBlocks, instanceId, updater);
+        if (result.changed) {
+          slotChanged = true;
+          nextSlots[slotName] = result.blocks;
+        } else {
+          nextSlots[slotName] = slotBlocks;
+        }
+      }
+
+      if (slotChanged) {
+        updatedBlock = { ...(updatedBlock ?? block), slots: nextSlots };
+      }
+    }
+
+    if (block.expressionInputs) {
+      const nextInputs: Record<string, BlockInstance[]> = {};
+      let inputChanged = false;
+
+      for (const [inputName, inputBlocks] of Object.entries(block.expressionInputs)) {
+        const result = updateBlocks(inputBlocks, instanceId, updater);
+        if (result.changed) {
+          inputChanged = true;
+          nextInputs[inputName] = result.blocks;
+        } else {
+          nextInputs[inputName] = inputBlocks;
+        }
+      }
+
+      if (inputChanged) {
+        updatedBlock = {
+          ...(updatedBlock ?? block),
+          expressionInputs: nextInputs,
+        };
+      }
+    }
+
+    if (!updatedBlock) {
+      return block;
+    }
+
+    changed = true;
+    return updatedBlock;
+  });
+
+  return { blocks: changed ? nextBlocks : blocks, changed };
+};
+
+export const updateBlock = (
+  blocks: BlockInstance[],
+  instanceId: string,
+  updater: (block: BlockInstance) => BlockInstance,
+): { blocks: BlockInstance[]; changed: boolean } => updateBlocks(blocks, instanceId, updater);

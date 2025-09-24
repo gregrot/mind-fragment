@@ -9,13 +9,14 @@ import {
 
 describe('module library definitions', () => {
   it('provides blueprint metadata for the MVP modules', () => {
-    expect(MODULE_LIBRARY).toHaveLength(5);
+    expect(MODULE_LIBRARY).toHaveLength(6);
     expect(DEFAULT_MODULE_LOADOUT).toEqual([
       'core.movement',
       'arm.manipulator',
       'storage.cargo',
       'fabricator.basic',
       'sensor.survey',
+      'status.signal',
     ]);
 
     for (const moduleId of DEFAULT_MODULE_LOADOUT) {
@@ -66,6 +67,11 @@ describe('module library definitions', () => {
     const scanRange = scannerValues?.scanRange.value as number;
     expect(scanRange).toBeGreaterThan(0);
     expect(scannerActions?.scan.metadata.label).toBe('Sweep area');
+
+    const statusValues = telemetry.values['status.signal'];
+    const statusActions = telemetry.actions['status.signal'];
+    expect(statusValues?.active.value).toBe(false);
+    expect(statusActions?.toggleStatus.metadata.label).toBe('Toggle status');
 
     const linearResult = chassis.invokeAction('core.movement', 'setLinearVelocity', { x: 200, y: 0 }) as {
       x: number;
@@ -158,6 +164,15 @@ describe('module library definitions', () => {
 
     const cooldownResult = chassis.invokeAction('sensor.survey', 'scan', {}) as Record<string, unknown>;
     expect(cooldownResult.status).toBe('cooldown');
+
+    const statusToggle = chassis.invokeAction('status.signal', 'toggleStatus', {}) as { active: boolean };
+    expect(statusToggle.active).toBe(true);
+    const statusSet = chassis.invokeAction('status.signal', 'setStatus', { value: false }) as {
+      status: string;
+      active: boolean;
+    };
+    expect(statusSet.status).toBe('ok');
+    expect(statusSet.active).toBe(false);
 
     chassis.detachModule('sensor.survey');
     expect(() => chassis.invokeAction('sensor.survey', 'scan', {})).toThrow();

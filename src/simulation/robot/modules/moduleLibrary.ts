@@ -4,8 +4,9 @@ import { ManipulationModule } from './manipulationModule';
 import { CargoHoldModule } from './cargoHoldModule';
 import { CraftingModule } from './craftingModule';
 import { ScanningModule } from './scanningModule';
+import { StatusModule, STATUS_MODULE_ID } from './statusModule';
 
-export type ModuleIconVariant = 'movement' | 'manipulation' | 'inventory' | 'crafting' | 'scanning';
+export type ModuleIconVariant = 'movement' | 'manipulation' | 'inventory' | 'crafting' | 'scanning' | 'status';
 
 export interface ModuleParameterMetadata {
   key: string;
@@ -116,6 +117,11 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         label: 'Gather resource',
         description: 'Harvest a surveyed node and transfer it into cargo storage.',
       },
+      {
+        name: 'dropResource',
+        label: 'Drop resource',
+        description: 'Release stored resources to create or expand nearby ground piles.',
+      },
     ],
     telemetry: [
       {
@@ -144,9 +150,19 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         description: 'Total resource units transferred into inventory.',
       },
       {
+        key: 'totalDeposited',
+        label: 'Total deposited',
+        description: 'Total resource units released back into the field.',
+      },
+      {
         key: 'lastGather',
         label: 'Last gather',
         description: 'Result payload from the most recent harvesting attempt.',
+      },
+      {
+        key: 'lastDrop',
+        label: 'Last drop',
+        description: 'Summary of the most recent drop operation.',
       },
     ],
     instantiate: () => new ManipulationModule(),
@@ -294,6 +310,44 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
     ],
     instantiate: () => new ScanningModule(),
   },
+  {
+    id: STATUS_MODULE_ID,
+    title: 'Status Indicator',
+    summary:
+      'Auxiliary signal lamp that broadcasts a binary status state across the chassis.',
+    icon: 'status',
+    attachment: { slot: 'sensor', index: 1 },
+    provides: ['status.signal'],
+    requires: [],
+    capacityCost: 1,
+    parameters: [
+      {
+        key: 'defaultState',
+        label: 'Default state',
+        description: 'Whether the indicator should activate on boot.',
+      },
+    ],
+    actions: [
+      {
+        name: 'toggleStatus',
+        label: 'Toggle status',
+        description: 'Flip the indicator between illuminated and idle states.',
+      },
+      {
+        name: 'setStatus',
+        label: 'Set status',
+        description: 'Force the indicator on or off using a boolean input.',
+      },
+    ],
+    telemetry: [
+      {
+        key: 'active',
+        label: 'Indicator active',
+        description: 'True when the status lamp is emitting light.',
+      },
+    ],
+    instantiate: () => new StatusModule(),
+  },
 ];
 
 const MODULE_LOOKUP = MODULE_LIBRARY.reduce<Record<string, ModuleBlueprint>>((accumulator, blueprint) => {
@@ -307,6 +361,7 @@ export const DEFAULT_MODULE_LOADOUT = [
   'storage.cargo',
   'fabricator.basic',
   'sensor.survey',
+  STATUS_MODULE_ID,
 ];
 
 export const getModuleBlueprint = (id: string): ModuleBlueprint | null => MODULE_LOOKUP[id] ?? null;

@@ -16,18 +16,26 @@ interface GatherResourcePayload {
   maxDistance?: number;
 }
 
+interface DropResourcePayload {
+  resource?: string;
+  amount?: number;
+  mergeDistance?: number;
+}
+
 export interface ManipulationModuleOptions {
   gripStrength?: number;
 }
 
 const DEFAULT_GATHER_RANGE = 220;
 const DEFAULT_GATHER_AMOUNT = 12;
+const DEFAULT_DROP_MERGE_DISTANCE = 32;
 
 export class ManipulationModule extends RobotModule {
   private readonly defaultGripStrength: number;
   private port: ModulePort | null = null;
   private operationsCompleted = 0;
   private harvestedTotal = 0;
+  private depositedTotal = 0;
 
   constructor({ gripStrength = 35 }: ManipulationModuleOptions = {}) {
     super({
@@ -45,6 +53,7 @@ export class ManipulationModule extends RobotModule {
     this.port = port;
     this.operationsCompleted = 0;
     this.harvestedTotal = 0;
+    this.depositedTotal = 0;
 
     port.publishValue('gripStrength', this.defaultGripStrength, {
       label: 'Grip strength',
@@ -67,8 +76,15 @@ export class ManipulationModule extends RobotModule {
       label: 'Total harvested',
       unit: 'units',
     });
+    port.publishValue('totalDeposited', 0, {
+      label: 'Total deposited',
+      unit: 'units',
+    });
     port.publishValue('lastGather', null, {
       label: 'Last gather result',
+    });
+    port.publishValue('lastDrop', null, {
+      label: 'Last drop result',
     });
 
     port.registerAction(
@@ -113,6 +129,20 @@ export class ManipulationModule extends RobotModule {
         ],
       },
     );
+
+    port.registerAction(
+      'dropResource',
+      (payload, context) => this.dropResource(payload, context),
+      {
+        label: 'Drop resource',
+        summary: 'Release inventory at the current position to form a resource pile.',
+        parameters: [
+          { key: 'resource', label: 'Resource id' },
+          { key: 'amount', label: 'Amount', unit: 'units' },
+          { key: 'mergeDistance', label: 'Merge radius', unit: 'units' },
+        ],
+      },
+    );
   }
 
   override onDetach(): void {
@@ -120,6 +150,7 @@ export class ManipulationModule extends RobotModule {
     this.port?.unregisterAction('grip');
     this.port?.unregisterAction('release');
     this.port?.unregisterAction('gatherResource');
+    this.port?.unregisterAction('dropResource');
     this.port = null;
   }
 
@@ -248,5 +279,117 @@ export class ManipulationModule extends RobotModule {
       overflow: storeResult.overflow,
     });
     return result;
+  }
+
+  private dropResource(payload: unknown, context: unknown): Record<string, unknown> {
+    if (!this.port) {
+      return { status: 'inactive', totalDropped: 0, resources: [] };
+    }
+
+    const typedContext = context as ModuleActionContext;
+    const inventory = typedContext?.utilities?.inventory;
+    const resourceField = typedContext?.utilities?.resourceField;
+    if (!inventory || !resourceField) {
+      const fallback = { status: 'missing-systems', totalDropped: 0, resources: [] as never[] };
+      this.port.updateValue('lastDrop', fallback);
+      return fallback;
+    }
+
+    const typedPayload = (payload ?? {}) as DropResourcePayload;
+    const origin = { ...typedContext.state.position };
+    const mergeDistance = Number.isFinite(typedPayload.mergeDistance)
+      ? Math.max(typedPayload.mergeDistance as number, 0)
+      : DEFAULT_DROP_MERGE_DISTANCE;
+    const specifiedResource = typedPayload.resource?.trim().toLowerCase() ?? null;
+    const requestedAmount = Number.isFinite(typedPayload.amount)
+      ? Math.max(typedPayload.amount as number, 0)
+      : null;
+
+    type DropDetail = {
+      resource: string;
+      dropped: number;
+      remaining: number;
+      nodeId: string;
+      nodeQuantity: number;
+      position: { x: number; y: number };
+    };
+
+    const attemptDrop = (resourceId: string, limit: number | null): DropDetail | null => {
+      const trimmed = resourceId.trim().toLowerCase();
+      if (!trimmed) {
+        return null;
+      }
+
+      const available = inventory.getQuantity(trimmed);
+      const desired = limit !== null ? Math.min(limit, available) : available;
+      if (desired <= 0) {
+        return null;
+      }
+
+      const withdrawal = inventory.withdraw(trimmed, desired);
+      if (withdrawal.withdrawn <= 0) {
+        return null;
+      }
+
+      const node = resourceField.upsertNode({
+        type: trimmed,
+        position: origin,
+        quantity: withdrawal.withdrawn,
+        mergeDistance,
+        metadata: { source: 'robot-drop', operations: this.operationsCompleted + 1 },
+      });
+
+      return {
+        resource: trimmed,
+        dropped: withdrawal.withdrawn,
+        remaining: withdrawal.remaining,
+        nodeId: node.id,
+        nodeQuantity: node.quantity,
+        position: { ...node.position },
+      };
+    };
+
+    const details: DropDetail[] = [];
+    if (specifiedResource) {
+      const detail = attemptDrop(specifiedResource, requestedAmount);
+      if (detail) {
+        details.push(detail);
+      }
+    } else {
+      const snapshot = inventory.getSnapshot();
+      for (const entry of snapshot.entries) {
+        const detail = attemptDrop(entry.resource, null);
+        if (detail) {
+          details.push(detail);
+        }
+      }
+    }
+
+    const totalDropped = details.reduce((sum, detail) => sum + detail.dropped, 0);
+    const partial = details.some((detail) => detail.remaining > 0);
+    const status = totalDropped <= 0 ? 'empty' : partial ? 'partial' : 'dropped';
+
+    if (totalDropped > 0) {
+      this.operationsCompleted += 1;
+      this.depositedTotal += totalDropped;
+      this.port.updateValue('operationsCompleted', this.operationsCompleted);
+      this.port.updateValue('totalDeposited', this.depositedTotal);
+    }
+
+    const summary = {
+      status,
+      totalDropped,
+      resources: details.map((detail) => ({
+        resource: detail.resource,
+        dropped: detail.dropped,
+        remaining: detail.remaining,
+        nodeId: detail.nodeId,
+        nodeQuantity: detail.nodeQuantity,
+        position: detail.position,
+      })),
+    };
+
+    this.port.updateValue('lastDrop', summary);
+    return summary;
   }
 }

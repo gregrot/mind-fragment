@@ -1,15 +1,14 @@
 /*
  * Sci-fi font stack
- * Download the Orbitron and Rajdhani font files using the setup notes in README.md
- * and drop them into `public/fonts/` with the names referenced below. If the files
- * are missing, the stack gracefully falls back to the next available family.
+ * The font files are bundled from `src/styles/fonts`. If the files are missing,
+ * the stack gracefully falls back to the next available family.
  */
 @font-face {
   font-family: 'Orbitron';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local('Orbitron Regular'), local('Orbitron'), url('/fonts/Orbitron-Regular.ttf') format('truetype');
+  src: local('Orbitron Regular'), local('Orbitron'), url('./fonts/Orbitron-Regular.ttf') format('truetype');
 }
 
 @font-face {
@@ -17,7 +16,7 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: local('Orbitron Bold'), local('Orbitron'), url('/fonts/Orbitron-Bold.ttf') format('truetype');
+  src: local('Orbitron Bold'), local('Orbitron'), url('./fonts/Orbitron-Bold.ttf') format('truetype');
 }
 
 @font-face {
@@ -25,7 +24,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local('Rajdhani Regular'), local('Rajdhani'), url('/fonts/Rajdhani-Regular.ttf') format('truetype');
+  src: local('Rajdhani Regular'), local('Rajdhani'), url('./fonts/Rajdhani-Regular.ttf') format('truetype');
 }
 
 @font-face {
@@ -33,7 +32,11 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: local('Rajdhani Bold'), local('Rajdhani'), url('/fonts/Rajdhani-Regular.ttf') format('truetype');
+  src:
+    local('Rajdhani Bold'),
+    local('Rajdhani'),
+    url('./fonts/Rajdhani-Bold.ttf') format('truetype'),
+    url('./fonts/Rajdhani-Regular.ttf') format('truetype');
 }
 
 :root {

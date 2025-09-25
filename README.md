@@ -29,7 +29,6 @@ This repository is the stripped-back planning space for rebooting Mind Fragment 
 ## Block Builder Prototype
 - Live React workspace under `src/` organised with Vite for quick iteration.
 - Install dependencies with `npm install`, then launch the playground via `npm run dev` to explore block behaviours.
-- Use `npm run storybook` to preview UI components in isolation with live controls while refining the interface.
 - Run the regression pack with `npm test` and `npm run typecheck` to catch unit and typing slips.
 - Execute targeted Playwright flows with `npx playwright test playwright/block-workspace.spec.ts` to confirm literal editing, signal selection, and operator nesting remain stable.
 - Palette now includes event anchors (When Started) and multi-branch control blocks (Parallel, Forever) so you can prototype branching flows quickly.

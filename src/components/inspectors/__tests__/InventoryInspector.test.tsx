@@ -2,6 +2,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import { afterEach, describe, expect, it } from 'vitest';
 import { useEffect } from 'react';
 import InventoryInspector from '../InventoryInspector';
+import inventoryStyles from '../../../styles/InventoryInspector.module.css';
 import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
 import { DragProvider, useDragContext } from '../../../state/DragContext';
 import type { EntityOverlayData } from '../../../types/overlay';
@@ -97,13 +98,21 @@ const ManagerCapture = (): null => {
   return null;
 };
 
-const renderInspector = (entity: EntityOverlayData) =>
+const renderInspector = (
+  entity: EntityOverlayData,
+  options?: { isLoading?: boolean },
+) =>
   render(
     <EntityOverlayManagerProvider>
       <DragProvider>
         <ManagerCapture />
         <DragController />
-        <InventoryInspector entity={entity} onClose={() => {}} />
+        <InventoryInspector
+          entity={entity}
+          onClose={() => {}}
+          isLoading={options?.isLoading ?? false}
+          persistenceState={{ status: 'idle', error: null }}
+        />
       </DragProvider>
     </EntityOverlayManagerProvider>,
   );
@@ -319,5 +328,56 @@ describe('InventoryInspector', () => {
     const validation = target.accepts(session);
     expect(validation.canDrop).toBe(false);
     expect(validation.reason).toBe('incompatible-item');
+  });
+
+  it('renders skeleton state with loading classes when requested', async () => {
+    const entity = createEntity([
+      createSlot('cargo-0', 0, null),
+      createSlot('cargo-1', 1, null),
+    ]);
+
+    renderInspector(entity, { isLoading: true });
+
+    const inspector = await screen.findByTestId('inventory-inspector');
+    expect(inspector).toHaveAttribute('data-loading', 'true');
+    expect(inspector.className.split(' ')).toContain(inventoryStyles.loading);
+  });
+
+  it('exposes accessible labels for empty slots in the loaded state', async () => {
+    const entity = createEntity([
+      createSlot('cargo-0', 0, null),
+      createSlot('cargo-1', 1, null),
+    ]);
+
+    renderInspector(entity);
+
+    const emptyButton = await screen.findByRole('button', { name: /empty inventory slot 1/i });
+    expect(emptyButton).toBeInTheDocument();
+  });
+
+  it('displays a placeholder when the entity lacks inventory data', () => {
+    const entity: EntityOverlayData = {
+      entityId: 99 as EntityId,
+      name: 'No Inventory',
+      description: 'Test entity without inventory',
+      overlayType: 'complex',
+      chassis: undefined,
+      inventory: undefined,
+    };
+
+    render(
+      <EntityOverlayManagerProvider>
+        <DragProvider>
+          <InventoryInspector
+            entity={entity}
+            onClose={() => {}}
+            isLoading={false}
+            persistenceState={{ status: 'idle', error: null }}
+          />
+        </DragProvider>
+      </EntityOverlayManagerProvider>,
+    );
+
+    expect(screen.getByText(/inventory data is not available/i)).toBeInTheDocument();
   });
 });

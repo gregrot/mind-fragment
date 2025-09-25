@@ -223,39 +223,42 @@ export const EntityOverlayManagerProvider = ({
 
   const upsertEntityData = useCallback(
     (data: EntityOverlayData, options?: { silent?: boolean }) => {
-      let previous: EntityOverlayData | undefined;
-      let changed = false;
+      const previous = entityDataMap.get(data.entityId);
+      if (previous === data) {
+        return;
+      }
+
       setEntityDataMap((current) => {
-        previous = current.get(data.entityId);
-        if (previous === data) {
+        const existing = current.get(data.entityId);
+        if (existing === data) {
           return current;
         }
         const next = new Map(current);
         next.set(data.entityId, data);
-        changed = true;
         return next;
       });
-      if (!changed) {
+
+      if (options?.silent) {
         return;
       }
+
       const changeEvent: OverlayChangeEvent = {
         kind: 'upsert',
         entityId: data.entityId,
         next: data,
         previous,
       };
-      if (!options?.silent) {
-        emitEvent({
-          type: 'change',
-          changeType: 'upsert',
-          entityId: data.entityId,
-          next: data,
-          previous,
-        });
-        schedulePersistence(changeEvent);
-      }
+
+      emitEvent({
+        type: 'change',
+        changeType: 'upsert',
+        entityId: data.entityId,
+        next: data,
+        previous,
+      });
+      schedulePersistence(changeEvent);
     },
-    [emitEvent, schedulePersistence],
+    [emitEvent, entityDataMap, schedulePersistence],
   );
 
   const removeEntityData = useCallback(

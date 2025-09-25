@@ -12,7 +12,14 @@ const baseEntity: EntityOverlayData = {
 };
 
 const renderInspector = (overrides: Partial<EntityOverlayData> = {}) =>
-  render(<EntityInfoInspector entity={{ ...baseEntity, ...overrides }} onClose={() => {}} />);
+  render(
+    <EntityInfoInspector
+      entity={{ ...baseEntity, ...overrides }}
+      onClose={() => {}}
+      isLoading={false}
+      persistenceState={{ status: 'idle', error: null }}
+    />,
+  );
 
 afterEach(() => {
   cleanup();

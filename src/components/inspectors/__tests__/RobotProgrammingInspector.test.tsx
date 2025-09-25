@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RobotProgrammingInspector from '../RobotProgrammingInspector';
+import programmingStyles from '../../../styles/RobotProgrammingPanel.module.css';
 import { ProgrammingInspectorProvider } from '../../../state/ProgrammingInspectorContext';
 import { createBlockInstance } from '../../../blocks/library';
 import type { WorkspaceState } from '../../../types/blocks';
@@ -55,7 +56,11 @@ const createWorkspaceWithMoveBlock = (): WorkspaceState => {
   return [start];
 };
 
-const renderInspector = (entity: EntityOverlayData, workspace: WorkspaceState) => {
+const renderInspector = (
+  entity: EntityOverlayData,
+  workspace: WorkspaceState,
+  options?: { isLoading?: boolean },
+) => {
   const contextValue = {
     workspace,
     onDrop: vi.fn(),
@@ -67,7 +72,12 @@ const renderInspector = (entity: EntityOverlayData, workspace: WorkspaceState) =
 
   return render(
     <ProgrammingInspectorProvider value={contextValue}>
-      <RobotProgrammingInspector entity={entity} onClose={() => {}} />
+      <RobotProgrammingInspector
+        entity={entity}
+        onClose={() => {}}
+        isLoading={options?.isLoading ?? false}
+        persistenceState={{ status: 'idle', error: null }}
+      />
     </ProgrammingInspectorProvider>,
   );
 };
@@ -113,5 +123,16 @@ describe('RobotProgrammingInspector', () => {
     expect(screen.getByText(/locomotion thrusters mk1/i)).toBeInTheDocument();
     const moveBlock = screen.getByTestId('block-move');
     expect(moveBlock).toHaveAttribute('data-state-warning', 'true');
+  });
+
+  it('renders skeleton layout when loading', () => {
+    const workspace = createWorkspaceWithMoveBlock();
+    const entity = createEntity();
+
+    renderInspector(entity, workspace, { isLoading: true });
+
+    const inspector = screen.getByTestId('robot-programming-inspector');
+    expect(inspector).toHaveAttribute('data-loading', 'true');
+    expect(inspector.className.split(' ')).toContain(programmingStyles.programmingSkeleton);
   });
 });

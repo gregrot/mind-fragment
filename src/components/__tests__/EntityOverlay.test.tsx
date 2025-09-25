@@ -11,6 +11,7 @@ import type { EntityId } from '../../simulation/ecs/world';
 import { registerInspector } from '../../overlay/inspectorRegistry';
 import EntityInfoInspector from '../inspectors/EntityInfoInspector';
 import { DragProvider } from '../../state/DragContext';
+import type { OverlayPersistenceAdapter } from '../../state/overlayPersistence';
 
 const createOverlayData = (): EntityOverlayData => ({
   entityId: 5 as EntityId,
@@ -128,5 +129,41 @@ describe('EntityOverlay', () => {
     expect(screen.getByText('320')).toBeInTheDocument();
     expect(screen.getByText('Composition')).toBeInTheDocument();
     expect(screen.getByText('Iron, Nickel')).toBeInTheDocument();
+  });
+
+  it('displays loading skeletons while persistence is saving', async () => {
+    const data = createOverlayData();
+    const persistenceAdapter: OverlayPersistenceAdapter = {
+      saveEntity: () => new Promise(() => {}),
+      removeEntity: () => new Promise(() => {}),
+    };
+
+    const SavingOverlayHarness = ({ onClose }: { onClose: () => void }): JSX.Element => {
+      const manager = useEntityOverlayManager();
+
+      useEffect(() => {
+        if (!manager.isOpen) {
+          manager.openOverlay(data);
+          Promise.resolve().then(() => {
+            manager.upsertEntityData({ ...data, name: 'Saving Unit' });
+          });
+        }
+      }, [manager]);
+
+      return <EntityOverlay onClose={onClose} />;
+    };
+
+    render(
+      <EntityOverlayManagerProvider persistenceAdapter={persistenceAdapter}>
+        <DragProvider>
+          <SavingOverlayHarness onClose={vi.fn()} />
+        </DragProvider>
+      </EntityOverlayManagerProvider>,
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog).toHaveAttribute('data-loading', 'true'));
+    expect(dialog).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText(/Loading entity/i)).toBeInTheDocument();
   });
 });

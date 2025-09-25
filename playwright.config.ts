@@ -11,12 +11,20 @@ export default defineConfig({
     trace: 'on-first-retry',
     headless: true,
   },
-  webServer: {
-    command: 'npm run build && npm run preview -- --host 0.0.0.0 --port 4173',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180000,
-  },
+  webServer: [
+    {
+      command: 'npm run build && npm run preview -- --host 0.0.0.0 --port 4173',
+      url: 'http://127.0.0.1:4173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 180000,
+    },
+    {
+      command: 'npx storybook dev -p 6006 --ci --quiet --host 0.0.0.0',
+      url: 'http://127.0.0.1:6006/iframe.html',
+      reuseExistingServer: !process.env.CI,
+      timeout: 180000,
+    },
+  ],
   projects: [
     {
       name: 'chromium',

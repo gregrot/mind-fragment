@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import ModuleIcon from '../ModuleIcon';
+import SkeletonBlock from '../SkeletonBlock';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useEntityOverlayManager } from '../../state/EntityOverlayManager';
 import { useDragContext } from '../../state/DragContext';
@@ -81,11 +82,13 @@ interface InventorySlotProps {
   activeTargetId: string | null;
   validation: DropValidationResult | null;
   isDragging: boolean;
+  hovered: boolean;
   onStartDrag: (event: ReactPointerEvent<HTMLButtonElement>, slot: SlotSchema) => void;
   onDrop: (slotId: string, session: DragSession) => void;
   registerDropTarget: ReturnType<typeof useDragContext>['registerDropTarget'];
   setActiveTarget: ReturnType<typeof useDragContext>['setActiveTarget'];
   validateDrop: (slot: SlotSchema, session: DragSession) => DropValidationResult;
+  onHoverChange: (slotId: string | null) => void;
 }
 
 const InventorySlot = ({
@@ -97,11 +100,13 @@ const InventorySlot = ({
   activeTargetId,
   validation,
   isDragging,
+  hovered,
   onStartDrag,
   onDrop,
   registerDropTarget,
   setActiveTarget,
   validateDrop,
+  onHoverChange,
 }: InventorySlotProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const targetId = getSlotTargetId(entityId, slot.id);
@@ -158,12 +163,25 @@ const InventorySlot = ({
 
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
+  const slotClasses = [styles.slot];
+  if (hovered) {
+    slotClasses.push(styles.slotHovered);
+  }
+  if (isDragging) {
+    slotClasses.push(styles.slotDragging);
+  }
+  if (isEmpty) {
+    slotClasses.push(styles.slotEmpty);
+  }
+
   return (
     <div
       ref={containerRef}
-      className={styles.slot}
+      className={slotClasses.join(' ')}
       data-drop-state={dropState}
       data-slot-locked={slot.metadata.locked ? 'true' : undefined}
+      data-hovered={hovered ? 'true' : undefined}
+      data-dragging={isDragging ? 'true' : undefined}
       data-testid={`inventory-slot-${slot.id}`}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -173,6 +191,10 @@ const InventorySlot = ({
         type="button"
         className={styles.itemButton}
         onPointerDown={(event) => onStartDrag(event, slot)}
+        onMouseEnter={() => onHoverChange(slot.id)}
+        onMouseLeave={() => onHoverChange(null)}
+        onFocus={() => onHoverChange(slot.id)}
+        onBlur={() => onHoverChange(null)}
         disabled={isEmpty || slot.metadata.locked}
         aria-label={ariaLabel}
       >
@@ -196,7 +218,7 @@ const InventorySlot = ({
   );
 };
 
-const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
+const InventoryInspector = ({ entity, isLoading }: InspectorProps): JSX.Element => {
   const manager = useEntityOverlayManager();
   const {
     registerDropTarget,
@@ -214,10 +236,21 @@ const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const initialSlots = useMemo(() => sortSlots(entity.inventory?.slots ?? []), [entity.inventory?.slots]);
   const [slots, setSlots] = useState<SlotSchema[]>(initialSlots);
+  const [hoveredSlotId, setHoveredSlotId] = useState<string | null>(null);
 
   useEffect(() => {
     setSlots(sortSlots(entity.inventory?.slots ?? []));
   }, [entity.inventory?.slots]);
+
+  useEffect(() => {
+    if (!hoveredSlotId) {
+      return;
+    }
+    const hasSlot = entity.inventory?.slots?.some((slot) => slot.id === hoveredSlotId) ?? false;
+    if (!hasSlot) {
+      setHoveredSlotId(null);
+    }
+  }, [entity.inventory?.slots, hoveredSlotId]);
 
   useEffect(() => {
     return () => {
@@ -468,6 +501,31 @@ const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
     [cancelDrag, createPreview, drop, entity.entityId, startDrag, updatePointer],
   );
 
+  if (isLoading) {
+    return (
+      <section
+        className={`${styles.inspector} ${styles.loading}`.trim()}
+        aria-label="Inventory inspector"
+        data-testid="inventory-inspector"
+        data-loading="true"
+        aria-busy="true"
+      >
+        <header className={styles.header}>
+          <SkeletonBlock className={styles.headerSkeletonTitle} height={24} width="44%" />
+          <SkeletonBlock className={styles.headerSkeletonSummary} height={16} width="68%" />
+        </header>
+        <div className={styles.gridSkeleton}>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className={styles.slotSkeleton}>
+              <SkeletonBlock height={12} width="40%" variant="text" />
+              <SkeletonBlock className={styles.slotSkeletonTile} height={120} />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   if (!entity.inventory) {
     return (
       <section className={styles.inspector} aria-label="Inventory inspector">
@@ -477,7 +535,12 @@ const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
   }
 
   return (
-    <section className={styles.inspector} aria-label="Inventory inspector" data-testid="inventory-inspector">
+    <section
+      className={styles.inspector}
+      aria-label="Inventory inspector"
+      data-testid="inventory-inspector"
+      data-dragging={isDragging ? 'true' : undefined}
+    >
       <header className={styles.header}>
         <h3 className={styles.title}>Inventory Management</h3>
         <p className={styles.summary}>Organise stored resources and spare modules for deployment.</p>
@@ -498,11 +561,13 @@ const InventoryInspector = ({ entity }: InspectorProps): JSX.Element => {
               activeTargetId={activeTargetId}
               validation={validation}
               isDragging={isDragging}
+              hovered={hoveredSlotId === slot.id}
               onStartDrag={handleStartDrag}
               onDrop={handleDropOnSlot}
               registerDropTarget={registerDropTarget}
               setActiveTarget={setActiveTarget}
               validateDrop={validateDrop}
+              onHoverChange={setHoveredSlotId}
             />
           );
         })}

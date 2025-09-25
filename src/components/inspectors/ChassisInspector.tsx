@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import ModuleIcon from '../ModuleIcon';
+import SkeletonBlock from '../SkeletonBlock';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useEntityOverlayManager } from '../../state/EntityOverlayManager';
 import { useDragContext } from '../../state/DragContext';
@@ -136,12 +137,25 @@ const ChassisSlot = ({
     }
   }, [activeTargetId, isDragging, setActiveTarget, targetId]);
 
+  const slotClasses = [styles.slot];
+  if (hovered) {
+    slotClasses.push(styles.slotHovered);
+  }
+  if (isDragging) {
+    slotClasses.push(styles.slotDragging);
+  }
+  if (!slot.occupantId) {
+    slotClasses.push(styles.slotEmpty);
+  }
+
   return (
     <div
       ref={containerRef}
-      className={styles.slot}
+      className={slotClasses.join(' ')}
       data-drop-state={dropState}
       data-slot-locked={slot.metadata.locked ? 'true' : undefined}
+      data-hovered={hovered ? 'true' : undefined}
+      data-dragging={isDragging ? 'true' : undefined}
       data-testid={`chassis-slot-${slot.id}`}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -182,7 +196,7 @@ const ChassisSlot = ({
   );
 };
 
-const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
+const ChassisInspector = ({ entity, isLoading }: InspectorProps): JSX.Element => {
   const manager = useEntityOverlayManager();
   const {
     registerDropTarget,
@@ -414,6 +428,32 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
     [cancelDrag, createPreview, drop, entity.entityId, startDrag, updatePointer],
   );
 
+  if (isLoading) {
+    return (
+      <section
+        className={`${styles.inspector} ${styles.loading}`.trim()}
+        aria-label="Chassis inspector"
+        data-testid="chassis-inspector"
+        data-loading="true"
+        aria-busy="true"
+      >
+        <header className={styles.header}>
+          <SkeletonBlock className={styles.headerSkeletonTitle} height={24} width="48%" />
+          <SkeletonBlock className={styles.headerSkeletonSummary} height={16} width="72%" />
+        </header>
+        <div className={styles.gridSkeleton}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className={styles.slotSkeleton}>
+              <SkeletonBlock height={12} width="40%" variant="text" />
+              <SkeletonBlock className={styles.slotSkeletonType} height={10} width="60%" variant="text" />
+              <SkeletonBlock className={styles.slotSkeletonTile} height={132} />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   if (!entity.chassis) {
     return (
       <section className={styles.inspector} aria-label="Chassis inspector">
@@ -423,7 +463,12 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
   }
 
   return (
-    <section className={styles.inspector} aria-label="Chassis inspector" data-testid="chassis-inspector">
+    <section
+      className={styles.inspector}
+      aria-label="Chassis inspector"
+      data-testid="chassis-inspector"
+      data-dragging={isDragging ? 'true' : undefined}
+    >
       <header className={styles.header}>
         <h3 className={styles.title}>Chassis Configuration</h3>
         <p className={styles.summary}>Arrange installed modules and review their capabilities.</p>

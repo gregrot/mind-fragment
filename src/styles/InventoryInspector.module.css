@@ -5,6 +5,10 @@
   padding: var(--space-2) 0;
 }
 
+.loading {
+  gap: var(--space-4);
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -29,6 +33,12 @@
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
+.gridSkeleton {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
 .slot {
   position: relative;
   display: flex;
@@ -39,7 +49,7 @@
   border: 1px solid rgba(110, 130, 170, 0.35);
   background: rgba(10, 16, 28, 0.55);
   min-height: 160px;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-fast);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-fast), background var(--transition-fast);
 }
 
 .slot[data-drop-state='active-valid'] {
@@ -55,6 +65,30 @@
 .slot[data-slot-locked='true'] {
   border-style: dashed;
   opacity: 0.65;
+}
+
+.slot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.slotHovered::after,
+.slot[data-hovered='true']::after {
+  border-color: rgba(100, 249, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(100, 249, 255, 0.1);
+}
+
+.slotDragging {
+  transform: translateY(-1px);
+}
+
+.slotEmpty {
+  background: rgba(10, 16, 28, 0.42);
 }
 
 .slotLabel {
@@ -93,6 +127,21 @@
   cursor: default;
   opacity: 0.6;
   background: rgba(25, 35, 55, 0.35);
+}
+
+.headerSkeletonTitle,
+.headerSkeletonSummary {
+  display: block;
+}
+
+.slotSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.slotSkeletonTile {
+  border-radius: var(--radius-md);
 }
 
 .itemVisual {

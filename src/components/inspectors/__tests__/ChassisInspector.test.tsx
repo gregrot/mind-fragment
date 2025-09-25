@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChassisInspector from '../ChassisInspector';
+import chassisStyles from '../../../styles/ChassisInspector.module.css';
 import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
 import { DragProvider, useDragContext } from '../../../state/DragContext';
 import type { EntityOverlayData } from '../../../types/overlay';
@@ -87,13 +88,21 @@ const ManagerCapture = (): null => {
   return null;
 };
 
-const renderInspector = (entity: EntityOverlayData) =>
+const renderInspector = (
+  entity: EntityOverlayData,
+  options?: { isLoading?: boolean },
+) =>
   render(
     <EntityOverlayManagerProvider>
       <DragProvider>
         <ManagerCapture />
         <DragController />
-        <ChassisInspector entity={entity} onClose={() => {}} />
+        <ChassisInspector
+          entity={entity}
+          onClose={() => {}}
+          isLoading={options?.isLoading ?? false}
+          persistenceState={{ status: 'idle', error: null }}
+        />
       </DragProvider>
     </EntityOverlayManagerProvider>,
   );
@@ -121,6 +130,21 @@ describe('ChassisInspector', () => {
     expect(screen.getByText('Precision Manipulator Rig')).toBeInTheDocument();
     const renderedSlots = screen.getAllByTestId(/chassis-slot-/);
     expect(renderedSlots).toHaveLength(3);
+  });
+
+  it('renders loading skeleton classes when the inspector is loading', async () => {
+    const slots = [
+      createSlot('core-0', 0, 'core.movement'),
+      createSlot('extension-0', 1, null),
+    ];
+    const entity = createEntity(slots);
+
+    renderInspector(entity, { isLoading: true });
+
+    const inspector = await screen.findByTestId('chassis-inspector');
+    expect(inspector).toHaveAttribute('data-loading', 'true');
+    expect(inspector.className.split(' ')).toContain(chassisStyles.loading);
+    expect(inspector).toHaveAttribute('aria-label', 'Chassis inspector');
   });
 
   it('displays module tooltips on hover', async () => {

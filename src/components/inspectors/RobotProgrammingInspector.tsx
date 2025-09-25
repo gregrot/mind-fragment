@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import RobotProgrammingPanel from '../RobotProgrammingPanel';
+import SkeletonBlock from '../SkeletonBlock';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useProgrammingInspector } from '../../state/ProgrammingInspectorContext';
 import { useSimulationRuntime } from '../../hooks/useSimulationRuntime';
 import { MODULE_LIBRARY } from '../../simulation/robot/modules/moduleLibrary';
 import type { BlockInstance, WorkspaceState } from '../../types/blocks';
+import programmingStyles from '../../styles/RobotProgrammingPanel.module.css';
 
 const MODULE_LABELS = new Map(MODULE_LIBRARY.map((module) => [module.id, module.title]));
 
@@ -59,7 +61,7 @@ const gatherModuleRequirements = (
   return requirements;
 };
 
-const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
+const RobotProgrammingInspector = ({ entity, isLoading }: InspectorProps): JSX.Element => {
   const { workspace, onDrop, onTouchDrop, onUpdateBlock, onRemoveBlock, robotId } =
     useProgrammingInspector();
   const { status, stopProgram } = useSimulationRuntime(robotId);
@@ -111,20 +113,58 @@ const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
   const activeBlockId = entity.programState?.activeBlockId ?? null;
   const canStopProgram = status === 'running' ? stopProgram : undefined;
 
+  if (isLoading) {
+    return (
+      <section
+        className={`${programmingStyles.programmingShell} ${programmingStyles.programmingSkeleton}`.trim()}
+        aria-label="Programming inspector"
+        data-testid="robot-programming-inspector"
+        data-loading="true"
+        aria-busy="true"
+      >
+        <div className={programmingStyles.summarySkeleton}>
+          <SkeletonBlock className={programmingStyles.summarySkeletonTitle} height={24} width="40%" />
+          <SkeletonBlock className={programmingStyles.summarySkeletonBody} height={16} width="68%" />
+          <SkeletonBlock className={programmingStyles.summarySkeletonBody} height={16} width="55%" />
+        </div>
+        <div className={programmingStyles.layoutSkeleton}>
+          <div className={programmingStyles.paletteSkeleton}>
+            <SkeletonBlock height={18} width="60%" variant="text" />
+            <SkeletonBlock className={programmingStyles.paletteSkeletonBody} height={140} />
+          </div>
+          <div className={programmingStyles.workspaceSkeleton}>
+            <SkeletonBlock height={18} width="50%" variant="text" />
+            <SkeletonBlock className={programmingStyles.workspaceSkeletonSurface} height={180} />
+          </div>
+        </div>
+        <div className={programmingStyles.footerSkeleton}>
+          <SkeletonBlock height={36} width="28%" />
+          <SkeletonBlock height={12} width="50%" variant="text" />
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <RobotProgrammingPanel
-      workspace={workspace}
-      onDrop={onDrop}
-      onTouchDrop={onTouchDrop}
-      onUpdateBlock={onUpdateBlock}
-      onRemoveBlock={onRemoveBlock}
-      robotId={robotId}
-      isReadOnly={isRunning}
-      onRequestStop={canStopProgram}
-      moduleWarnings={moduleWarnings}
-      activeBlockId={activeBlockId}
-      warningBlockIds={warningBlockIds}
-    />
+    <section
+      className={programmingStyles.programmingShell}
+      aria-label="Programming inspector"
+      data-testid="robot-programming-inspector"
+    >
+      <RobotProgrammingPanel
+        workspace={workspace}
+        onDrop={onDrop}
+        onTouchDrop={onTouchDrop}
+        onUpdateBlock={onUpdateBlock}
+        onRemoveBlock={onRemoveBlock}
+        robotId={robotId}
+        isReadOnly={isRunning}
+        onRequestStop={canStopProgram}
+        moduleWarnings={moduleWarnings}
+        activeBlockId={activeBlockId}
+        warningBlockIds={warningBlockIds}
+      />
+    </section>
   );
 };
 

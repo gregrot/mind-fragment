@@ -1,9 +1,12 @@
 import type { ComponentType } from 'react';
+import type { EntityPersistenceState } from '../state/EntityOverlayManager';
 import type { EntityOverlayData, InspectorTabId } from '../types/overlay';
 
 export interface InspectorProps {
   entity: EntityOverlayData;
   onClose: () => void;
+  isLoading: boolean;
+  persistenceState: EntityPersistenceState;
 }
 
 export interface InspectorDefinition<TProps extends InspectorProps = InspectorProps> {

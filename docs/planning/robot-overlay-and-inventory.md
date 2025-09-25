@@ -53,13 +53,27 @@ This document defines the rebuilt interaction model for entity overlays, robot c
 - The `ProgramInspector` reflects the current execution state:
   - When a programme is running, the inspector is read-only and highlights the block currently executing.
   - To edit the programme the player must stop execution. Provide explicit copy that communicates the lock state and offers a stop control if absent elsewhere.
-- When execution stops, editing unlocks instantly and changes persist immediately back to the robot’s programme store.
-- The inspector should listen for chassis changes so blocks that depend on missing modules signal warnings, keeping parity with the runtime checks in the programming plan.
+  - When execution stops, editing unlocks instantly and changes persist immediately back to the robot’s programme store.
+  - The inspector should listen for chassis changes so blocks that depend on missing modules signal warnings, keeping parity with the runtime checks in the programming plan.
 
 ## Simple Entity Info Bubbles
 - Simple entities (e.g., resource nodes, loose objects) reuse the inspector framework but may supply only one lightweight inspector.
 - Minimum behaviour: display the entity name and a single-line description such as “This is a stick.”
 - Optional enrichments (health, output rate) can be layered on per entity definition without deviating from the shared inspector pipeline.
+
+## Overlay Styling Reference
+- `src/styles/SimulationOverlay.module.css` now provides the overarching layout primitives for the modal shell. Key hooks: `overlay`, `dialog`, `headerContent`, `tabSkeletonList`, `panelSkeletonGroup`, and the breakpoint-specific media queries for ≤960 px, ≤720 px, and ≤480 px.
+  :::task-stub{title="Trace overlay class usage"}
+  Cross-check any future updates to `EntityOverlay.tsx` against the class map in `src/styles/SimulationOverlay.module.css` so new hooks stay discoverable here.
+  :::
+- Inspector modules share colour and spacing tokens: `ChassisInspector.module.css` introduces `gridSkeleton`, `slotHovered`, and `slotSkeletonTile`, while `InventoryInspector.module.css` mirrors the pattern with `gridSkeleton`, `slotDragging`, and `headerSkeletonTitle`.
+  :::task-stub{title="Audit inspector skeleton classes"}
+  When extending inspector UIs, update both the relevant CSS module and this table to keep hover/skeleton class naming consistent across subsystems.
+  :::
+- `RobotProgrammingPanel.module.css` exposes `programmingShell`, `programmingSkeleton`, and per-column skeleton classes so the programming inspector can swap between loading placeholders and the interactive panel without layout shifts.
+  :::task-stub{title="Keep programming skeletons aligned"}
+  Coordinate changes to `RobotProgrammingInspector.tsx` and `RobotProgrammingPanel.module.css` so the shell/skeleton classes stay in sync with Storybook documentation.
+  :::
 
 ## Data Model and Persistence Updates
 - Inventories and chassis loadouts should share a common slot schema that records:

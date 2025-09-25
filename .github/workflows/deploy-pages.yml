@@ -33,9 +33,6 @@ jobs:
       - name: Build site
         run: npm run build
 
-      - name: Build Storybook
-        run: npm run build-storybook -- --output-dir dist/storybook
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -6,10 +6,10 @@
 - Document intent as soon as it lands. Update this roadmap and the steering guide whenever priorities shift so downstream contributors stay aligned.
 
 ## Phase 1 — Simulation & Programming Cohesion
-**Objective**: consolidate the existing Pixi simulation, robot overlay, and block workspace into a reliable authoring loop.
+**Objective**: consolidate the existing Pixi simulation, mechanism overlay, and block workspace into a reliable authoring loop.
 
 - ✅ Stabilise the Pixi shell initialisation and teardown lifecycle (covered by `SimulationShell`).
-- ✅ Maintain per-robot workspace state in React so switching entities retains draft programmes.
+- ✅ Maintain per-mechanism workspace state in React so switching entities retains draft programmes.
 - 🚧 Surface runtime compile errors inline in the overlay using `ProgramRunnerStatus`.
 - 🚧 Persist overlay edits optimistically and implement retry flows via `EntityOverlayManager` events.
 - 📌 Audit drag-and-drop affordances for accessibility (keyboard focus, ARIA labelling, and touch targets).
@@ -20,7 +20,7 @@
 - 🚧 Extend `simulationRuntime.subscribeTelemetry` consumers with grouped channels (Power, Navigation, Threats).
 - 📌 Add timeline scrubbing for recent telemetry snapshots to aid debugging.
 - 📌 Introduce breakpoint blocks or conditional pauses to let designers inspect world state mid-run.
-- 📌 Publish a diagnostics overlay that cross-references inventory, chassis capacity, and queued actions for the selected robot.
+- 📌 Publish a diagnostics overlay that cross-references inventory, chassis capacity, and queued actions for the selected mechanism.
 
 ## Phase 3 — World Growth & Narrative Hooks
 **Objective**: add context so the crash-site feels alive while keeping focus on programmable systems.
@@ -28,12 +28,12 @@
 - 📌 Re-enable onboarding through the `ONBOARDING_ENABLED` gate with a streamlined three-step tutorial.
 - 📌 Populate the scene with interactive points (e.g. resource nodes, hazards) driven by ECS components so block programmes have meaningful targets.
 - 📌 Layer narrative prompts triggered by telemetry events—short, flavourful callouts that respect the tone described in the steering guide.
-- 📌 Prototype cooperative tasks requiring multiple robots to share inventory or chained programmes.
+- 📌 Prototype cooperative tasks requiring multiple mechanisms to share inventory or chained programmes.
 
 ## Phase 4 — Persistence & Sharing
 **Objective**: support longer sessions and collaboration without breaking the tight iteration loop.
 
-- 📌 Persist robot configurations (chassis slots, inventory assignments, block programmes) to a storage backend.
+- 📌 Persist mechanism configurations (chassis slots, inventory assignments, block programmes) to a storage backend.
 - 📌 Implement save slots or timeline branches so players can experiment and roll back.
 - 📌 Add export/import for programmes in a human-readable JSON format compatible with `WorkspaceState`.
 - 📌 Explore cloud-sharing hooks so designers can distribute canonical challenge setups.

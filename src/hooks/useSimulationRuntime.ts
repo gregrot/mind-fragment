@@ -9,22 +9,22 @@ export interface SimulationRuntimeControls {
   stopProgram: () => void;
 }
 
-export const useSimulationRuntime = (robotId: string): SimulationRuntimeControls => {
-  const [status, setStatus] = useState<ProgramRunnerStatus>(simulationRuntime.getStatus(robotId));
+export const useSimulationRuntime = (mechanismId: string): SimulationRuntimeControls => {
+  const [status, setStatus] = useState<ProgramRunnerStatus>(simulationRuntime.getStatus(mechanismId));
 
-  useEffect(() => simulationRuntime.subscribeStatus(robotId, setStatus), [robotId]);
+  useEffect(() => simulationRuntime.subscribeStatus(mechanismId, setStatus), [mechanismId]);
 
   useEffect(() => {
-    setStatus(simulationRuntime.getStatus(robotId));
-  }, [robotId]);
+    setStatus(simulationRuntime.getStatus(mechanismId));
+  }, [mechanismId]);
 
   const runProgram = useCallback((program: CompiledProgram) => {
-    simulationRuntime.runProgram(robotId, program);
-  }, [robotId]);
+    simulationRuntime.runProgram(mechanismId, program);
+  }, [mechanismId]);
 
   const stopProgram = useCallback(() => {
-    simulationRuntime.stopProgram(robotId);
-  }, [robotId]);
+    simulationRuntime.stopProgram(mechanismId);
+  }, [mechanismId]);
 
   return {
     status,

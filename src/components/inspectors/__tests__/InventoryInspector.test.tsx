@@ -33,7 +33,7 @@ const createEntity = (
   options?: { chassisSlots?: SlotSchema[] },
 ): EntityOverlayData => ({
   entityId: 84 as EntityId,
-  name: 'Test Robot',
+  name: 'Test Mechanism',
   description: 'Prototype inventory unit',
   overlayType: 'complex',
   chassis: {

@@ -1,16 +1,16 @@
 import type { ProgramRunnerStatus } from './blockProgramRunner';
-import type { RobotChassis } from '../robot';
+import type { MechanismChassis } from '../mechanism';
 
 export interface SimulationUISignal {
   type: string;
   payload?: Record<string, unknown>;
 }
 
-export type SimulationTelemetrySnapshot = ReturnType<RobotChassis['getTelemetrySnapshot']>;
+export type SimulationTelemetrySnapshot = ReturnType<MechanismChassis['getTelemetrySnapshot']>;
 
 export const SIMULATION_BLACKBOARD_FACT_KEYS = {
   ProgramStatus: 'program.status',
-  SelectedRobotId: 'selection.activeRobotId',
+  SelectedMechanismId: 'selection.activeMechanismId',
   TelemetrySnapshot: 'telemetry.latest',
   CurrentUISignal: 'ui.signal.current',
 } as const;
@@ -30,7 +30,7 @@ type BlackboardEventPayload<TEvents extends Record<string, unknown[]>, TKey exte
 
 export interface SimulationBlackboardFacts extends Record<string, unknown> {
   [SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus]: ProgramRunnerStatus;
-  [SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId]: string | null;
+  [SIMULATION_BLACKBOARD_FACT_KEYS.SelectedMechanismId]: string | null;
   [SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot]: SimulationTelemetrySnapshot | null;
   [SIMULATION_BLACKBOARD_FACT_KEYS.CurrentUISignal]: SimulationUISignal | null;
 }

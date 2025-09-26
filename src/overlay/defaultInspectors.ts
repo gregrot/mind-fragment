@@ -1,7 +1,7 @@
 import ChassisInspector from '../components/inspectors/ChassisInspector';
 import InventoryInspector from '../components/inspectors/InventoryInspector';
 import EntityInfoInspector from '../components/inspectors/EntityInfoInspector';
-import RobotProgrammingInspector from '../components/inspectors/RobotProgrammingInspector';
+import MechanismProgrammingInspector from '../components/inspectors/MechanismProgrammingInspector';
 import { getInspectorDefinitions, registerInspector } from './inspectorRegistry';
 
 const ensureInspectorRegistered = (id: string, register: () => void): void => {
@@ -13,9 +13,9 @@ const ensureInspectorRegistered = (id: string, register: () => void): void => {
 };
 
 export const ensureDefaultInspectorsRegistered = (): void => {
-  ensureInspectorRegistered('robot-chassis', () => {
+  ensureInspectorRegistered('mechanism-chassis', () => {
     registerInspector({
-      id: 'robot-chassis',
+      id: 'mechanism-chassis',
       label: 'Chassis',
       group: 'systems',
       component: ChassisInspector,
@@ -24,9 +24,9 @@ export const ensureDefaultInspectorsRegistered = (): void => {
     });
   });
 
-  ensureInspectorRegistered('robot-inventory', () => {
+  ensureInspectorRegistered('mechanism-inventory', () => {
     registerInspector({
-      id: 'robot-inventory',
+      id: 'mechanism-inventory',
       label: 'Inventory',
       group: 'systems',
       component: InventoryInspector,
@@ -45,12 +45,12 @@ export const ensureDefaultInspectorsRegistered = (): void => {
     });
   });
 
-  ensureInspectorRegistered('robot-programming', () => {
+  ensureInspectorRegistered('mechanism-programming', () => {
     registerInspector({
-      id: 'robot-programming',
+      id: 'mechanism-programming',
       label: 'Programming',
       group: 'programming',
-      component: RobotProgrammingInspector,
+      component: MechanismProgrammingInspector,
       shouldRender: (entity) => entity.overlayType === 'complex',
       order: 50,
     });

@@ -2,19 +2,19 @@ import type { RootScene } from '../simulation/rootScene';
 import type { CompiledProgram, Diagnostic } from '../simulation/runtime/blockProgram';
 import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
 import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
-import { DEFAULT_ROBOT_ID } from '../simulation/runtime/simulationWorld';
+import { DEFAULT_MECHANISM_ID } from '../simulation/runtime/simulationWorld';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
-import type { InventoryEntry, InventorySnapshot } from '../simulation/robot/inventory';
-import type { ChassisSnapshot } from '../simulation/robot';
+import type { InventoryEntry, InventorySnapshot } from '../simulation/mechanism/inventory';
+import type { ChassisSnapshot } from '../simulation/mechanism';
 import type { EntityId } from '../simulation/ecs/world';
 import type { SlotSchema } from '../types/slots';
 
 type StatusListener = (status: ProgramRunnerStatus) => void;
 type InventoryListener = (snapshot: InventorySnapshot) => void;
-type SelectionListener = (selection: { robotId: string | null; entityId: EntityId | null }) => void;
+type SelectionListener = (selection: { mechanismId: string | null; entityId: EntityId | null }) => void;
 type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
-  robotId: string | null,
+  mechanismId: string | null,
 ) => void;
 type ChassisListener = (snapshot: ChassisSnapshot) => void;
 
@@ -83,7 +83,7 @@ class SimulationRuntime {
   private scene: RootScene | null = null;
   private readonly pendingPrograms = new Map<string, CompiledProgram>();
   private readonly statusListeners = new Map<string, Set<StatusListener>>();
-  private readonly statusByRobot = new Map<string, ProgramRunnerStatus>();
+  private readonly statusByMechanism = new Map<string, ProgramRunnerStatus>();
   private readonly inventoryListeners = new Set<InventoryListener>();
   private readonly chassisListeners = new Set<ChassisListener>();
   private readonly selectionListeners = new Set<SelectionListener>();
@@ -95,9 +95,9 @@ class SimulationRuntime {
   private inventorySnapshot: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT;
   private chassisSnapshot: ChassisSnapshot = EMPTY_CHASSIS_SNAPSHOT;
   private telemetrySnapshot: SimulationTelemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-  private telemetryRobotId: string | null = null;
+  private telemetryMechanismId: string | null = null;
   private readonly telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
-  private selectedRobotId: string | null = null;
+  private selectedMechanismId: string | null = null;
   private selectedEntityId: EntityId | null = null;
   private hasAutoStartedDefault = false;
 
@@ -112,30 +112,30 @@ class SimulationRuntime {
     this.sceneTelemetryUnsubscribe?.();
     this.telemetrySnapshots.clear();
     this.scene = scene;
-    this.unsubscribeScene = scene.subscribeProgramStatus((nextStatus, robotId) => {
-      this.updateStatus(robotId, nextStatus);
+    this.unsubscribeScene = scene.subscribeProgramStatus((nextStatus, mechanismId) => {
+      this.updateStatus(mechanismId, nextStatus);
     });
 
-    const activeRobotId = this.selectedRobotId ?? DEFAULT_ROBOT_ID;
-    this.updateInventorySnapshot(scene.getInventorySnapshot(activeRobotId));
+    const activeMechanismId = this.selectedMechanismId ?? DEFAULT_MECHANISM_ID;
+    this.updateInventorySnapshot(scene.getInventorySnapshot(activeMechanismId));
     this.ensureInventorySubscription();
-    this.updateChassisSnapshot(scene.getChassisSnapshot(activeRobotId));
+    this.updateChassisSnapshot(scene.getChassisSnapshot(activeMechanismId));
     this.ensureChassisSubscription();
-    this.sceneTelemetryUnsubscribe = scene.subscribeTelemetry((snapshot, robotId) => {
-      this.handleSceneTelemetry(snapshot, robotId);
+    this.sceneTelemetryUnsubscribe = scene.subscribeTelemetry((snapshot, mechanismId) => {
+      this.handleSceneTelemetry(snapshot, mechanismId);
     });
-    this.handleSceneTelemetry(scene.getTelemetrySnapshot(activeRobotId), activeRobotId);
-    if (this.selectedRobotId !== null) {
-      scene.selectRobot(this.selectedRobotId);
+    this.handleSceneTelemetry(scene.getTelemetrySnapshot(activeMechanismId), activeMechanismId);
+    if (this.selectedMechanismId !== null) {
+      scene.selectMechanism(this.selectedMechanismId);
     }
 
-    if (!this.pendingPrograms.has(DEFAULT_ROBOT_ID) && !this.hasAutoStartedDefault) {
-      scene.runProgram(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
+    if (!this.pendingPrograms.has(DEFAULT_MECHANISM_ID) && !this.hasAutoStartedDefault) {
+      scene.runProgram(DEFAULT_MECHANISM_ID, DEFAULT_STARTUP_PROGRAM);
       this.hasAutoStartedDefault = true;
     }
 
-    for (const [robotId, program] of this.pendingPrograms) {
-      scene.runProgram(robotId, program);
+    for (const [mechanismId, program] of this.pendingPrograms) {
+      scene.runProgram(mechanismId, program);
     }
     this.pendingPrograms.clear();
   }
@@ -153,69 +153,69 @@ class SimulationRuntime {
     this.sceneTelemetryUnsubscribe = null;
     this.scene = null;
     this.pendingPrograms.clear();
-    for (const robotId of this.statusByRobot.keys()) {
-      this.updateStatus(robotId, 'idle');
+    for (const mechanismId of this.statusByMechanism.keys()) {
+      this.updateStatus(mechanismId, 'idle');
     }
     this.updateInventorySnapshot(EMPTY_INVENTORY_SNAPSHOT);
     this.updateChassisSnapshot(EMPTY_CHASSIS_SNAPSHOT);
     this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, null);
     this.telemetrySnapshots.clear();
-    this.updateSelectedRobot(null, null);
+    this.updateSelectedMechanism(null, null);
     this.hasAutoStartedDefault = false;
   }
 
-  runProgram(robotId: string, program: CompiledProgram): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
+  runProgram(mechanismId: string, program: CompiledProgram): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
     if (this.scene) {
-      this.scene.runProgram(targetRobotId, program);
+      this.scene.runProgram(targetMechanismId, program);
       return;
     }
-    this.pendingPrograms.set(targetRobotId, program);
+    this.pendingPrograms.set(targetMechanismId, program);
   }
 
-  stopProgram(robotId: string): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    this.pendingPrograms.delete(targetRobotId);
+  stopProgram(mechanismId: string): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    this.pendingPrograms.delete(targetMechanismId);
     if (this.scene) {
-      this.scene.stopProgram(targetRobotId);
+      this.scene.stopProgram(targetMechanismId);
     } else {
-      this.updateStatus(targetRobotId, 'idle');
+      this.updateStatus(targetMechanismId, 'idle');
     }
   }
 
-  reportCompileDiagnostics(robotId: string, diagnostics: Diagnostic[]): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
+  reportCompileDiagnostics(mechanismId: string, diagnostics: Diagnostic[]): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
     const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
     if (hasErrors) {
-      this.pendingPrograms.delete(targetRobotId);
-      this.updateStatus(targetRobotId, 'error');
+      this.pendingPrograms.delete(targetMechanismId);
+      this.updateStatus(targetMechanismId, 'error');
       return;
     }
-    if (this.statusByRobot.get(targetRobotId) === 'error') {
-      this.updateStatus(targetRobotId, 'idle');
+    if (this.statusByMechanism.get(targetMechanismId) === 'error') {
+      this.updateStatus(targetMechanismId, 'idle');
     }
   }
 
-  subscribeStatus(robotId: string, listener: StatusListener): () => void {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    let listenersForRobot = this.statusListeners.get(targetRobotId);
-    if (!listenersForRobot) {
-      listenersForRobot = new Set();
-      this.statusListeners.set(targetRobotId, listenersForRobot);
+  subscribeStatus(mechanismId: string, listener: StatusListener): () => void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    let listenersForMechanism = this.statusListeners.get(targetMechanismId);
+    if (!listenersForMechanism) {
+      listenersForMechanism = new Set();
+      this.statusListeners.set(targetMechanismId, listenersForMechanism);
     }
-    listenersForRobot.add(listener);
-    listener(this.getStatus(targetRobotId));
+    listenersForMechanism.add(listener);
+    listener(this.getStatus(targetMechanismId));
     return () => {
-      listenersForRobot?.delete(listener);
-      if (listenersForRobot && listenersForRobot.size === 0) {
-        this.statusListeners.delete(targetRobotId);
+      listenersForMechanism?.delete(listener);
+      if (listenersForMechanism && listenersForMechanism.size === 0) {
+        this.statusListeners.delete(targetMechanismId);
       }
     };
   }
 
-  getStatus(robotId: string): ProgramRunnerStatus {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    return this.statusByRobot.get(targetRobotId) ?? 'idle';
+  getStatus(mechanismId: string): ProgramRunnerStatus {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    return this.statusByMechanism.get(targetMechanismId) ?? 'idle';
   }
 
   subscribeInventory(listener: InventoryListener): () => void {
@@ -246,13 +246,13 @@ class SimulationRuntime {
     };
   }
 
-  getChassisSnapshot(robotId: string | null = this.selectedRobotId): ChassisSnapshot {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    if (targetRobotId === this.normaliseRobotId(this.selectedRobotId)) {
+  getChassisSnapshot(mechanismId: string | null = this.selectedMechanismId): ChassisSnapshot {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    if (targetMechanismId === this.normaliseMechanismId(this.selectedMechanismId)) {
       return this.chassisSnapshot;
     }
     if (this.scene) {
-      return this.scene.getChassisSnapshot(targetRobotId);
+      return this.scene.getChassisSnapshot(targetMechanismId);
     }
     return EMPTY_CHASSIS_SNAPSHOT;
   }
@@ -260,52 +260,52 @@ class SimulationRuntime {
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener);
     if (this.telemetrySnapshots.size > 0) {
-      for (const [robotId, snapshot] of this.telemetrySnapshots) {
-        listener(snapshot, robotId);
+      for (const [mechanismId, snapshot] of this.telemetrySnapshots) {
+        listener(snapshot, mechanismId);
       }
     } else {
-      listener(this.telemetrySnapshot, this.telemetryRobotId);
+      listener(this.telemetrySnapshot, this.telemetryMechanismId);
     }
     return () => {
       this.telemetryListeners.delete(listener);
     };
   }
 
-  getTelemetrySnapshot(robotId: string | null = this.selectedRobotId): SimulationTelemetrySnapshot {
-    if (robotId) {
-      if (robotId === this.telemetryRobotId) {
+  getTelemetrySnapshot(mechanismId: string | null = this.selectedMechanismId): SimulationTelemetrySnapshot {
+    if (mechanismId) {
+      if (mechanismId === this.telemetryMechanismId) {
         return this.telemetrySnapshot;
       }
-      return this.telemetrySnapshots.get(robotId) ?? EMPTY_TELEMETRY_SNAPSHOT;
+      return this.telemetrySnapshots.get(mechanismId) ?? EMPTY_TELEMETRY_SNAPSHOT;
     }
     return this.telemetrySnapshot;
   }
 
-  subscribeSelectedRobot(listener: SelectionListener): () => void {
+  subscribeSelectedMechanism(listener: SelectionListener): () => void {
     this.selectionListeners.add(listener);
-    listener({ robotId: this.selectedRobotId, entityId: this.selectedEntityId });
+    listener({ mechanismId: this.selectedMechanismId, entityId: this.selectedEntityId });
     return () => {
       this.selectionListeners.delete(listener);
     };
   }
 
-  getSelectedRobot(): string | null {
-    return this.selectedRobotId;
+  getSelectedMechanism(): string | null {
+    return this.selectedMechanismId;
   }
 
   getSelectedEntityId(): EntityId | null {
     return this.selectedEntityId;
   }
 
-  setSelectedRobot(robotId: string, entityId?: EntityId | null): void {
-    this.scene?.selectRobot(robotId);
-    this.updateSelectedRobot(robotId, entityId ?? null);
-    this.applyTelemetryForSelection(robotId);
+  setSelectedMechanism(mechanismId: string, entityId?: EntityId | null): void {
+    this.scene?.selectMechanism(mechanismId);
+    this.updateSelectedMechanism(mechanismId, entityId ?? null);
+    this.applyTelemetryForSelection(mechanismId);
   }
 
-  clearSelectedRobot(): void {
-    this.scene?.clearRobotSelection();
-    this.updateSelectedRobot(null, null);
+  clearSelectedMechanism(): void {
+    this.scene?.clearMechanismSelection();
+    this.updateSelectedMechanism(null, null);
     this.applyTelemetryForSelection(null);
   }
 
@@ -334,23 +334,23 @@ class SimulationRuntime {
     this.updateChassisSnapshot(snapshot);
   }
 
-  private normaliseRobotId(robotId: string | null | undefined): string {
-    if (robotId && robotId.trim().length > 0) {
-      return robotId;
+  private normaliseMechanismId(mechanismId: string | null | undefined): string {
+    if (mechanismId && mechanismId.trim().length > 0) {
+      return mechanismId;
     }
-    return DEFAULT_ROBOT_ID;
+    return DEFAULT_MECHANISM_ID;
   }
 
-  private updateStatus(robotId: string, status: ProgramRunnerStatus): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    const previousStatus = this.statusByRobot.get(targetRobotId) ?? 'idle';
+  private updateStatus(mechanismId: string, status: ProgramRunnerStatus): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    const previousStatus = this.statusByMechanism.get(targetMechanismId) ?? 'idle';
     if (previousStatus === status) {
       return;
     }
-    this.statusByRobot.set(targetRobotId, status);
-    const listenersForRobot = this.statusListeners.get(targetRobotId);
-    if (listenersForRobot) {
-      for (const listener of listenersForRobot) {
+    this.statusByMechanism.set(targetMechanismId, status);
+    const listenersForMechanism = this.statusListeners.get(targetMechanismId);
+    if (listenersForMechanism) {
+      for (const listener of listenersForMechanism) {
         listener(status);
       }
     }
@@ -402,77 +402,77 @@ class SimulationRuntime {
     }
   }
 
-  private updateSelectedRobot(selectedRobotId: string | null, entityId: EntityId | null): void {
-    if (this.selectedRobotId === selectedRobotId && this.selectedEntityId === entityId) {
+  private updateSelectedMechanism(selectedMechanismId: string | null, entityId: EntityId | null): void {
+    if (this.selectedMechanismId === selectedMechanismId && this.selectedEntityId === entityId) {
       return;
     }
-    this.selectedRobotId = selectedRobotId;
+    this.selectedMechanismId = selectedMechanismId;
     this.selectedEntityId = entityId;
-    this.applyChassisForSelection(selectedRobotId);
+    this.applyChassisForSelection(selectedMechanismId);
     for (const listener of this.selectionListeners) {
-      listener({ robotId: selectedRobotId, entityId });
+      listener({ mechanismId: selectedMechanismId, entityId });
     }
   }
 
   private handleSceneTelemetry(
     snapshot: SimulationTelemetrySnapshot,
-    robotId: string | null,
+    mechanismId: string | null,
   ): void {
-    if (!robotId) {
-      const fallbackRobotId = this.selectedRobotId ?? DEFAULT_ROBOT_ID;
-      this.updateTelemetrySnapshot(snapshot, fallbackRobotId);
+    if (!mechanismId) {
+      const fallbackMechanismId = this.selectedMechanismId ?? DEFAULT_MECHANISM_ID;
+      this.updateTelemetrySnapshot(snapshot, fallbackMechanismId);
       return;
     }
-    const activeRobotId = this.selectedRobotId ?? DEFAULT_ROBOT_ID;
-    this.telemetrySnapshots.set(robotId, snapshot);
-    if (robotId === activeRobotId) {
-      this.updateTelemetrySnapshot(snapshot, robotId);
+    const activeMechanismId = this.selectedMechanismId ?? DEFAULT_MECHANISM_ID;
+    this.telemetrySnapshots.set(mechanismId, snapshot);
+    if (mechanismId === activeMechanismId) {
+      this.updateTelemetrySnapshot(snapshot, mechanismId);
       return;
     }
-    this.notifyTelemetryListeners(snapshot, robotId);
+    this.notifyTelemetryListeners(snapshot, mechanismId);
   }
 
-  private applyChassisForSelection(robotId: string | null): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
+  private applyChassisForSelection(mechanismId: string | null): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
     if (this.scene) {
-      this.updateChassisSnapshot(this.scene.getChassisSnapshot(targetRobotId));
+      this.updateChassisSnapshot(this.scene.getChassisSnapshot(targetMechanismId));
       return;
     }
     this.updateChassisSnapshot(EMPTY_CHASSIS_SNAPSHOT);
   }
 
-  private applyTelemetryForSelection(robotId: string | null): void {
-    const targetRobotId = this.normaliseRobotId(robotId);
-    const cached = this.telemetrySnapshots.get(targetRobotId);
+  private applyTelemetryForSelection(mechanismId: string | null): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    const cached = this.telemetrySnapshots.get(targetMechanismId);
     if (cached) {
-      this.updateTelemetrySnapshot(cached, targetRobotId);
+      this.updateTelemetrySnapshot(cached, targetMechanismId);
       return;
     }
     if (this.scene) {
-      this.updateTelemetrySnapshot(this.scene.getTelemetrySnapshot(targetRobotId), targetRobotId);
+      this.updateTelemetrySnapshot(this.scene.getTelemetrySnapshot(targetMechanismId), targetMechanismId);
       return;
     }
-    this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, targetRobotId);
+    this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, targetMechanismId);
   }
 
   private updateTelemetrySnapshot(
     snapshot: SimulationTelemetrySnapshot,
-    robotId: string | null,
+    mechanismId: string | null,
   ): void {
     this.telemetrySnapshot = snapshot;
-    this.telemetryRobotId = robotId;
-    if (robotId) {
-      this.telemetrySnapshots.set(robotId, snapshot);
+    this.telemetryMechanismId = mechanismId;
+    if (mechanismId) {
+      this.telemetrySnapshots.set(mechanismId, snapshot);
     }
-    this.notifyTelemetryListeners(snapshot, robotId);
+    this.notifyTelemetryListeners(snapshot, mechanismId);
   }
 
   private notifyTelemetryListeners(
     snapshot: SimulationTelemetrySnapshot,
-    robotId: string | null,
+    mechanismId: string | null,
   ): void {
     for (const listener of this.telemetryListeners) {
-      listener(snapshot, robotId);
+      listener(snapshot, mechanismId);
     }
   }
 }

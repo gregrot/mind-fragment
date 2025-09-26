@@ -1028,7 +1028,7 @@ export const compileWorkspaceProgram = (workspace: WorkspaceState): CompilationR
   if (instructions.length === 0) {
     diagnostics.push({
       severity: 'warning',
-      message: 'Place movement or wait blocks under "When Started" to see the robot react.',
+      message: 'Place movement or wait blocks under "When Started" to see the mechanism react.',
     });
   }
 

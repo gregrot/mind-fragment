@@ -1,23 +1,23 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { simulationRuntime } from '../simulationRuntime';
 import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram';
-import { DEFAULT_ROBOT_ID } from '../../simulation/runtime/simulationWorld';
+import { DEFAULT_MECHANISM_ID } from '../../simulation/runtime/simulationWorld';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
-import type { ChassisSnapshot } from '../../simulation/robot';
+import type { ChassisSnapshot } from '../../simulation/mechanism';
 import type { ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 import type { SlotSchema } from '../../types/slots';
 
 const createSceneStub = () => {
-  const statusListeners: Array<(status: ProgramRunnerStatus, robotId: string) => void> = [];
-  const telemetryListeners: Array<(snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void> = [];
+  const statusListeners: Array<(status: ProgramRunnerStatus, mechanismId: string) => void> = [];
+  const telemetryListeners: Array<(snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void> = [];
   const telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
   const chassisListeners: Array<(snapshot: ChassisSnapshot) => void> = [];
   let chassisSnapshot: ChassisSnapshot = { capacity: 0, slots: [] };
-  let selectedRobotId: string | null = null;
+  let selectedMechanismId: string | null = null;
   return {
-    subscribeProgramStatus: vi.fn((listener: (status: ProgramRunnerStatus, robotId: string) => void) => {
+    subscribeProgramStatus: vi.fn((listener: (status: ProgramRunnerStatus, mechanismId: string) => void) => {
       statusListeners.push(listener);
       return () => {
         const index = statusListeners.indexOf(listener);
@@ -38,7 +38,7 @@ const createSceneStub = () => {
       slotCapacity: 0,
     })),
     subscribeInventory: vi.fn(() => () => {}),
-    subscribeTelemetry: vi.fn((listener: (snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void) => {
+    subscribeTelemetry: vi.fn((listener: (snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void) => {
       telemetryListeners.push(listener);
       return () => {
         const index = telemetryListeners.indexOf(listener);
@@ -47,7 +47,7 @@ const createSceneStub = () => {
         }
       };
     }),
-    getTelemetrySnapshot: vi.fn((robotId: string = DEFAULT_ROBOT_ID) => telemetrySnapshots.get(robotId) ?? { values: {}, actions: {} }),
+    getTelemetrySnapshot: vi.fn((mechanismId: string = DEFAULT_MECHANISM_ID) => telemetrySnapshots.get(mechanismId) ?? { values: {}, actions: {} }),
     subscribeChassis: vi.fn((listener: (snapshot: ChassisSnapshot) => void) => {
       chassisListeners.push(listener);
       listener(chassisSnapshot);
@@ -59,22 +59,22 @@ const createSceneStub = () => {
       };
     }),
     getChassisSnapshot: vi.fn(() => chassisSnapshot),
-    getSelectedRobot: vi.fn(() => selectedRobotId),
-    selectRobot: vi.fn((robotId: string) => {
-      selectedRobotId = robotId;
+    getSelectedMechanism: vi.fn(() => selectedMechanismId),
+    selectMechanism: vi.fn((mechanismId: string) => {
+      selectedMechanismId = mechanismId;
     }),
-    clearRobotSelection: vi.fn(() => {
-      selectedRobotId = null;
+    clearMechanismSelection: vi.fn(() => {
+      selectedMechanismId = null;
     }),
-    triggerStatus: (robotId: string, status: ProgramRunnerStatus) => {
+    triggerStatus: (mechanismId: string, status: ProgramRunnerStatus) => {
       for (const listener of statusListeners) {
-        listener(status, robotId);
+        listener(status, mechanismId);
       }
     },
-    triggerTelemetry: (robotId: string, snapshot: SimulationTelemetrySnapshot) => {
-      telemetrySnapshots.set(robotId, snapshot);
+    triggerTelemetry: (mechanismId: string, snapshot: SimulationTelemetrySnapshot) => {
+      telemetrySnapshots.set(mechanismId, snapshot);
       for (const listener of telemetryListeners) {
-        listener(snapshot, robotId);
+        listener(snapshot, mechanismId);
       }
     },
     triggerChassis: (snapshot: ChassisSnapshot) => {
@@ -84,8 +84,8 @@ const createSceneStub = () => {
       }
     },
   } as unknown as RootScene & {
-    triggerStatus: (robotId: string, status: ProgramRunnerStatus) => void;
-    triggerTelemetry: (robotId: string, snapshot: SimulationTelemetrySnapshot) => void;
+    triggerStatus: (mechanismId: string, status: ProgramRunnerStatus) => void;
+    triggerTelemetry: (mechanismId: string, snapshot: SimulationTelemetrySnapshot) => void;
     triggerChassis: (snapshot: ChassisSnapshot) => void;
   };
 };
@@ -102,9 +102,9 @@ const createTelemetrySnapshot = (value: number): SimulationTelemetrySnapshot => 
 describe('simulationRuntime', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    simulationRuntime.stopProgram(DEFAULT_ROBOT_ID);
+    simulationRuntime.stopProgram(DEFAULT_MECHANISM_ID);
     simulationRuntime.stopProgram('MF-02');
-    simulationRuntime.clearSelectedRobot();
+    simulationRuntime.clearSelectedMechanism();
   });
 
   it('runs the default startup program when a scene registers', () => {
@@ -112,10 +112,10 @@ describe('simulationRuntime', () => {
 
     simulationRuntime.registerScene(scene);
 
-    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
+    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_MECHANISM_ID, DEFAULT_STARTUP_PROGRAM);
 
-    scene.triggerStatus(DEFAULT_ROBOT_ID, 'running');
-    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('running');
+    scene.triggerStatus(DEFAULT_MECHANISM_ID, 'running');
+    expect(simulationRuntime.getStatus(DEFAULT_MECHANISM_ID)).toBe('running');
 
     simulationRuntime.unregisterScene(scene);
   });
@@ -128,7 +128,7 @@ describe('simulationRuntime', () => {
     const secondScene = createSceneStub();
     simulationRuntime.registerScene(secondScene);
 
-    expect(secondScene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
+    expect(secondScene.runProgram).toHaveBeenCalledWith(DEFAULT_MECHANISM_ID, DEFAULT_STARTUP_PROGRAM);
 
     simulationRuntime.unregisterScene(secondScene);
   });
@@ -139,37 +139,37 @@ describe('simulationRuntime', () => {
         { kind: 'wait', duration: createNumberLiteralBinding(1, { label: 'Queued → wait' }) },
       ],
     };
-    simulationRuntime.runProgram(DEFAULT_ROBOT_ID, customProgram);
+    simulationRuntime.runProgram(DEFAULT_MECHANISM_ID, customProgram);
 
     const scene = createSceneStub();
     simulationRuntime.registerScene(scene);
 
-    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_ROBOT_ID, customProgram);
-    expect(scene.runProgram).not.toHaveBeenCalledWith(DEFAULT_ROBOT_ID, DEFAULT_STARTUP_PROGRAM);
+    expect(scene.runProgram).toHaveBeenCalledWith(DEFAULT_MECHANISM_ID, customProgram);
+    expect(scene.runProgram).not.toHaveBeenCalledWith(DEFAULT_MECHANISM_ID, DEFAULT_STARTUP_PROGRAM);
 
     simulationRuntime.unregisterScene(scene);
   });
 
   it('updates status to error when compile diagnostics include blocking failures', () => {
     const statuses: ProgramRunnerStatus[] = [];
-    simulationRuntime.subscribeStatus(DEFAULT_ROBOT_ID, (status) => {
+    simulationRuntime.subscribeStatus(DEFAULT_MECHANISM_ID, (status) => {
       statuses.push(status);
     });
 
-    simulationRuntime.reportCompileDiagnostics(DEFAULT_ROBOT_ID, [
+    simulationRuntime.reportCompileDiagnostics(DEFAULT_MECHANISM_ID, [
       { severity: 'error', message: 'Add a "When Started" block to trigger the routine.' },
     ]);
 
-    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('error');
+    expect(simulationRuntime.getStatus(DEFAULT_MECHANISM_ID)).toBe('error');
     expect(statuses).toContain('error');
 
-    simulationRuntime.reportCompileDiagnostics(DEFAULT_ROBOT_ID, []);
+    simulationRuntime.reportCompileDiagnostics(DEFAULT_MECHANISM_ID, []);
 
-    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('idle');
+    expect(simulationRuntime.getStatus(DEFAULT_MECHANISM_ID)).toBe('idle');
     expect(statuses[statuses.length - 1]).toBe('idle');
   });
 
-  it('tracks program status per robot independently', () => {
+  it('tracks program status per mechanism independently', () => {
     const scene = createSceneStub();
     simulationRuntime.registerScene(scene);
 
@@ -200,7 +200,7 @@ describe('simulationRuntime', () => {
     simulationRuntime.unregisterScene(scene);
   });
 
-  it('stores telemetry snapshots separately for each robot', () => {
+  it('stores telemetry snapshots separately for each mechanism', () => {
     const scene = createSceneStub();
     simulationRuntime.registerScene(scene);
 

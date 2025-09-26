@@ -6,7 +6,7 @@ import type { EntityId } from './ecs/world';
 import styles from '../styles/SimulationShell.module.css';
 
 interface SimulationShellProps {
-  onEntitySelect?: (selection: { robotId: string; entityId: EntityId }) => void;
+  onEntitySelect?: (selection: { mechanismId: string; entityId: EntityId }) => void;
   onEntityClear?: () => void;
 }
 
@@ -23,7 +23,7 @@ const SimulationShell = ({ onEntitySelect, onEntityClear }: SimulationShellProps
     let disposed = false;
     let cleanupResize: (() => void) | undefined;
     let selectionCleanup: (() => void) | undefined;
-    let hasAnnouncedFirstRobot = false;
+    let hasAnnouncedFirstMechanism = false;
 
     const init = async () => {
       const container = containerRef.current;
@@ -59,19 +59,19 @@ const SimulationShell = ({ onEntitySelect, onEntityClear }: SimulationShellProps
       simulationRuntime.registerScene(rootScene);
       rootScene.resize(activeApp.renderer.width, activeApp.renderer.height);
 
-      selectionCleanup = rootScene.subscribeRobotSelection((robotId, entityId) => {
-        if (robotId) {
-          simulationRuntime.setSelectedRobot(robotId, entityId ?? undefined);
-          if (hasAnnouncedFirstRobot) {
+      selectionCleanup = rootScene.subscribeMechanismSelection((mechanismId, entityId) => {
+        if (mechanismId) {
+          simulationRuntime.setSelectedMechanism(mechanismId, entityId ?? undefined);
+          if (hasAnnouncedFirstMechanism) {
             if (entityId !== null && entityId !== undefined) {
-              onEntitySelect?.({ robotId, entityId });
+              onEntitySelect?.({ mechanismId, entityId });
             }
           } else {
-            hasAnnouncedFirstRobot = true;
+            hasAnnouncedFirstMechanism = true;
           }
           return;
         }
-        simulationRuntime.clearSelectedRobot();
+        simulationRuntime.clearSelectedMechanism();
         onEntityClear?.();
       });
 

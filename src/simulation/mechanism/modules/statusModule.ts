@@ -1,4 +1,4 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
 
 export const STATUS_MODULE_ID = 'status.signal';
@@ -17,7 +17,7 @@ interface SetResult {
   active: boolean;
 }
 
-export class StatusModule extends RobotModule {
+export class StatusModule extends MechanismModule {
   private port: ModulePort | null = null;
   private active = false;
 

@@ -1,6 +1,6 @@
 # Mind Fragment
 
-A block-programming sandbox about rebuilding field robots after a catastrophic crash. The project pairs a live Pixi.js simulation with a React workspace so designers can assemble logic visually, deploy it instantly, and watch robots react in context.
+A block-programming sandbox about rebuilding field mechanisms after a catastrophic crash. The project pairs a live Pixi.js simulation with a React workspace so designers can assemble logic visually, deploy it instantly, and watch mechanisms react in context.
 
 ## Quick start
 1. Install dependencies with `npm install`.
@@ -9,9 +9,9 @@ A block-programming sandbox about rebuilding field robots after a catastrophic c
 
 ## Project structure
 - `src/main.tsx` bootstraps React and wires global providers (drag context, overlay manager, simulation runtime binding).
-- `src/App.tsx` orchestrates the simulation shell, block workspace, and robot overlay.
+- `src/App.tsx` orchestrates the simulation shell, block workspace, and mechanism overlay.
 - `src/components/` contains UI building blocks such as the block palette, workspace renderer, programming panel, and runtime controls.
-- `src/simulation/` hosts the Pixi scene graph, ECS runtime, and robot abstractions.
+- `src/simulation/` hosts the Pixi scene graph, ECS runtime, and mechanism abstractions.
 - `src/state/` contains shared stores for overlay persistence, simulation status, and selection.
 - `docs/` holds design intent. Update the summaries below whenever documents change.
 
@@ -20,6 +20,6 @@ A block-programming sandbox about rebuilding field robots after a catastrophic c
 - [Mind Fragment Roadmap](docs/planning/roadmap.md) — phased plan for delivering features, debugging tools, and persistence.
 
 ## Working practices
-- Treat the block workspace as the primary interaction surface. New systems should integrate with it or the entity overlay so players never lose sight of their robots.
+- Treat the block workspace as the primary interaction surface. New systems should integrate with it or the entity overlay so players never lose sight of their mechanisms.
 - Keep tone and copy grounded in pragmatic survival with flashes of dry wit.
 - When plans or priorities shift, update the relevant Markdown in place; avoid scattering notes across duplicate files.

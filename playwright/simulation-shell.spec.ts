@@ -22,7 +22,7 @@ test('simulation shell initialises without runtime errors', async ({ page }) => 
   await expect(page.locator('.simulation-shell canvas')).toHaveCount(1);
   const toolbar = page.getByRole('toolbar', { name: 'Simulation interface controls' });
   await expect(toolbar).toBeVisible();
-  const programButton = toolbar.getByRole('button', { name: 'Program robot' });
+  const programButton = toolbar.getByRole('button', { name: 'Program mechanism' });
   await expect(programButton).toBeVisible();
   await programButton.click();
   const overlay = page.getByTestId('entity-overlay');

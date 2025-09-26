@@ -1,6 +1,6 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ModuleUpdateContext } from '../RobotChassis';
+import type { ModuleUpdateContext } from '../MechanismChassis';
 
 interface CraftTask {
   recipe: string;
@@ -30,7 +30,7 @@ export interface CraftingModuleOptions {
   defaultDuration?: number;
 }
 
-export class CraftingModule extends RobotModule {
+export class CraftingModule extends MechanismModule {
   private readonly defaultDuration: number;
   private port: ModulePort | null = null;
   private readonly queue: CraftTask[] = [];

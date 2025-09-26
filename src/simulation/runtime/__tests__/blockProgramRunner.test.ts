@@ -8,8 +8,8 @@ import {
   type CompiledProgram,
   type NumberExpression,
 } from '../blockProgram';
-import { RobotChassis } from '../../robot';
-import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../robot/modules/moduleLibrary';
+import { MechanismChassis } from '../../mechanism';
+import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../mechanism/modules/moduleLibrary';
 
 const STATUS_SIGNAL_DESCRIPTOR = {
   id: 'status.signal.active',
@@ -19,18 +19,18 @@ const STATUS_SIGNAL_DESCRIPTOR = {
   signalId: 'active',
 } as const;
 
-const createRobot = (): RobotChassis => {
-  const robot = new RobotChassis();
+const createMechanism = (): MechanismChassis => {
+  const mechanism = new MechanismChassis();
   for (const moduleId of DEFAULT_MODULE_LOADOUT) {
-    robot.attachModule(createModuleInstance(moduleId));
+    mechanism.attachModule(createModuleInstance(moduleId));
   }
-  return robot;
+  return mechanism;
 };
 
 describe('BlockProgramRunner', () => {
   it('applies movement instructions and returns to idle', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -40,13 +40,13 @@ describe('BlockProgramRunner', () => {
         },
       ],
     };
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
 
     runner.load(program);
     expect(runner.getStatus()).toBe('running');
 
     runner.update(0.5);
-    robot.tick(0.5);
+    mechanism.tick(0.5);
     expect(actionSpy).toHaveBeenCalledWith(
       'core.movement',
       'setLinearVelocity',
@@ -54,7 +54,7 @@ describe('BlockProgramRunner', () => {
     );
 
     runner.update(0.6);
-    robot.tick(0.6);
+    mechanism.tick(0.6);
     expect(runner.getStatus()).toBe('completed');
     const finalLinearCommand = actionSpy.mock.calls
       .filter(([, actionName]) => actionName === 'setLinearVelocity')
@@ -65,8 +65,8 @@ describe('BlockProgramRunner', () => {
   });
 
   it('applies turn instructions by adjusting angular velocity', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -76,18 +76,18 @@ describe('BlockProgramRunner', () => {
         },
       ],
     };
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
 
     runner.load(program);
     runner.update(0.25);
-    robot.tick(0.25);
+    mechanism.tick(0.25);
     const angularCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setAngularVelocity');
     const firstNonZero = angularCalls.find(([, , payload]) => Math.abs(((payload as { value?: number })?.value ?? 0)) > 1e-5);
     const firstPayload = firstNonZero?.[2] as { value?: number } | undefined;
     expect(firstPayload?.value).toBeCloseTo(Math.PI);
 
     runner.update(0.5);
-    robot.tick(0.5);
+    mechanism.tick(0.5);
     const allAngularCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setAngularVelocity');
     expect(
       allAngularCalls.some(([, , payload]) => Math.abs(((payload as { value?: number })?.value ?? 0)) < 1e-5),
@@ -95,8 +95,8 @@ describe('BlockProgramRunner', () => {
   });
 
   it('scans for resources and gathers them into inventory', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -111,9 +111,9 @@ describe('BlockProgramRunner', () => {
         },
       ],
     };
-    const originalInvoke = robot.invokeAction.bind(robot);
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
-    const targetNode = robot
+    const originalInvoke = mechanism.invokeAction.bind(mechanism);
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
+    const targetNode = mechanism
       .resourceField
       .list()
       .find((candidate) => candidate.id === 'node-ferrous-1');
@@ -121,7 +121,7 @@ describe('BlockProgramRunner', () => {
       throw new Error('Expected the default silicate resource node to exist.');
     }
 
-    const state = robot.getStateSnapshot();
+    const state = mechanism.getStateSnapshot();
     const distanceToNode = Math.hypot(
       targetNode.position.x - state.position.x,
       targetNode.position.y - state.position.y,
@@ -149,15 +149,15 @@ describe('BlockProgramRunner', () => {
       }
       return originalInvoke(moduleId, actionName, payload);
     });
-    const initialInventory = robot.getInventorySnapshot();
+    const initialInventory = mechanism.getInventorySnapshot();
 
     runner.load(program);
     runner.update(1);
-    robot.tick(1);
+    mechanism.tick(1);
     runner.update(2);
-    robot.tick(2);
+    mechanism.tick(2);
 
-    const finalInventory = robot.getInventorySnapshot();
+    const finalInventory = mechanism.getInventorySnapshot();
     expect(finalInventory.used).toBeGreaterThan(initialInventory.used);
     expect(actionSpy).toHaveBeenCalledWith('sensor.survey', 'scan', expect.any(Object));
     const gatherCall = actionSpy.mock.calls.find(
@@ -168,8 +168,8 @@ describe('BlockProgramRunner', () => {
   });
 
   it('stores scan hit positions in memory for later targeting', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const scanFilter = 'silicate-crystal';
     const program: CompiledProgram = {
       instructions: [
@@ -181,7 +181,7 @@ describe('BlockProgramRunner', () => {
       ],
     };
 
-    const originalInvoke = robot.invokeAction.bind(robot);
+    const originalInvoke = mechanism.invokeAction.bind(mechanism);
     const customHit = {
       id: 'custom-node-42',
       type: 'silicate-crystal',
@@ -189,7 +189,7 @@ describe('BlockProgramRunner', () => {
       distance: 96,
       position: { x: 75, y: -45 },
     } as const;
-    const invokeSpy = vi.spyOn(robot, 'invokeAction');
+    const invokeSpy = vi.spyOn(mechanism, 'invokeAction');
     invokeSpy.mockImplementation((moduleId, actionName, payload) => {
       if (moduleId === 'sensor.survey' && actionName === 'scan') {
         return {
@@ -207,7 +207,7 @@ describe('BlockProgramRunner', () => {
 
     runner.load(program);
     runner.update(0.25);
-    robot.tick(0.25);
+    mechanism.tick(0.25);
 
     const scanMemory = (runner as unknown as {
       scanMemory: { filter: string | null; hits: Array<{
@@ -235,12 +235,12 @@ describe('BlockProgramRunner', () => {
   });
 
   it('steers towards the most recent scan hit when executing move-to instructions', () => {
-    const robot = new RobotChassis({ state: { orientation: Math.PI / 2 } });
+    const mechanism = new MechanismChassis({ state: { orientation: Math.PI / 2 } });
     for (const moduleId of DEFAULT_MODULE_LOADOUT) {
-      robot.attachModule(createModuleInstance(moduleId));
+      mechanism.attachModule(createModuleInstance(moduleId));
     }
 
-    const runner = new BlockProgramRunner(robot);
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -264,19 +264,19 @@ describe('BlockProgramRunner', () => {
       ],
     };
 
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
 
     runner.load(program);
     runner.update(0.5);
-    robot.tick(0.5);
+    mechanism.tick(0.5);
     runner.update(0.5);
 
-    const node = robot.resourceField.list().find((candidate) => candidate.id === 'node-silicate-1');
+    const node = mechanism.resourceField.list().find((candidate) => candidate.id === 'node-silicate-1');
     if (!node) {
       throw new Error('Expected the default silicate node to be present.');
     }
 
-    const beforeState = robot.getStateSnapshot();
+    const beforeState = mechanism.getStateSnapshot();
     const beforeDistance = Math.hypot(
       node.position.x - beforeState.position.x,
       node.position.y - beforeState.position.y,
@@ -284,10 +284,10 @@ describe('BlockProgramRunner', () => {
 
     for (let i = 0; i < 8; i += 1) {
       runner.update(0.25);
-      robot.tick(0.25);
+      mechanism.tick(0.25);
     }
 
-    const afterState = robot.getStateSnapshot();
+    const afterState = mechanism.getStateSnapshot();
     const afterDistance = Math.hypot(
       node.position.x - afterState.position.x,
       node.position.y - afterState.position.y,
@@ -316,11 +316,11 @@ describe('BlockProgramRunner', () => {
   });
 
   it('drops carried resources when executing a deposit instruction', () => {
-    const robot = createRobot();
-    robot.inventory.store('ferrous-ore', 6);
-    robot.inventory.store('silicate-crystal', 3);
+    const mechanism = createMechanism();
+    mechanism.inventory.store('ferrous-ore', 6);
+    mechanism.inventory.store('silicate-crystal', 3);
 
-    const runner = new BlockProgramRunner(robot);
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -332,16 +332,16 @@ describe('BlockProgramRunner', () => {
 
     runner.load(program);
     runner.update(1);
-    robot.tick(1);
+    mechanism.tick(1);
 
-    const inventoryAfter = robot.getInventorySnapshot();
+    const inventoryAfter = mechanism.getInventorySnapshot();
     expect(inventoryAfter.used).toBe(0);
 
-    const robotState = robot.getStateSnapshot();
-    const nodes = robot.resourceField.list();
+    const mechanismState = mechanism.getStateSnapshot();
+    const nodes = mechanism.resourceField.list();
     const nearbyNodes = nodes.filter((node) => {
-      const dx = node.position.x - robotState.position.x;
-      const dy = node.position.y - robotState.position.y;
+      const dx = node.position.x - mechanismState.position.x;
+      const dy = node.position.y - mechanismState.position.y;
       return Math.hypot(dx, dy) <= 1;
     });
     expect(nearbyNodes.length).toBeGreaterThanOrEqual(2);
@@ -352,19 +352,19 @@ describe('BlockProgramRunner', () => {
   });
 
   it('loops gather instructions until the targeted node is depleted', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
-    const availableNodes = robot.resourceField.list();
-    const robotState = robot.getStateSnapshot();
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
+    const availableNodes = mechanism.resourceField.list();
+    const mechanismState = mechanism.getStateSnapshot();
     const targetNode = availableNodes.reduce((closest, node) => {
       if (!closest) {
         return node;
       }
-      const dx = node.position.x - robotState.position.x;
-      const dy = node.position.y - robotState.position.y;
+      const dx = node.position.x - mechanismState.position.x;
+      const dy = node.position.y - mechanismState.position.y;
       const distance = Math.hypot(dx, dy);
-      const closestDx = closest.position.x - robotState.position.x;
-      const closestDy = closest.position.y - robotState.position.y;
+      const closestDx = closest.position.x - mechanismState.position.x;
+      const closestDy = closest.position.y - mechanismState.position.y;
       const closestDistance = Math.hypot(closestDx, closestDy);
       return distance < closestDistance ? node : closest;
     }, availableNodes[0]);
@@ -385,7 +385,7 @@ describe('BlockProgramRunner', () => {
       ],
     };
 
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
     if (!targetNode) {
       throw new Error('Expected at least one resource node for loop test.');
     }
@@ -394,19 +394,19 @@ describe('BlockProgramRunner', () => {
 
     let safety = 0;
     while (true) {
-      const quantity = robot.resourceField.list().find((node) => node.id === targetNode.id)?.quantity ?? 0;
+      const quantity = mechanism.resourceField.list().find((node) => node.id === targetNode.id)?.quantity ?? 0;
       if (quantity <= 0) {
         break;
       }
       safety += 1;
       runner.update(1.5);
-      robot.tick(1.5);
+      mechanism.tick(1.5);
       if (safety > 12) {
         break;
       }
     }
 
-    const finalNode = robot.resourceField.list().find((node) => node.id === targetNode.id);
+    const finalNode = mechanism.resourceField.list().find((node) => node.id === targetNode.id);
     expect(finalNode?.quantity).toBe(0);
 
     const gatherCallsWithIndex = actionSpy.mock.calls
@@ -419,8 +419,8 @@ describe('BlockProgramRunner', () => {
   });
 
   it('evaluates counted loops using operator expressions', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const iterations = createNumberLiteralBinding(1, { label: 'Test → repeat count' });
     const operator: NumberExpression = {
       kind: 'operator',
@@ -451,19 +451,19 @@ describe('BlockProgramRunner', () => {
       ],
     };
 
-    const actionSpy = vi.spyOn(robot, 'invokeAction');
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
 
     runner.load(program);
     runner.update(3);
-    robot.tick(3);
+    mechanism.tick(3);
 
     const moveCalls = actionSpy.mock.calls.filter(([, actionName]) => actionName === 'setLinearVelocity');
     expect(moveCalls.length).toBeGreaterThanOrEqual(3);
   });
 
   it('branches based on signal telemetry', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const condition = createBooleanLiteralBinding(false, { label: 'Test → branch condition' });
     condition.expression = {
       kind: 'signal',
@@ -497,21 +497,21 @@ describe('BlockProgramRunner', () => {
 
     runner.load(program);
     runner.update(0.1);
-    robot.tick(0.1);
-    let telemetry = robot.getTelemetrySnapshot();
+    mechanism.tick(0.1);
+    let telemetry = mechanism.getTelemetrySnapshot();
     expect(telemetry.values['status.signal']?.active.value).toBe(false);
 
-    robot.invokeAction('status.signal', 'setStatus', { value: true });
+    mechanism.invokeAction('status.signal', 'setStatus', { value: true });
     runner.load(program);
     runner.update(0.1);
-    robot.tick(0.1);
-    telemetry = robot.getTelemetrySnapshot();
+    mechanism.tick(0.1);
+    telemetry = mechanism.getTelemetrySnapshot();
     expect(telemetry.values['status.signal']?.active.value).toBe(true);
   });
 
   it('exposes debug state including current instruction and frame stack', () => {
-    const robot = createRobot();
-    const runner = new BlockProgramRunner(robot);
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
     const program: CompiledProgram = {
       instructions: [
         {
@@ -543,7 +543,7 @@ describe('BlockProgramRunner', () => {
     expect(initialDebug.frames[0]).toMatchObject({ kind: 'sequence', index: 0, length: 2 });
 
     runner.update(1.1);
-    robot.tick(1.1);
+    mechanism.tick(1.1);
 
     const loopDebug = runner.getDebugState();
     expect(loopDebug.currentInstruction?.kind).toBe('turn');

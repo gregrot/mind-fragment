@@ -10,7 +10,7 @@ import type {
   BlockParameterDefinition,
   BlockParameterValue,
 } from '../types/blocks';
-import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
+import type { MechanismTelemetryData } from '../hooks/useMechanismTelemetry';
 import styles from '../styles/BlockView.module.css';
 
 interface BlockParameterSignalSelectProps {
@@ -21,7 +21,7 @@ interface BlockParameterSignalSelectProps {
   label: string;
   testId: string;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
-  telemetry?: RobotTelemetryData;
+  telemetry?: MechanismTelemetryData;
 }
 
 const stopPropagation = (

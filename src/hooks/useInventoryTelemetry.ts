@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { InventorySnapshot } from '../simulation/robot/inventory';
+import type { InventorySnapshot } from '../simulation/mechanism/inventory';
 import { simulationRuntime } from '../state/simulationRuntime';
 
 export const useInventoryTelemetry = (): InventorySnapshot => {

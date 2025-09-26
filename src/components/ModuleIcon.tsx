@@ -1,4 +1,4 @@
-import type { ModuleIconVariant } from '../simulation/robot/modules/moduleLibrary';
+import type { ModuleIconVariant } from '../simulation/mechanism/modules/moduleLibrary';
 import styles from '../styles/ModuleIcon.module.css';
 
 interface ModuleIconProps {

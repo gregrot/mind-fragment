@@ -1,4 +1,4 @@
-import type { Vector2 } from '../robot/robotState';
+import type { Vector2 } from '../mechanism/mechanismState';
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
 

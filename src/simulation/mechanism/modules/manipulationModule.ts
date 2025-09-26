@@ -1,6 +1,6 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ModuleActionContext } from '../RobotChassis';
+import type { ModuleActionContext } from '../MechanismChassis';
 
 interface GripPayload {
   item?: string;
@@ -30,7 +30,7 @@ const DEFAULT_GATHER_RANGE = 220;
 const DEFAULT_GATHER_AMOUNT = 12;
 const DEFAULT_DROP_MERGE_DISTANCE = 32;
 
-export class ManipulationModule extends RobotModule {
+export class ManipulationModule extends MechanismModule {
   private readonly defaultGripStrength: number;
   private port: ModulePort | null = null;
   private operationsCompleted = 0;
@@ -336,7 +336,7 @@ export class ManipulationModule extends RobotModule {
         position: origin,
         quantity: withdrawal.withdrawn,
         mergeDistance,
-        metadata: { source: 'robot-drop', operations: this.operationsCompleted + 1 },
+        metadata: { source: 'mechanism-drop', operations: this.operationsCompleted + 1 },
       });
 
       return {

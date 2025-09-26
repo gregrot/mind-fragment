@@ -61,7 +61,7 @@ describe('ECSBlackboard', () => {
   it('clears events and facts independently', () => {
     const blackboard = new ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>();
 
-    blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId, 'MF-01');
+    blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedMechanismId, 'MF-01');
     blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated, {
       values: {},
       actions: {},
@@ -71,6 +71,6 @@ describe('ECSBlackboard', () => {
     expect(blackboard.consumeEvents(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated)).toEqual([]);
 
     blackboard.clear();
-    expect(blackboard.getFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId)).toBeUndefined();
+    expect(blackboard.getFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedMechanismId)).toBeUndefined();
   });
 });

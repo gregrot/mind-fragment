@@ -51,13 +51,13 @@ class AssetService {
 
 export const assetService = new AssetService();
 
-interface RobotChassisOptions {
+interface MechanismChassisOptions {
   radius?: number;
   fill?: number;
   stroke?: number;
 }
 
-assetService.defineVectorAsset('robot/chassis', ({ radius = 28, fill = 0x4ecdc4, stroke = 0x1a535c }: RobotChassisOptions = {}) => {
+assetService.defineVectorAsset('mechanism/chassis', ({ radius = 28, fill = 0x4ecdc4, stroke = 0x1a535c }: MechanismChassisOptions = {}) => {
   const graphic = new Graphics();
 
   graphic.circle(0, 0, radius);

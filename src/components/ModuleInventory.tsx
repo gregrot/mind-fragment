@@ -3,7 +3,7 @@ import {
   MODULE_LIBRARY,
   DEFAULT_MODULE_LOADOUT,
   type ModuleBlueprint,
-} from '../simulation/robot/modules/moduleLibrary';
+} from '../simulation/mechanism/modules/moduleLibrary';
 import styles from '../styles/ModuleInventory.module.css';
 
 const renderList = (items: string[]): string => {

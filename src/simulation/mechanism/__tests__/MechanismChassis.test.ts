@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { RobotChassis, type ModuleActionContext, type ModuleUpdateContext } from '../RobotChassis';
-import { RobotModule } from '../RobotModule';
+import { MechanismChassis, type ModuleActionContext, type ModuleUpdateContext } from '../MechanismChassis';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ChassisSnapshot } from '../RobotChassis';
+import type { ChassisSnapshot } from '../MechanismChassis';
 
 interface LinearMovementOptions {
   id: string;
@@ -11,7 +11,7 @@ interface LinearMovementOptions {
   velocityX: number;
 }
 
-class PowerCoreModule extends RobotModule {
+class PowerCoreModule extends MechanismModule {
   constructor() {
     super({
       id: 'core.power',
@@ -22,7 +22,7 @@ class PowerCoreModule extends RobotModule {
   }
 }
 
-class LinearMovementModule extends RobotModule {
+class LinearMovementModule extends MechanismModule {
   private readonly priority: number;
   private readonly velocityX: number;
 
@@ -47,7 +47,7 @@ class LinearMovementModule extends RobotModule {
   }
 }
 
-class TelemetryCoolingModule extends RobotModule {
+class TelemetryCoolingModule extends MechanismModule {
   private port: ModulePort | null = null;
 
   constructor() {
@@ -80,9 +80,9 @@ class TelemetryCoolingModule extends RobotModule {
   }
 }
 
-describe('RobotChassis state model', () => {
-  it('exposes the robot state with position, orientation, velocity, energy, and heat', () => {
-    const chassis = new RobotChassis({
+describe('MechanismChassis state model', () => {
+  it('exposes the mechanism state with position, orientation, velocity, energy, and heat', () => {
+    const chassis = new MechanismChassis({
       state: {
         position: { x: 10, y: -5 },
         orientation: Math.PI / 2,
@@ -104,9 +104,9 @@ describe('RobotChassis state model', () => {
 
 describe('Module stack rules', () => {
   it('enforces capacity, attachment order, and dependencies', () => {
-    const chassis = new RobotChassis({ capacity: 3 });
+    const chassis = new MechanismChassis({ capacity: 3 });
     const power = new PowerCoreModule();
-    const mover = new RobotModule({
+    const mover = new MechanismModule({
       id: 'move.basic',
       title: 'Basic Movement',
       provides: ['movement.basic'],
@@ -119,7 +119,7 @@ describe('Module stack rules', () => {
 
     expect(chassis.moduleStack.hasCapability('movement.basic')).toBe(true);
 
-    const missingDependency = new RobotModule({
+    const missingDependency = new MechanismModule({
       id: 'scanner.vision',
       title: 'Vision Scanner',
       requires: ['power.aux'],
@@ -128,7 +128,7 @@ describe('Module stack rules', () => {
 
     expect(() => chassis.attachModule(missingDependency)).toThrow(/power\.aux/);
 
-    const filler = new RobotModule({
+    const filler = new MechanismModule({
       id: 'support.frame',
       title: 'Support Frame',
       attachment: { slot: 'support', index: 0 },
@@ -136,7 +136,7 @@ describe('Module stack rules', () => {
 
     chassis.attachModule(filler);
 
-    const overCapacity = new RobotModule({
+    const overCapacity = new MechanismModule({
       id: 'arm.heavy',
       title: 'Heavy Armature',
       provides: ['manipulator.heavy'],
@@ -151,7 +151,7 @@ describe('Module stack rules', () => {
 
 describe('Module messaging and actuator resolution', () => {
   it('allows modules to publish data, expose actions, and resolves actuator conflicts', () => {
-    const chassis = new RobotChassis({ capacity: 5 });
+    const chassis = new MechanismChassis({ capacity: 5 });
     const power = new PowerCoreModule();
     const cooling = new TelemetryCoolingModule();
     const moverA = new LinearMovementModule({
@@ -193,7 +193,7 @@ describe('Module messaging and actuator resolution', () => {
 
 describe('Chassis slot schema integration', () => {
   it('exposes slot schema snapshots with default metadata', () => {
-    const chassis = new RobotChassis({ capacity: 6 });
+    const chassis = new MechanismChassis({ capacity: 6 });
 
     const snapshot = chassis.getSlotSchemaSnapshot();
     expect(snapshot.capacity).toBe(6);
@@ -220,7 +220,7 @@ describe('Chassis slot schema integration', () => {
   });
 
   it('notifies listeners when slot occupancy changes', () => {
-    const chassis = new RobotChassis({ capacity: 4 });
+    const chassis = new MechanismChassis({ capacity: 4 });
     const power = new PowerCoreModule();
     const cooling = new TelemetryCoolingModule();
 

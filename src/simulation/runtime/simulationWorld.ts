@@ -6,15 +6,15 @@ import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
   createResourceFieldViewSystem,
-  createRobotPhysicsSystem,
+  createMechanismPhysicsSystem,
   createSelectableSystem,
   createSpriteSyncSystem,
   createStatusIndicatorSystem,
 } from '../ecs/systems';
-import { RobotChassis } from '../robot';
-import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../robot/modules/moduleLibrary';
+import { MechanismChassis } from '../mechanism';
+import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../mechanism/modules/moduleLibrary';
 import { BlockProgramRunner } from './blockProgramRunner';
-import { STATUS_MODULE_ID } from '../robot/modules/statusModule';
+import { STATUS_MODULE_ID } from '../mechanism/modules/statusModule';
 import type { ResourceLayer } from '../resourceLayer';
 import type { ResourceField } from '../resources/resourceField';
 import {
@@ -33,7 +33,7 @@ export const DEBUG_MAX_WIDTH = 280;
 export const DEBUG_MIN_WIDTH = 180;
 export const DEBUG_BACKGROUND_COLOUR = 0x0b1623;
 
-export const DEFAULT_ROBOT_ID = 'MF-01';
+export const DEFAULT_MECHANISM_ID = 'MF-01';
 
 export interface TransformComponent {
   position: { x: number; y: number };
@@ -46,7 +46,7 @@ export interface ViewportTargetComponent {
 }
 
 export interface SelectionStateComponent {
-  robotId: string | null;
+  mechanismId: string | null;
 }
 
 export interface ResourceFieldViewComponent {
@@ -62,11 +62,11 @@ export interface SelectableComponent {
 export interface SimulationWorldComponents {
   Transform: ComponentHandle<TransformComponent>;
   SpriteRef: ComponentHandle<Sprite>;
-  RobotCore: ComponentHandle<RobotChassis>;
+  MechanismCore: ComponentHandle<MechanismChassis>;
   ProgramRunner: ComponentHandle<BlockProgramRunner>;
   ViewportTarget: ComponentHandle<ViewportTargetComponent>;
   SelectionState: ComponentHandle<SelectionStateComponent>;
-  RobotId: ComponentHandle<string>;
+  MechanismId: ComponentHandle<string>;
   DebugOverlay: ComponentHandle<DebugOverlayComponent>;
   StatusIndicator: ComponentHandle<StatusIndicatorComponent>;
   ResourceFieldView: ComponentHandle<ResourceFieldViewComponent>;
@@ -74,7 +74,7 @@ export interface SimulationWorldComponents {
 }
 
 export interface SimulationWorldEntities {
-  robots: Map<string, EntityId>;
+  mechanisms: Map<string, EntityId>;
   selection: EntityId;
 }
 
@@ -83,22 +83,22 @@ export interface SimulationWorldContext {
   components: SimulationWorldComponents;
   entities: SimulationWorldEntities;
   blackboard: ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>;
-  defaultRobotId: string;
-  getRobotCore(robotId?: string): RobotChassis | null;
-  getProgramRunner(robotId?: string): BlockProgramRunner | null;
-  getSprite(robotId?: string): Sprite | null;
-  getTransform(robotId?: string): TransformComponent | null;
-  setTransform(robotId: string, transform: TransformComponent): void;
-  getRobotId(entity: EntityId): string | null;
-  getRobotEntity(robotId: string): EntityId | null;
-  selectRobot(robotId: string | null): void;
-  getSelectedRobot(): string | null;
+  defaultMechanismId: string;
+  getMechanismCore(mechanismId?: string): MechanismChassis | null;
+  getProgramRunner(mechanismId?: string): BlockProgramRunner | null;
+  getSprite(mechanismId?: string): Sprite | null;
+  getTransform(mechanismId?: string): TransformComponent | null;
+  setTransform(mechanismId: string, transform: TransformComponent): void;
+  getMechanismId(entity: EntityId): string | null;
+  getMechanismEntity(mechanismId: string): EntityId | null;
+  selectMechanism(mechanismId: string | null): void;
+  getSelectedMechanism(): string | null;
 }
 
 interface CreateSimulationWorldOptions {
   renderer: Renderer;
-  defaultRobotId?: string;
-  onRobotSelected?: (robotId: string | null) => void;
+  defaultMechanismId?: string;
+  onMechanismSelected?: (mechanismId: string | null) => void;
   overlayLayer: Container;
   viewport: Viewport;
 }
@@ -116,8 +116,8 @@ export interface StatusIndicatorComponent {
 
 export async function createSimulationWorld({
   renderer,
-  defaultRobotId = DEFAULT_ROBOT_ID,
-  onRobotSelected,
+  defaultMechanismId = DEFAULT_MECHANISM_ID,
+  onMechanismSelected,
   overlayLayer,
   viewport,
 }: CreateSimulationWorldOptions): Promise<SimulationWorldContext> {
@@ -125,61 +125,61 @@ export async function createSimulationWorld({
   const blackboard = new ECSBlackboard<SimulationBlackboardFacts, SimulationBlackboardEvents>();
 
   blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, 'idle');
-  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId, null);
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedMechanismId, null);
   blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, null);
   blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.CurrentUISignal, null);
 
   const Transform = world.defineComponent<TransformComponent>('Transform');
   const SpriteRef = world.defineComponent<Sprite>('SpriteRef');
-  const RobotCore = world.defineComponent<RobotChassis>('RobotCore');
+  const MechanismCore = world.defineComponent<MechanismChassis>('MechanismCore');
   const ProgramRunner = world.defineComponent<BlockProgramRunner>('ProgramRunner');
   const ViewportTarget = world.defineComponent<ViewportTargetComponent>('ViewportTarget');
   const SelectionState = world.defineComponent<SelectionStateComponent>('SelectionState');
-  const RobotId = world.defineComponent<string>('RobotId');
+  const MechanismId = world.defineComponent<string>('MechanismId');
   const DebugOverlay = world.defineComponent<DebugOverlayComponent>('DebugOverlay');
   const StatusIndicator = world.defineComponent<StatusIndicatorComponent>('StatusIndicator');
   const ResourceFieldView = world.defineComponent<ResourceFieldViewComponent>('ResourceFieldView');
   const Selectable = world.defineComponent<SelectableComponent>('Selectable');
 
   const selectionEntity = world.createEntity();
-  SelectionState.set(selectionEntity, { robotId: null });
+  SelectionState.set(selectionEntity, { mechanismId: null });
 
-  const chassisTexture = await assetService.loadTexture('robot/chassis', renderer);
+  const chassisTexture = await assetService.loadTexture('mechanism/chassis', renderer);
 
-  const robots = new Map<string, EntityId>();
+  const mechanisms = new Map<string, EntityId>();
 
-  const applySelection = (robotId: string | null): void => {
-    const current = SelectionState.get(selectionEntity)?.robotId ?? null;
-    if (current === robotId) {
+  const applySelection = (mechanismId: string | null): void => {
+    const current = SelectionState.get(selectionEntity)?.mechanismId ?? null;
+    if (current === mechanismId) {
       return;
     }
-    if (robotId !== null && !robots.has(robotId)) {
+    if (mechanismId !== null && !mechanisms.has(mechanismId)) {
       return;
     }
-    SelectionState.set(selectionEntity, { robotId });
-    blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedRobotId, robotId);
-    blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.SelectionChanged, robotId);
-    onRobotSelected?.(robotId);
+    SelectionState.set(selectionEntity, { mechanismId });
+    blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.SelectedMechanismId, mechanismId);
+    blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.SelectionChanged, mechanismId);
+    onMechanismSelected?.(mechanismId);
   };
 
-  const createRobotEntity = async (robotId: string) => {
+  const createMechanismEntity = async (mechanismId: string) => {
     const entity = world.createEntity();
-    robots.set(robotId, entity);
-    RobotId.set(entity, robotId);
+    mechanisms.set(mechanismId, entity);
+    MechanismId.set(entity, mechanismId);
 
-    const robotCore = new RobotChassis();
+    const mechanismCore = new MechanismChassis();
     for (const moduleId of DEFAULT_MODULE_LOADOUT) {
       const moduleInstance = createModuleInstance(moduleId);
-      robotCore.attachModule(moduleInstance);
+      mechanismCore.attachModule(moduleInstance);
     }
-    RobotCore.set(entity, robotCore);
+    MechanismCore.set(entity, mechanismCore);
 
     ResourceFieldView.set(entity, {
-      resourceField: robotCore.resourceField,
+      resourceField: mechanismCore.resourceField,
       layer: null,
     });
 
-    const runner = new BlockProgramRunner(robotCore);
+    const runner = new BlockProgramRunner(mechanismCore);
     ProgramRunner.set(entity, runner);
 
     const transform: TransformComponent = {
@@ -235,114 +235,114 @@ export async function createSimulationWorld({
     });
 
     Selectable.set(entity, {
-      id: robotId,
+      id: mechanismId,
       onSelected: (id) => applySelection(id),
     });
 
-    return { entity, robotCore, runner, sprite };
+    return { entity, mechanismCore, runner, sprite };
   };
 
   const creationOrder: string[] = [];
-  if (!creationOrder.includes(defaultRobotId)) {
-    creationOrder.push(defaultRobotId);
+  if (!creationOrder.includes(defaultMechanismId)) {
+    creationOrder.push(defaultMechanismId);
   }
-  for (const robotId of ['MF-01', 'MF-02']) {
-    if (!creationOrder.includes(robotId)) {
-      creationOrder.push(robotId);
+  for (const mechanismId of ['MF-01', 'MF-02']) {
+    if (!creationOrder.includes(mechanismId)) {
+      creationOrder.push(mechanismId);
     }
   }
 
-  const robotResults: Array<{
-    robotId: string;
-    robotCore: RobotChassis;
+  const mechanismResults: Array<{
+    mechanismId: string;
+    mechanismCore: MechanismChassis;
     runner: BlockProgramRunner;
   }> = [];
 
-  for (const robotId of creationOrder) {
-    const { robotCore, runner } = await createRobotEntity(robotId);
-    robotResults.push({ robotId, robotCore, runner });
+  for (const mechanismId of creationOrder) {
+    const { mechanismCore, runner } = await createMechanismEntity(mechanismId);
+    mechanismResults.push({ mechanismId, mechanismCore, runner });
   }
 
-  const defaultRobot = robotResults.find((entry) => entry.robotId === defaultRobotId) ?? robotResults[0];
-  const defaultTelemetry: SimulationTelemetrySnapshot = defaultRobot.robotCore.getTelemetrySnapshot();
+  const defaultMechanism = mechanismResults.find((entry) => entry.mechanismId === defaultMechanismId) ?? mechanismResults[0];
+  const defaultTelemetry: SimulationTelemetrySnapshot = defaultMechanism.mechanismCore.getTelemetrySnapshot();
 
-  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, defaultRobot.runner.getStatus());
+  blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.ProgramStatus, defaultMechanism.runner.getStatus());
   blackboard.setFact(SIMULATION_BLACKBOARD_FACT_KEYS.TelemetrySnapshot, defaultTelemetry);
   blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.TelemetryUpdated, defaultTelemetry);
 
-  const selectRobot = (robotId: string | null): void => {
-    applySelection(robotId);
+  const selectMechanism = (mechanismId: string | null): void => {
+    applySelection(mechanismId);
   };
 
-  const getSelectedRobot = (): string | null => {
-    return SelectionState.get(selectionEntity)?.robotId ?? null;
+  const getSelectedMechanism = (): string | null => {
+    return SelectionState.get(selectionEntity)?.mechanismId ?? null;
   };
 
-  const resolveRobotEntity = (robotId?: string): EntityId | null => {
-    if (robotId) {
-      return robots.get(robotId) ?? null;
+  const resolveMechanismEntity = (mechanismId?: string): EntityId | null => {
+    if (mechanismId) {
+      return mechanisms.get(mechanismId) ?? null;
     }
-    const selected = getSelectedRobot();
+    const selected = getSelectedMechanism();
     if (selected) {
-      return robots.get(selected) ?? null;
+      return mechanisms.get(selected) ?? null;
     }
-    return robots.get(defaultRobot.robotId) ?? null;
+    return mechanisms.get(defaultMechanism.mechanismId) ?? null;
   };
 
-  applySelection(defaultRobot.robotId);
+  applySelection(defaultMechanism.mechanismId);
 
   const context: SimulationWorldContext = {
     world,
     components: {
       Transform,
       SpriteRef,
-      RobotCore,
+      MechanismCore,
       ProgramRunner,
       ViewportTarget,
       SelectionState,
-      RobotId,
+      MechanismId,
       DebugOverlay,
       StatusIndicator,
       ResourceFieldView,
       Selectable,
     },
     entities: {
-      robots,
+      mechanisms,
       selection: selectionEntity,
     },
     blackboard,
-    defaultRobotId: defaultRobot.robotId,
-    getRobotCore: (robotId) => {
-      const entity = resolveRobotEntity(robotId);
-      return entity ? RobotCore.get(entity) ?? null : null;
+    defaultMechanismId: defaultMechanism.mechanismId,
+    getMechanismCore: (mechanismId) => {
+      const entity = resolveMechanismEntity(mechanismId);
+      return entity ? MechanismCore.get(entity) ?? null : null;
     },
-    getProgramRunner: (robotId) => {
-      const entity = resolveRobotEntity(robotId);
+    getProgramRunner: (mechanismId) => {
+      const entity = resolveMechanismEntity(mechanismId);
       return entity ? ProgramRunner.get(entity) ?? null : null;
     },
-    getSprite: (robotId) => {
-      const entity = resolveRobotEntity(robotId);
+    getSprite: (mechanismId) => {
+      const entity = resolveMechanismEntity(mechanismId);
       return entity ? SpriteRef.get(entity) ?? null : null;
     },
-    getTransform: (robotId) => {
-      const entity = resolveRobotEntity(robotId);
+    getTransform: (mechanismId) => {
+      const entity = resolveMechanismEntity(mechanismId);
       return entity ? Transform.get(entity) ?? null : null;
     },
-    setTransform: (robotId, nextTransform) => {
-      const entity = resolveRobotEntity(robotId);
+    setTransform: (mechanismId, nextTransform) => {
+      const entity = resolveMechanismEntity(mechanismId);
       if (!entity) {
         return;
       }
       Transform.set(entity, nextTransform);
     },
-    getRobotId: (entity) => RobotId.get(entity) ?? null,
-    getRobotEntity: (robotId) => robots.get(robotId) ?? null,
-    selectRobot,
-    getSelectedRobot,
+    getMechanismId: (entity) => MechanismId.get(entity) ?? null,
+    getMechanismEntity: (mechanismId) => mechanisms.get(mechanismId) ?? null,
+    selectMechanism,
+    getSelectedMechanism,
   };
 
   world.addSystem(createProgramRunnerSystem({ ProgramRunner }));
-  world.addSystem(createRobotPhysicsSystem({ RobotCore, Transform }));
+  world.addSystem(createMechanismPhysicsSystem({ MechanismCore, Transform }));
   world.addSystem(createSpriteSyncSystem({ Transform, SpriteRef }));
   world.addSystem(
     createResourceFieldViewSystem(
@@ -352,11 +352,11 @@ export async function createSimulationWorld({
   );
   world.addSystem(createSelectableSystem({ Selectable, SpriteRef }));
   world.addSystem(
-    createStatusIndicatorSystem({ RobotCore, StatusIndicator }, { statusModuleId: STATUS_MODULE_ID }),
+    createStatusIndicatorSystem({ MechanismCore, StatusIndicator }, { statusModuleId: STATUS_MODULE_ID }),
   );
   world.addSystem(
     createDebugOverlaySystem(
-      { RobotCore, ProgramRunner, SpriteRef, DebugOverlay },
+      { MechanismCore, ProgramRunner, SpriteRef, DebugOverlay },
       { overlayLayer, viewport },
     ),
   );

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import RobotProgrammingInspector from '../RobotProgrammingInspector';
+import MechanismProgrammingInspector from '../MechanismProgrammingInspector';
 import { ProgrammingInspectorProvider } from '../../../state/ProgrammingInspectorContext';
 import { createBlockInstance } from '../../../blocks/library';
 import type { WorkspaceState } from '../../../types/blocks';
@@ -10,8 +10,8 @@ import type { EntityId } from '../../../simulation/ecs/world';
 import type { Diagnostic } from '../../../simulation/runtime/blockProgram';
 import type { ProgramRunnerStatus } from '../../../simulation/runtime/blockProgramRunner';
 
-vi.mock('../../../hooks/useRobotTelemetry', () => ({
-  default: () => ({ robotId: 'MF-01', snapshot: { values: {}, actions: {} }, modules: [] }),
+vi.mock('../../../hooks/useMechanismTelemetry', () => ({
+  default: () => ({ mechanismId: 'MF-01', snapshot: { values: {}, actions: {} }, modules: [] }),
 }));
 
 let mockStatus: ProgramRunnerStatus = 'idle';
@@ -38,9 +38,9 @@ const createSlot = (id: string, index: number, occupantId: string | null): SlotS
 
 const createEntity = (overrides?: Partial<EntityOverlayData>): EntityOverlayData => ({
   entityId: 1 as EntityId,
-  robotId: 'MF-01',
-  name: 'Robot MF-01',
-  description: 'Programming inspector test robot',
+  mechanismId: 'MF-01',
+  name: 'Mechanism MF-01',
+  description: 'Programming inspector test mechanism',
   overlayType: 'complex',
   chassis: {
     capacity: overrides?.chassis?.capacity ?? 3,
@@ -68,14 +68,14 @@ const renderInspector = (
     onTouchDrop: vi.fn(),
     onUpdateBlock: vi.fn(),
     onRemoveBlock: vi.fn(),
-    robotId: entity.robotId ?? 'MF-01',
+    mechanismId: entity.mechanismId ?? 'MF-01',
     runProgram: vi.fn(() => ({ diagnostics: [], stepCount: 0, blocked: false })),
     diagnostics,
   };
 
   return render(
     <ProgrammingInspectorProvider value={contextValue}>
-      <RobotProgrammingInspector entity={entity} onClose={() => {}} />
+      <MechanismProgrammingInspector entity={entity} onClose={() => {}} />
     </ProgrammingInspectorProvider>,
   );
 };
@@ -89,7 +89,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('RobotProgrammingInspector', () => {
+describe('MechanismProgrammingInspector', () => {
   it('shows a lock notice and stop control when the program is running', () => {
     mockStatus = 'running';
     const workspace = createWorkspaceWithMoveBlock();

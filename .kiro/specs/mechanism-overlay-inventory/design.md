@@ -2,7 +2,7 @@
 
 ## Overview
 
-The robot overlay and inventory system will provide a unified interface for managing robot entities through a modernized overlay framework. The design builds upon the existing `SimulationOverlay` component but extends it to support multiple entity types with a flexible inspector-based architecture. The system will handle chassis configuration, inventory management, and programming through a tabbed interface with immediate persistence and drag-and-drop interactions.
+The mechanism overlay and inventory system will provide a unified interface for managing mechanism entities through a modernized overlay framework. The design builds upon the existing `SimulationOverlay` component but extends it to support multiple entity types with a flexible inspector-based architecture. The system will handle chassis configuration, inventory management, and programming through a tabbed interface with immediate persistence and drag-and-drop interactions.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ EntityOverlayManager
 The design leverages existing infrastructure:
 
 - **ECS World**: Entity selection and state management
-- **RobotChassis**: Module attachment and inventory operations
+- **MechanismChassis**: Module attachment and inventory operations
 - **Block Programming**: Existing workspace and runtime controls
 - **Module Library**: Blueprint definitions and instantiation
 
@@ -94,7 +94,7 @@ interface InspectorDefinition {
 
 ### ChassisInspector
 
-Manages robot module configuration:
+Manages mechanism module configuration:
 
 ```typescript
 interface ChassisSlot {
@@ -228,7 +228,7 @@ interface EntityOverlayData {
 
 The design extends existing models without breaking changes:
 
-- **RobotChassis**: Add slot schema conversion methods
+- **MechanismChassis**: Add slot schema conversion methods
 - **InventoryStore**: Add slot-based access methods
 - **ModuleStack**: Add slot ordering and metadata
 - **ECS Components**: Add overlay-specific component types

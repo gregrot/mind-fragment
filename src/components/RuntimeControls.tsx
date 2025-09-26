@@ -5,7 +5,7 @@ import styles from '../styles/RuntimeControls.module.css';
 import type { RunProgramResult } from '../state/ProgrammingInspectorContext';
 
 interface RuntimeControlsProps {
-  robotId: string;
+  mechanismId: string;
   onRun: () => RunProgramResult;
   diagnostics: Diagnostic[];
 }
@@ -23,8 +23,8 @@ const formatStatus = (status: string): string => {
   }
 };
 
-const RuntimeControls = ({ robotId, onRun, diagnostics }: RuntimeControlsProps): JSX.Element => {
-  const { status, stopProgram } = useSimulationRuntime(robotId);
+const RuntimeControls = ({ mechanismId, onRun, diagnostics }: RuntimeControlsProps): JSX.Element => {
+  const { status, stopProgram } = useSimulationRuntime(mechanismId);
   const [footerDiagnostics, setFooterDiagnostics] = useState<Diagnostic[]>(() =>
     diagnostics.filter((diagnostic) => diagnostic.severity !== 'error'),
   );

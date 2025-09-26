@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RobotChassis } from '../../RobotChassis';
+import { MechanismChassis } from '../../MechanismChassis';
 import {
   MODULE_LIBRARY,
   DEFAULT_MODULE_LOADOUT,
@@ -29,7 +29,7 @@ describe('module library definitions', () => {
   });
 
   it('instantiates modules that publish telemetry and expose actions', () => {
-    const chassis = new RobotChassis();
+    const chassis = new MechanismChassis();
     const modules = DEFAULT_MODULE_LOADOUT.map((id) => createModuleInstance(id));
     modules.forEach((module) => chassis.attachModule(module));
 

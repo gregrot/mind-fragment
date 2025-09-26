@@ -1,4 +1,4 @@
-import type { RobotModule } from '../RobotModule';
+import type { MechanismModule } from '../MechanismModule';
 import { MovementModule } from './movementModule';
 import { ManipulationModule } from './manipulationModule';
 import { CargoHoldModule } from './cargoHoldModule';
@@ -39,7 +39,7 @@ export interface ModuleBlueprint {
   parameters: ModuleParameterMetadata[];
   actions: ModuleActionMetadata[];
   telemetry: ModuleTelemetryMetadata[];
-  instantiate: () => RobotModule;
+  instantiate: () => MechanismModule;
 }
 
 export const MODULE_LIBRARY: ModuleBlueprint[] = [
@@ -293,7 +293,7 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
       {
         name: 'scan',
         label: 'Sweep area',
-        description: 'Trigger a survey sweep along the robot orientation with optional resource filtering.',
+        description: 'Trigger a survey sweep along the mechanism orientation with optional resource filtering.',
       },
     ],
     telemetry: [
@@ -366,7 +366,7 @@ export const DEFAULT_MODULE_LOADOUT = [
 
 export const getModuleBlueprint = (id: string): ModuleBlueprint | null => MODULE_LOOKUP[id] ?? null;
 
-export const createModuleInstance = (id: string): RobotModule => {
+export const createModuleInstance = (id: string): MechanismModule => {
   const blueprint = MODULE_LOOKUP[id];
   if (!blueprint) {
     throw new Error(`Unknown module id: ${id}`);

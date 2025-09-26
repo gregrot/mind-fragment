@@ -24,7 +24,8 @@ import type {
 } from '../../runtime/blockProgramRunner';
 import type { BlockProgramRunner } from '../../runtime/blockProgramRunner';
 import type { MechanismChassis } from '../../mechanism';
-import type { ComponentHandle, EntityId, System } from '../world';
+import type { ComponentHandle, System } from '../world';
+import type { Entity } from '../entity';
 
 interface DebugOverlaySystemDependencies
   extends Pick<
@@ -52,7 +53,7 @@ export function createDebugOverlaySystem(
     name: 'DebugOverlaySystem',
     components: [MechanismCore, ProgramRunner, SpriteRef, DebugOverlay],
     update: (_world, entities) => {
-      const processed = new Set<EntityId>();
+      const processed = new Set<Entity>();
 
       for (const [entity, overlay] of DebugOverlay.entries()) {
         overlay.container.visible = false;

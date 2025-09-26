@@ -4,7 +4,8 @@ import type {
   ResourceFieldViewComponent,
   SimulationWorldComponents,
 } from '../../runtime/simulationWorld';
-import type { ComponentHandle, EntityId, System } from '../world';
+import type { ComponentHandle, System } from '../world';
+import type { Entity } from '../entity';
 
 interface ResourceFieldViewSystemDependencies
   extends Pick<SimulationWorldComponents, 'ResourceFieldView'> {}
@@ -18,13 +19,13 @@ export function createResourceFieldViewSystem(
   { ResourceFieldView }: ResourceFieldViewSystemDependencies,
   { renderer, container }: ResourceFieldViewSystemOptions,
 ): System<[ComponentHandle<ResourceFieldViewComponent>]> {
-  const layers = new Map<EntityId, ResourceLayer>();
+  const layers = new Map<Entity, ResourceLayer>();
 
   return {
     name: 'ResourceFieldViewSystem',
     components: [ResourceFieldView],
     update: (world, entities) => {
-      const activeEntities = new Set<EntityId>();
+      const activeEntities = new Set<Entity>();
 
       for (const [entity, view] of entities) {
         activeEntities.add(entity);

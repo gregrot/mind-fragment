@@ -3,7 +3,8 @@ import type {
   SelectableComponent,
   SimulationWorldComponents,
 } from '../../runtime/simulationWorld';
-import type { ComponentHandle, EntityId, System } from '../world';
+import type { ComponentHandle, System } from '../world';
+import type { Entity } from '../entity';
 
 interface SelectableSystemDependencies
   extends Pick<SimulationWorldComponents, 'Selectable' | 'SpriteRef'> {}
@@ -36,13 +37,13 @@ export function createSelectableSystem({
   ComponentHandle<SelectableComponent>,
   ComponentHandle<Sprite>,
 ]> {
-  const listeners = new Map<EntityId, ListenerEntry>();
+  const listeners = new Map<Entity, ListenerEntry>();
 
   return {
     name: 'SelectableSystem',
     components: [Selectable, SpriteRef],
     update: (world, entities) => {
-      const active = new Set<EntityId>();
+      const active = new Set<Entity>();
 
       for (const [entity, _selectable, sprite] of entities) {
         active.add(entity);

@@ -159,6 +159,11 @@ describe('EntityOverlayManager', () => {
     });
     const { result } = renderManager(adapter);
     const data = createOverlayData(7 as EntityId, 'complex');
+    const listener = vi.fn();
+
+    act(() => {
+      result.current.subscribe(listener);
+    });
 
     await act(async () => {
       result.current.upsertEntityData(data);
@@ -169,6 +174,9 @@ describe('EntityOverlayManager', () => {
     expect(state.status).toBe('error');
     expect(state.error).toBe(error);
     expect(result.current.getEntityData(data.entityId)).toBeUndefined();
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'save-error', entityId: data.entityId, error }),
+    );
 
     await act(async () => {
       result.current.retryPersistence(data.entityId);
@@ -179,5 +187,13 @@ describe('EntityOverlayManager', () => {
     expect(state.status).toBe('idle');
     expect(adapter.saveEntity).toHaveBeenCalledTimes(2);
     expect(result.current.getEntityData(data.entityId)).toEqual(data);
+
+    const changeEvents = listener.mock.calls.filter(
+      ([event]) => event.type === 'change' && event.entityId === data.entityId,
+    );
+    expect(changeEvents).toHaveLength(2);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'save-success', entityId: data.entityId }),
+    );
   });
 });

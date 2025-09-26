@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Text, type Renderer } from 'pixi.js';
 import type { Viewport } from 'pixi-viewport';
 import { assetService } from '../assetService';
-import { ECSWorld, type ComponentHandle, type EntityId } from '../ecs';
+import { ECSWorld, type ComponentHandle, type Entity } from '../ecs';
 import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
@@ -74,8 +74,8 @@ export interface SimulationWorldComponents {
 }
 
 export interface SimulationWorldEntities {
-  mechanisms: Map<string, EntityId>;
-  selection: EntityId;
+  mechanisms: Map<string, Entity>;
+  selection: Entity;
 }
 
 export interface SimulationWorldContext {
@@ -89,8 +89,8 @@ export interface SimulationWorldContext {
   getSprite(mechanismId?: string): Sprite | null;
   getTransform(mechanismId?: string): TransformComponent | null;
   setTransform(mechanismId: string, transform: TransformComponent): void;
-  getMechanismId(entity: EntityId): string | null;
-  getMechanismEntity(mechanismId: string): EntityId | null;
+  getMechanismId(entity: Entity): string | null;
+  getMechanismEntity(mechanismId: string): Entity | null;
   selectMechanism(mechanismId: string | null): void;
   getSelectedMechanism(): string | null;
 }
@@ -146,7 +146,7 @@ export async function createSimulationWorld({
 
   const chassisTexture = await assetService.loadTexture('mechanism/chassis', renderer);
 
-  const mechanisms = new Map<string, EntityId>();
+  const mechanisms = new Map<string, Entity>();
 
   const applySelection = (mechanismId: string | null): void => {
     const current = SelectionState.get(selectionEntity)?.mechanismId ?? null;
@@ -278,7 +278,7 @@ export async function createSimulationWorld({
     return SelectionState.get(selectionEntity)?.mechanismId ?? null;
   };
 
-  const resolveMechanismEntity = (mechanismId?: string): EntityId | null => {
+  const resolveMechanismEntity = (mechanismId?: string): Entity | null => {
     if (mechanismId) {
       return mechanisms.get(mechanismId) ?? null;
     }

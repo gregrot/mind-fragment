@@ -425,10 +425,11 @@ export class RootScene {
 
   subscribeMechanismSelection(listener: MechanismSelectionListener): () => void {
     this.selectionListeners.add(listener);
-    const entityId =
+    const entity =
       this.pendingSelection && this.context
         ? this.context.getMechanismEntity(this.pendingSelection) ?? null
         : null;
+    const entityId = entity ? (entity.id as EntityId) : null;
     listener(this.pendingSelection, entityId);
     return () => {
       this.selectionListeners.delete(listener);
@@ -598,8 +599,9 @@ export class RootScene {
         }
       }
     }
-    const entityId =
+    const entity =
       mechanismId && this.context ? this.context.getMechanismEntity(mechanismId) ?? null : null;
+    const entityId = entity ? (entity.id as EntityId) : null;
     for (const listener of this.selectionListeners) {
       listener(mechanismId, entityId);
     }

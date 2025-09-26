@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { simulationRuntime } from '../simulationRuntime';
+import { chassisState, inventoryState, telemetryState } from '../runtime';
 import { DEFAULT_STARTUP_PROGRAM } from '../../simulation/runtime/defaultProgram';
 import { DEFAULT_MECHANISM_ID } from '../../simulation/runtime/simulationWorld';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
@@ -132,6 +133,9 @@ describe('simulationRuntime', () => {
     simulationRuntime.stopProgram(DEFAULT_MECHANISM_ID);
     simulationRuntime.stopProgram('MF-02');
     simulationRuntime.clearSelectedMechanism();
+    inventoryState.clear();
+    chassisState.clear();
+    telemetryState.clear();
   });
 
   it('runs the default startup program when a scene registers', () => {

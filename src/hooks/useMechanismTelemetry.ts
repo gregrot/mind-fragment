@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
 import { MODULE_LIBRARY } from '../simulation/mechanism/modules/moduleLibrary';
 import { simulationRuntime } from '../state/simulationRuntime';
+import { telemetryState } from '../state/runtime';
 
 interface TelemetryValueMetadata {
   label?: string;
@@ -110,13 +111,13 @@ const EMPTY_TELEMETRY: SimulationTelemetrySnapshot = { values: {}, actions: {} }
 export const useMechanismTelemetry = (): MechanismTelemetryData => {
   const [state, setState] = useState<{ mechanismId: string | null; snapshot: SimulationTelemetrySnapshot }>(() => {
     const mechanismId = simulationRuntime.getSelectedMechanism();
-    const snapshot = simulationRuntime.getTelemetrySnapshot(mechanismId ?? null);
+    const snapshot = telemetryState.getSnapshot(mechanismId ?? null);
     return { mechanismId, snapshot };
   });
 
   useEffect(
     () =>
-      simulationRuntime.subscribeTelemetry((snapshot, mechanismId) => {
+      telemetryState.subscribe((snapshot, mechanismId) => {
         setState((current) => ({ mechanismId: mechanismId ?? current.mechanismId ?? null, snapshot }));
       }),
     [],

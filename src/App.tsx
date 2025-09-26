@@ -4,6 +4,7 @@ import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 import OnboardingFlow from './onboarding/OnboardingFlow';
 import { useMechanismSelection } from './hooks/useMechanismSelection';
 import { simulationRuntime } from './state/simulationRuntime';
+import { chassisState, inventoryState } from './state/runtime';
 import {
   EntityOverlayManagerProvider,
   useEntityOverlayManager,
@@ -148,15 +149,15 @@ const AppContent = (): JSX.Element => {
     () => selectedMechanismId ?? DEFAULT_MECHANISM_ID,
   );
   const [chassisSnapshot, setChassisSnapshot] = useState<ChassisSnapshot>(() =>
-    simulationRuntime.getChassisSnapshot(selectedMechanismId ?? DEFAULT_MECHANISM_ID),
+    chassisState.getSnapshot(),
   );
   const [inventoryOverlay, setInventoryOverlay] = useState<InventoryOverlayView>(() =>
-    buildInventoryOverlayData(simulationRuntime.getInventorySnapshot()),
+    buildInventoryOverlayData(inventoryState.getSnapshot()),
   );
   const [debugStatesByMechanism, setDebugStatesByMechanism] = useState<Record<string, ProgramDebugState>>({});
 
   const activeMechanismId = useMemo(() => selectedMechanismId ?? DEFAULT_MECHANISM_ID, [selectedMechanismId]);
-  useEffect(() => simulationRuntime.subscribeChassis(setChassisSnapshot), []);
+  useEffect(() => chassisState.subscribe(setChassisSnapshot), []);
 
   useEffect(() => {
     const nextState = simulationRuntime.getProgramDebugState(activeMechanismId);
@@ -185,7 +186,7 @@ const AppContent = (): JSX.Element => {
 
   useEffect(
     () =>
-      simulationRuntime.subscribeInventory((snapshot) => {
+      inventoryState.subscribe((snapshot) => {
         setInventoryOverlay((current) => {
           const next = buildInventoryOverlayData(snapshot);
           if (areInventoryOverlaysEqual(current, next)) {
@@ -198,7 +199,7 @@ const AppContent = (): JSX.Element => {
   );
 
   useEffect(() => {
-    setChassisSnapshot(simulationRuntime.getChassisSnapshot(selectedMechanismId));
+    setChassisSnapshot(chassisState.getSnapshot());
   }, [selectedMechanismId]);
 
   const getWorkspaceForMechanism = useCallback(

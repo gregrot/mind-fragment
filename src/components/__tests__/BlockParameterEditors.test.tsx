@@ -6,6 +6,7 @@ import { BLOCK_MAP, createBlockInstance } from '../../blocks/library';
 import type { BlockInstance } from '../../types/blocks';
 import useMechanismTelemetry from '../../hooks/useMechanismTelemetry';
 import { simulationRuntime } from '../../state/simulationRuntime';
+import { telemetryState } from '../../state/runtime';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 
 afterEach(() => {
@@ -161,8 +162,8 @@ describe('Block parameter editors', () => {
     let telemetryListener: ((snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void) | null = null;
 
     vi.spyOn(simulationRuntime, 'getSelectedMechanism').mockReturnValue('MF-01');
-    vi.spyOn(simulationRuntime, 'getTelemetrySnapshot').mockReturnValue(initialSnapshot);
-    vi.spyOn(simulationRuntime, 'subscribeTelemetry').mockImplementation((listener) => {
+    vi.spyOn(telemetryState, 'getSnapshot').mockReturnValue(initialSnapshot);
+    vi.spyOn(telemetryState, 'subscribe').mockImplementation((listener) => {
       telemetryListener = listener;
       listener(initialSnapshot, 'MF-01');
       return () => {};

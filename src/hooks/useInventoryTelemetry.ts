@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { InventorySnapshot } from '../simulation/mechanism/inventory';
-import { simulationRuntime } from '../state/simulationRuntime';
+import { inventoryState } from '../state/runtime';
 
 export const useInventoryTelemetry = (): InventorySnapshot => {
-  const [snapshot, setSnapshot] = useState<InventorySnapshot>(simulationRuntime.getInventorySnapshot());
+  const [snapshot, setSnapshot] = useState<InventorySnapshot>(inventoryState.getSnapshot());
 
-  useEffect(() => simulationRuntime.subscribeInventory(setSnapshot), []);
+  useEffect(() => inventoryState.subscribe(setSnapshot), []);
 
   return snapshot;
 };

@@ -5,7 +5,7 @@ import { DEFAULT_MECHANISM_ID } from '../../simulation/runtime/simulationWorld';
 import { createNumberLiteralBinding, type CompiledProgram } from '../../simulation/runtime/blockProgram';
 import type { RootScene } from '../../simulation/rootScene';
 import type { ChassisSnapshot } from '../../simulation/mechanism';
-import type { ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
+import type { ProgramDebugState, ProgramRunnerStatus } from '../../simulation/runtime/blockProgramRunner';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 import type { SlotSchema } from '../../types/slots';
 
@@ -14,6 +14,8 @@ const createSceneStub = () => {
   const telemetryListeners: Array<(snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void> = [];
   const telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
   const chassisListeners: Array<(snapshot: ChassisSnapshot) => void> = [];
+  const debugListeners: Array<(state: ProgramDebugState, mechanismId: string) => void> = [];
+  const debugStates = new Map<string, ProgramDebugState>();
   let chassisSnapshot: ChassisSnapshot = { capacity: 0, slots: [] };
   let selectedMechanismId: string | null = null;
   return {
@@ -48,6 +50,25 @@ const createSceneStub = () => {
       };
     }),
     getTelemetrySnapshot: vi.fn((mechanismId: string = DEFAULT_MECHANISM_ID) => telemetrySnapshots.get(mechanismId) ?? { values: {}, actions: {} }),
+    subscribeProgramDebug: vi.fn((listener: (state: ProgramDebugState, mechanismId: string) => void) => {
+      debugListeners.push(listener);
+      return () => {
+        const index = debugListeners.indexOf(listener);
+        if (index >= 0) {
+          debugListeners.splice(index, 1);
+        }
+      };
+    }),
+    getProgramDebugState: vi.fn(
+      (mechanismId: string = DEFAULT_MECHANISM_ID) =>
+        debugStates.get(mechanismId) ?? {
+          status: 'idle',
+          program: null,
+          currentInstruction: null,
+          timeRemaining: 0,
+          frames: [],
+        },
+    ),
     subscribeChassis: vi.fn((listener: (snapshot: ChassisSnapshot) => void) => {
       chassisListeners.push(listener);
       listener(chassisSnapshot);
@@ -75,6 +96,12 @@ const createSceneStub = () => {
       telemetrySnapshots.set(mechanismId, snapshot);
       for (const listener of telemetryListeners) {
         listener(snapshot, mechanismId);
+      }
+    },
+    triggerDebugState: (mechanismId: string, state: ProgramDebugState) => {
+      debugStates.set(mechanismId, state);
+      for (const listener of debugListeners) {
+        listener(state, mechanismId);
       }
     },
     triggerChassis: (snapshot: ChassisSnapshot) => {
@@ -136,7 +163,11 @@ describe('simulationRuntime', () => {
   it('prioritises queued programs over the default startup routine', () => {
     const customProgram: CompiledProgram = {
       instructions: [
-        { kind: 'wait', duration: createNumberLiteralBinding(1, { label: 'Queued → wait' }) },
+        {
+          kind: 'wait',
+          duration: createNumberLiteralBinding(1, { label: 'Queued → wait' }),
+          sourceBlockId: 'queued-wait',
+        },
       ],
     };
     simulationRuntime.runProgram(DEFAULT_MECHANISM_ID, customProgram);

@@ -84,6 +84,7 @@ export class BlockProgramRunner {
   private frames: ExecutionFrame[] = [];
   private activeProgram: CompiledProgram | null = null;
   private debugFrames: ProgramDebugFrame[] = [];
+  private debugStateListener: ((state: ProgramDebugState) => void) | null = null;
 
   constructor(mechanism: MechanismChassis, onStatusChange?: (status: ProgramRunnerStatus) => void) {
     this.mechanism = mechanism;
@@ -96,6 +97,13 @@ export class BlockProgramRunner {
     this.statusListener = listener;
     if (listener) {
       listener(this.status);
+    }
+  }
+
+  setDebugStateListener(listener: ((state: ProgramDebugState) => void) | null): void {
+    this.debugStateListener = listener;
+    if (listener) {
+      listener(this.getDebugState());
     }
   }
 
@@ -112,9 +120,11 @@ export class BlockProgramRunner {
     this.frames = [];
     this.debugFrames = [];
     this.resetMovement();
+    this.notifyDebugState();
 
     if (!program.instructions || program.instructions.length === 0) {
       this.updateStatus('completed');
+      this.notifyDebugState();
       return;
     }
 
@@ -133,6 +143,7 @@ export class BlockProgramRunner {
     this.debugFrames = [];
     this.resetMovement();
     this.updateStatus('idle');
+    this.notifyDebugState();
   }
 
   update(stepSeconds: number): void {
@@ -282,6 +293,7 @@ export class BlockProgramRunner {
     this.frames = [];
     this.debugFrames = [];
     this.updateStatus('completed');
+    this.notifyDebugState();
   }
 
   private applyInstruction(instruction: BlockInstruction, telemetry: ValuesSnapshot): void {
@@ -846,9 +858,16 @@ export class BlockProgramRunner {
     } satisfies ProgramDebugState;
   }
 
+  private notifyDebugState(): void {
+    if (this.debugStateListener) {
+      this.debugStateListener(this.getDebugState());
+    }
+  }
+
   private updateDebugFrames(): void {
     if (this.frames.length === 0) {
       this.debugFrames = [];
+      this.notifyDebugState();
       return;
     }
 
@@ -875,5 +894,6 @@ export class BlockProgramRunner {
     });
 
     this.debugFrames = nextFrames;
+    this.notifyDebugState();
   }
 }

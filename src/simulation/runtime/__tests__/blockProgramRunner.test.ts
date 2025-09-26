@@ -37,6 +37,7 @@ describe('BlockProgramRunner', () => {
           kind: 'move',
           duration: createNumberLiteralBinding(1, { label: 'Test → move duration' }),
           speed: createNumberLiteralBinding(40, { label: 'Test → move speed' }),
+          sourceBlockId: 'test-move',
         },
       ],
     };
@@ -73,6 +74,7 @@ describe('BlockProgramRunner', () => {
           kind: 'turn',
           duration: createNumberLiteralBinding(0.5, { label: 'Test → turn duration' }),
           angularVelocity: createNumberLiteralBinding(Math.PI, { label: 'Test → turn rate' }),
+          sourceBlockId: 'test-turn',
         },
       ],
     };
@@ -103,11 +105,13 @@ describe('BlockProgramRunner', () => {
           kind: 'scan',
           duration: createNumberLiteralBinding(1, { label: 'Test → scan duration' }),
           filter: null,
+          sourceBlockId: 'test-scan',
         },
         {
           kind: 'gather',
           duration: createNumberLiteralBinding(1.5, { label: 'Test → gather duration' }),
           target: 'auto',
+          sourceBlockId: 'test-gather',
         },
       ],
     };
@@ -177,6 +181,7 @@ describe('BlockProgramRunner', () => {
           kind: 'scan',
           duration: createNumberLiteralBinding(0.25, { label: 'Test → scan duration' }),
           filter: scanFilter,
+          sourceBlockId: 'test-scan-memory',
         },
       ],
     };
@@ -247,6 +252,7 @@ describe('BlockProgramRunner', () => {
           kind: 'scan',
           duration: createNumberLiteralBinding(1, { label: 'Test → scan duration' }),
           filter: null,
+          sourceBlockId: 'test-steer-scan',
         },
         {
           kind: 'move-to',
@@ -260,6 +266,7 @@ describe('BlockProgramRunner', () => {
               y: createNumberLiteralBinding(0, { label: 'Test → fallback Y' }),
             },
           },
+          sourceBlockId: 'test-steer-move-to',
         },
       ],
     };
@@ -326,6 +333,7 @@ describe('BlockProgramRunner', () => {
         {
           kind: 'deposit',
           duration: createNumberLiteralBinding(1, { label: 'Test → deposit duration' }),
+          sourceBlockId: 'test-deposit',
         },
       ],
     };
@@ -379,8 +387,10 @@ describe('BlockProgramRunner', () => {
               kind: 'gather',
               duration: createNumberLiteralBinding(1.5, { label: 'Test → gather duration' }),
               target: 'auto',
+              sourceBlockId: 'test-loop-gather',
             },
           ],
+          sourceBlockId: 'test-loop',
         },
       ],
     };
@@ -445,8 +455,10 @@ describe('BlockProgramRunner', () => {
               kind: 'move',
               duration: createNumberLiteralBinding(0.2, { label: 'Test → move duration' }),
               speed: createNumberLiteralBinding(10, { label: 'Test → move speed' }),
+              sourceBlockId: 'test-counted-move',
             },
           ],
+          sourceBlockId: 'test-counted-loop',
         },
       ],
     };
@@ -482,6 +494,7 @@ describe('BlockProgramRunner', () => {
               kind: 'status-set',
               duration: createNumberLiteralBinding(0, { label: 'Branch → true duration' }),
               value: createBooleanLiteralBinding(true, { label: 'Branch → true value' }),
+              sourceBlockId: 'test-branch-true',
             },
           ],
           whenFalse: [
@@ -489,8 +502,10 @@ describe('BlockProgramRunner', () => {
               kind: 'status-set',
               duration: createNumberLiteralBinding(0, { label: 'Branch → false duration' }),
               value: createBooleanLiteralBinding(false, { label: 'Branch → false value' }),
+              sourceBlockId: 'test-branch-false',
             },
           ],
+          sourceBlockId: 'test-branch',
         },
       ],
     };
@@ -518,6 +533,7 @@ describe('BlockProgramRunner', () => {
           kind: 'move',
           duration: createNumberLiteralBinding(1, { label: 'Debug → move duration' }),
           speed: createNumberLiteralBinding(20, { label: 'Debug → move speed' }),
+          sourceBlockId: 'debug-move',
         },
         {
           kind: 'loop',
@@ -527,8 +543,10 @@ describe('BlockProgramRunner', () => {
               kind: 'turn',
               duration: createNumberLiteralBinding(0.5, { label: 'Debug → turn duration' }),
               angularVelocity: createNumberLiteralBinding(Math.PI, { label: 'Debug → turn rate' }),
+              sourceBlockId: 'debug-turn',
             },
           ],
+          sourceBlockId: 'debug-loop',
         },
       ],
     };
@@ -539,6 +557,7 @@ describe('BlockProgramRunner', () => {
     expect(initialDebug.status).toBe('running');
     expect(initialDebug.program).toBe(program);
     expect(initialDebug.currentInstruction?.kind).toBe('move');
+    expect(initialDebug.currentInstruction?.sourceBlockId).toBe('debug-move');
     expect(initialDebug.frames).toHaveLength(1);
     expect(initialDebug.frames[0]).toMatchObject({ kind: 'sequence', index: 0, length: 2 });
 
@@ -547,6 +566,7 @@ describe('BlockProgramRunner', () => {
 
     const loopDebug = runner.getDebugState();
     expect(loopDebug.currentInstruction?.kind).toBe('turn');
+    expect(loopDebug.currentInstruction?.sourceBlockId).toBe('debug-turn');
     expect(loopDebug.frames).toEqual([
       expect.objectContaining({ kind: 'sequence', index: 2, length: 2 }),
       expect.objectContaining({ kind: 'loop', index: 0, length: 1 }),

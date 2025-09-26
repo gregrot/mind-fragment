@@ -91,69 +91,73 @@ export interface MoveToTargetMetadata {
   };
 }
 
-export interface MoveToInstruction {
+export interface BlockInstructionMetadata {
+  sourceBlockId: string;
+}
+
+export type MoveToInstruction = BlockInstructionMetadata & {
   kind: 'move-to';
   duration: NumberParameterBinding;
   speed: NumberParameterBinding;
   target: MoveToTargetMetadata;
-}
+};
 
 export type BlockInstruction =
   | MoveToInstruction
-  | {
+  | (BlockInstructionMetadata & {
       kind: 'move';
       duration: NumberParameterBinding;
       speed: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'turn';
       duration: NumberParameterBinding;
       angularVelocity: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'wait';
       duration: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'scan';
       duration: NumberParameterBinding;
       filter: string | null;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'gather';
       duration: NumberParameterBinding;
       target: 'auto';
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'deposit';
       duration: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'status-toggle';
       duration: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'status-set';
       duration: NumberParameterBinding;
       value: BooleanParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'loop';
       mode: 'forever';
       instructions: BlockInstruction[];
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'loop';
       mode: 'counted';
       instructions: BlockInstruction[];
       iterations: NumberParameterBinding;
-    }
-  | {
+    })
+  | (BlockInstructionMetadata & {
       kind: 'branch';
       condition: BooleanParameterBinding;
       whenTrue: BlockInstruction[];
       whenFalse: BlockInstruction[];
-    };
+    });
 
 export interface CompiledProgram {
   instructions: BlockInstruction[];
@@ -805,6 +809,7 @@ const compileBlock = (
   diagnostics: Diagnostic[],
   context: CompilationContext,
 ): BlockInstruction[] => {
+  const sourceBlockId = block.instanceId;
   switch (block.type) {
     case 'move':
       return [
@@ -812,6 +817,7 @@ const compileBlock = (
           kind: 'move',
           duration: createNumberLiteralBinding(1, { label: 'Move → duration' }),
           speed: createNumberLiteralBinding(MOVE_SPEED, { label: 'Move → speed' }),
+          sourceBlockId,
         },
       ];
     case 'move-to': {
@@ -851,6 +857,7 @@ const compileBlock = (
               y: targetYBinding,
             },
           },
+          sourceBlockId,
         },
       ];
     }
@@ -860,6 +867,7 @@ const compileBlock = (
           kind: 'turn',
           duration: createNumberLiteralBinding(1, { label: 'Turn → duration' }),
           angularVelocity: createNumberLiteralBinding(TURN_RATE, { label: 'Turn → rate' }),
+          sourceBlockId,
         },
       ];
     case 'wait':
@@ -867,6 +875,7 @@ const compileBlock = (
         {
           kind: 'wait',
           duration: createNumberLiteralBinding(WAIT_DURATION, { label: 'Wait → duration' }),
+          sourceBlockId,
         },
       ];
     case 'scan-resources':
@@ -875,6 +884,7 @@ const compileBlock = (
           kind: 'scan',
           duration: createNumberLiteralBinding(SCAN_DURATION, { label: 'Scan → duration' }),
           filter: null,
+          sourceBlockId,
         },
       ];
     case 'gather-resource':
@@ -883,6 +893,7 @@ const compileBlock = (
           kind: 'gather',
           duration: createNumberLiteralBinding(GATHER_DURATION, { label: 'Gather → duration' }),
           target: 'auto',
+          sourceBlockId,
         },
       ];
     case 'deposit-cargo':
@@ -890,6 +901,7 @@ const compileBlock = (
         {
           kind: 'deposit',
           duration: createNumberLiteralBinding(WAIT_DURATION, { label: 'Deposit → duration' }),
+          sourceBlockId,
         },
       ];
     case 'toggle-status':
@@ -897,6 +909,7 @@ const compileBlock = (
         {
           kind: 'status-toggle',
           duration: createNumberLiteralBinding(0, { label: 'Toggle Status → duration' }),
+          sourceBlockId,
         },
       ];
     case 'set-status': {
@@ -909,6 +922,7 @@ const compileBlock = (
           kind: 'status-set',
           duration: createNumberLiteralBinding(0, { label: 'Set Status → duration' }),
           value: valueBinding,
+          sourceBlockId,
         },
       ];
     }
@@ -933,6 +947,7 @@ const compileBlock = (
           mode: 'counted',
           iterations: countBinding,
           instructions: inner,
+          sourceBlockId,
         },
       ];
     }
@@ -965,6 +980,7 @@ const compileBlock = (
           kind: 'loop',
           mode: 'forever',
           instructions: inner,
+          sourceBlockId,
         },
       ];
     }
@@ -991,6 +1007,7 @@ const compileBlock = (
           condition: conditionBinding,
           whenTrue: thenInstructions,
           whenFalse: elseInstructions,
+          sourceBlockId,
         },
       ];
     }

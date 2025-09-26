@@ -33,11 +33,13 @@ describe('compileWorkspaceProgram', () => {
     if (moveInstruction.kind !== 'move') {
       throw new Error('Expected the first instruction to be a move.');
     }
+    expect(moveInstruction.sourceBlockId).toBe(move.instanceId);
     expect(extractLiteral(moveInstruction.duration.literal?.value)).toBeCloseTo(1);
     expect(extractLiteral(moveInstruction.speed.literal?.value)).toBeGreaterThan(0);
     if (waitInstruction.kind !== 'wait') {
       throw new Error('Expected the second instruction to be a wait.');
     }
+    expect(waitInstruction.sourceBlockId).toBe(wait.instanceId);
     expect(extractLiteral(waitInstruction.duration.literal?.value)).toBeCloseTo(1);
     expect(result.diagnostics).toHaveLength(0);
   });
@@ -61,6 +63,7 @@ describe('compileWorkspaceProgram', () => {
     if (instruction.kind !== 'move-to') {
       throw new Error('Expected a move-to instruction.');
     }
+    expect(instruction.sourceBlockId).toBe(moveTo.instanceId);
     expect(instruction.target.useScanHit.literal?.value).toBe(false);
     expect(instruction.target.useScanHit.literal?.source).toBe('user');
     expect(instruction.target.scanHitIndex.literal?.value).toBe(2);
@@ -81,10 +84,12 @@ describe('compileWorkspaceProgram', () => {
     const [scanInstruction, gatherInstruction] = result.program.instructions;
     expect(scanInstruction).toMatchObject({ kind: 'scan', filter: null });
     if (scanInstruction.kind === 'scan') {
+      expect(scanInstruction.sourceBlockId).toBe(scan.instanceId);
       expect(extractLiteral(scanInstruction.duration.literal?.value)).toBeGreaterThan(0);
     }
     expect(gatherInstruction).toMatchObject({ kind: 'gather', target: 'auto' });
     if (gatherInstruction.kind === 'gather') {
+      expect(gatherInstruction.sourceBlockId).toBe(gather.instanceId);
       expect(extractLiteral(gatherInstruction.duration.literal?.value)).toBeGreaterThan(0);
     }
   });
@@ -103,6 +108,7 @@ describe('compileWorkspaceProgram', () => {
     if (statusInstruction.kind !== 'status-set') {
       throw new Error('Expected a status-set instruction.');
     }
+    expect(statusInstruction.sourceBlockId).toBe(setStatus.instanceId);
     expect(statusInstruction.duration.literal?.value).toBe(0);
     expect(statusInstruction.value.literal?.value).toBe(false);
     expect(statusInstruction.value.literal?.source).toBe('user');
@@ -122,9 +128,11 @@ describe('compileWorkspaceProgram', () => {
     if (loop.kind !== 'loop') {
       throw new Error('Expected a loop instruction to be emitted.');
     }
+    expect(loop.sourceBlockId).toBe(forever.instanceId);
     expect(loop.mode).toBe('forever');
     expect(loop.instructions).toHaveLength(1);
     expect(loop.instructions[0]).toMatchObject({ kind: 'gather', target: 'auto' });
+    expect(loop.instructions[0]?.sourceBlockId).toBe(gather.instanceId);
   });
 
   it('compiles repeat blocks into counted loops with defaults', () => {
@@ -144,6 +152,7 @@ describe('compileWorkspaceProgram', () => {
     if (instruction.mode !== 'counted') {
       throw new Error('Expected a counted loop.');
     }
+    expect(instruction.sourceBlockId).toBe(repeat.instanceId);
     expect(extractLiteral(instruction.iterations.literal?.value)).toBe(3);
     expect(instruction.iterations.literal?.source).toBe('default');
     expect(result.diagnostics).toHaveLength(0);
@@ -164,6 +173,7 @@ describe('compileWorkspaceProgram', () => {
     if (instruction.kind !== 'loop' || instruction.mode !== 'counted') {
       throw new Error('Expected a counted loop instruction.');
     }
+    expect(instruction.sourceBlockId).toBe(repeat.instanceId);
     expect(instruction.iterations.literal?.value).toBe(5);
     expect(instruction.iterations.literal?.source).toBe('user');
   });
@@ -186,8 +196,11 @@ describe('compileWorkspaceProgram', () => {
     if (branch.kind !== 'branch') {
       throw new Error('Expected a branch instruction.');
     }
+    expect(branch.sourceBlockId).toBe(conditional.instanceId);
     expect(branch.whenTrue).toHaveLength(1);
     expect(branch.whenFalse).toHaveLength(1);
+    expect(branch.whenTrue[0]?.sourceBlockId).toBe(thenTurn.instanceId);
+    expect(branch.whenFalse[0]?.sourceBlockId).toBe(elseMove.instanceId);
     expect(branch.condition.literal?.value).toBe(false);
     expect(branch.condition.literal?.source).toBe('user');
     expect(result.diagnostics).toHaveLength(0);

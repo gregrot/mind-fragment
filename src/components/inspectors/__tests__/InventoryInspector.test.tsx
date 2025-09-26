@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
 import InventoryInspector from '../InventoryInspector';
@@ -320,6 +320,41 @@ describe('InventoryInspector', () => {
     const validation = target.accepts(session);
     expect(validation.canDrop).toBe(false);
     expect(validation.reason).toBe('incompatible-item');
+  });
+
+  it('supports keyboard dragging between inventory slots', async () => {
+    const slots = [
+      createSlot('cargo-0', 0, 'resource.scrap', 3),
+      createSlot('cargo-1', 1, null),
+    ];
+    const entity = createEntity(slots);
+
+    renderInspector(entity);
+
+    const firstSlot = await screen.findByTestId('inventory-slot-cargo-0');
+    const secondSlot = await screen.findByTestId('inventory-slot-cargo-1');
+    const firstButton = within(firstSlot).getByRole('button');
+    const secondButton = within(secondSlot).getByRole('button');
+
+    firstButton.focus();
+    fireEvent.keyDown(firstButton, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(firstButton).toHaveAttribute('aria-grabbed', 'true');
+    });
+
+    fireEvent.keyDown(firstButton, { key: 'ArrowRight' });
+
+    await waitFor(() => {
+      expect(secondSlot).toHaveAttribute('data-drop-state', 'active-valid');
+    });
+
+    fireEvent.keyDown(secondButton, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inventory-slot-cargo-1')).toHaveTextContent('Scrap');
+      expect(screen.getByTestId('inventory-slot-cargo-0')).toHaveTextContent('Empty slot');
+    });
   });
 
   it('surfaces inline retry actions when inventory persistence fails', async () => {

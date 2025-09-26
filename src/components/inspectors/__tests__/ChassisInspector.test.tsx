@@ -365,4 +365,39 @@ describe('ChassisInspector', () => {
       expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Locomotion Thrusters Mk1');
     });
   });
+
+  it('supports keyboard dragging between slots', async () => {
+    const slots = [
+      createSlot('core-0', 0, 'core.movement'),
+      createSlot('extension-0', 1, null),
+    ];
+    const entity = createEntity(slots);
+
+    renderInspector(entity);
+
+    const firstSlot = await screen.findByTestId('chassis-slot-core-0');
+    const secondSlot = await screen.findByTestId('chassis-slot-extension-0');
+    const firstButton = within(firstSlot).getByRole('button');
+    const secondButton = within(secondSlot).getByRole('button');
+
+    firstButton.focus();
+    fireEvent.keyDown(firstButton, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(firstButton).toHaveAttribute('aria-grabbed', 'true');
+    });
+
+    fireEvent.keyDown(firstButton, { key: 'ArrowRight' });
+
+    await waitFor(() => {
+      expect(secondSlot).toHaveAttribute('data-drop-state', 'active-valid');
+    });
+
+    fireEvent.keyDown(secondButton, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Locomotion Thrusters Mk1');
+      expect(screen.getByTestId('chassis-slot-core-0')).toHaveTextContent('Add module');
+    });
+  });
 });

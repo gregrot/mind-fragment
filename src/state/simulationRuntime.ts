@@ -1,6 +1,6 @@
 import type { RootScene } from '../simulation/rootScene';
 import type { CompiledProgram, Diagnostic } from '../simulation/runtime/blockProgram';
-import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
+import type { ProgramDebugState, ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
 import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import { DEFAULT_MECHANISM_ID } from '../simulation/runtime/simulationWorld';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
@@ -17,6 +17,7 @@ type TelemetryListener = (
   mechanismId: string | null,
 ) => void;
 type ChassisListener = (snapshot: ChassisSnapshot) => void;
+type DebugListener = (state: ProgramDebugState) => void;
 
 const EMPTY_INVENTORY_SNAPSHOT: InventorySnapshot = {
   capacity: 0,
@@ -35,6 +36,14 @@ const EMPTY_TELEMETRY_SNAPSHOT: SimulationTelemetrySnapshot = {
 const EMPTY_CHASSIS_SNAPSHOT: ChassisSnapshot = {
   capacity: 0,
   slots: [],
+};
+
+const EMPTY_PROGRAM_DEBUG_STATE: ProgramDebugState = {
+  status: 'idle',
+  program: null,
+  currentInstruction: null,
+  timeRemaining: 0,
+  frames: [],
 };
 
 interface InventoryOverlayUpdate {
@@ -84,6 +93,8 @@ class SimulationRuntime {
   private readonly pendingPrograms = new Map<string, CompiledProgram>();
   private readonly statusListeners = new Map<string, Set<StatusListener>>();
   private readonly statusByMechanism = new Map<string, ProgramRunnerStatus>();
+  private readonly debugListeners = new Map<string, Set<DebugListener>>();
+  private readonly debugStateByMechanism = new Map<string, ProgramDebugState>();
   private readonly inventoryListeners = new Set<InventoryListener>();
   private readonly chassisListeners = new Set<ChassisListener>();
   private readonly selectionListeners = new Set<SelectionListener>();
@@ -92,11 +103,13 @@ class SimulationRuntime {
   private sceneInventoryUnsubscribe: (() => void) | null = null;
   private sceneChassisUnsubscribe: (() => void) | null = null;
   private sceneTelemetryUnsubscribe: (() => void) | null = null;
+  private sceneDebugUnsubscribe: (() => void) | null = null;
   private inventorySnapshot: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT;
   private chassisSnapshot: ChassisSnapshot = EMPTY_CHASSIS_SNAPSHOT;
   private telemetrySnapshot: SimulationTelemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
   private telemetryMechanismId: string | null = null;
   private readonly telemetrySnapshots = new Map<string, SimulationTelemetrySnapshot>();
+  private debugState: ProgramDebugState = EMPTY_PROGRAM_DEBUG_STATE;
   private selectedMechanismId: string | null = null;
   private selectedEntityId: EntityId | null = null;
   private hasAutoStartedDefault = false;
@@ -110,7 +123,11 @@ class SimulationRuntime {
     this.teardownInventorySubscription();
     this.teardownChassisSubscription();
     this.sceneTelemetryUnsubscribe?.();
+    this.sceneDebugUnsubscribe?.();
+    this.sceneDebugUnsubscribe = null;
     this.telemetrySnapshots.clear();
+    this.debugStateByMechanism.clear();
+    this.debugState = EMPTY_PROGRAM_DEBUG_STATE;
     this.scene = scene;
     this.unsubscribeScene = scene.subscribeProgramStatus((nextStatus, mechanismId) => {
       this.updateStatus(mechanismId, nextStatus);
@@ -124,7 +141,11 @@ class SimulationRuntime {
     this.sceneTelemetryUnsubscribe = scene.subscribeTelemetry((snapshot, mechanismId) => {
       this.handleSceneTelemetry(snapshot, mechanismId);
     });
+    this.sceneDebugUnsubscribe = scene.subscribeProgramDebug((state, mechanismId) => {
+      this.handleSceneProgramDebug(state, mechanismId);
+    });
     this.handleSceneTelemetry(scene.getTelemetrySnapshot(activeMechanismId), activeMechanismId);
+    this.handleSceneProgramDebug(scene.getProgramDebugState(activeMechanismId), activeMechanismId);
     if (this.selectedMechanismId !== null) {
       scene.selectMechanism(this.selectedMechanismId);
     }
@@ -151,6 +172,8 @@ class SimulationRuntime {
     this.teardownChassisSubscription();
     this.sceneTelemetryUnsubscribe?.();
     this.sceneTelemetryUnsubscribe = null;
+    this.sceneDebugUnsubscribe?.();
+    this.sceneDebugUnsubscribe = null;
     this.scene = null;
     this.pendingPrograms.clear();
     for (const mechanismId of this.statusByMechanism.keys()) {
@@ -160,6 +183,8 @@ class SimulationRuntime {
     this.updateChassisSnapshot(EMPTY_CHASSIS_SNAPSHOT);
     this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, null);
     this.telemetrySnapshots.clear();
+    this.debugStateByMechanism.clear();
+    this.debugState = EMPTY_PROGRAM_DEBUG_STATE;
     this.updateSelectedMechanism(null, null);
     this.hasAutoStartedDefault = false;
   }
@@ -180,6 +205,7 @@ class SimulationRuntime {
       this.scene.stopProgram(targetMechanismId);
     } else {
       this.updateStatus(targetMechanismId, 'idle');
+      this.updateDebugState(targetMechanismId, EMPTY_PROGRAM_DEBUG_STATE);
     }
   }
 
@@ -216,6 +242,31 @@ class SimulationRuntime {
   getStatus(mechanismId: string): ProgramRunnerStatus {
     const targetMechanismId = this.normaliseMechanismId(mechanismId);
     return this.statusByMechanism.get(targetMechanismId) ?? 'idle';
+  }
+
+  subscribeProgramDebug(mechanismId: string, listener: DebugListener): () => void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    let listenersForMechanism = this.debugListeners.get(targetMechanismId);
+    if (!listenersForMechanism) {
+      listenersForMechanism = new Set();
+      this.debugListeners.set(targetMechanismId, listenersForMechanism);
+    }
+    listenersForMechanism.add(listener);
+    listener(this.getProgramDebugState(targetMechanismId));
+    return () => {
+      listenersForMechanism?.delete(listener);
+      if (listenersForMechanism && listenersForMechanism.size === 0) {
+        this.debugListeners.delete(targetMechanismId);
+      }
+    };
+  }
+
+  getProgramDebugState(mechanismId: string): ProgramDebugState {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    if (targetMechanismId === this.normaliseMechanismId(this.selectedMechanismId)) {
+      return this.debugState;
+    }
+    return this.debugStateByMechanism.get(targetMechanismId) ?? EMPTY_PROGRAM_DEBUG_STATE;
   }
 
   subscribeInventory(listener: InventoryListener): () => void {
@@ -356,6 +407,15 @@ class SimulationRuntime {
     }
   }
 
+  private updateDebugState(mechanismId: string, state: ProgramDebugState): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    this.debugStateByMechanism.set(targetMechanismId, state);
+    if (targetMechanismId === this.normaliseMechanismId(this.selectedMechanismId)) {
+      this.debugState = state;
+    }
+    this.notifyDebugListeners(state, targetMechanismId);
+  }
+
   private updateInventorySnapshot(snapshot: InventorySnapshot): void {
     this.inventorySnapshot = snapshot;
     for (const listener of this.inventoryListeners) {
@@ -409,6 +469,7 @@ class SimulationRuntime {
     this.selectedMechanismId = selectedMechanismId;
     this.selectedEntityId = entityId;
     this.applyChassisForSelection(selectedMechanismId);
+    this.applyDebugForSelection(selectedMechanismId);
     for (const listener of this.selectionListeners) {
       listener({ mechanismId: selectedMechanismId, entityId });
     }
@@ -430,6 +491,10 @@ class SimulationRuntime {
       return;
     }
     this.notifyTelemetryListeners(snapshot, mechanismId);
+  }
+
+  private handleSceneProgramDebug(state: ProgramDebugState, mechanismId: string): void {
+    this.updateDebugState(mechanismId, state);
   }
 
   private applyChassisForSelection(mechanismId: string | null): void {
@@ -455,6 +520,17 @@ class SimulationRuntime {
     this.updateTelemetrySnapshot(EMPTY_TELEMETRY_SNAPSHOT, targetMechanismId);
   }
 
+  private applyDebugForSelection(mechanismId: string | null): void {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    let state = this.debugStateByMechanism.get(targetMechanismId);
+    if (!state) {
+      state = this.scene?.getProgramDebugState(targetMechanismId) ?? EMPTY_PROGRAM_DEBUG_STATE;
+      this.debugStateByMechanism.set(targetMechanismId, state);
+    }
+    this.debugState = state;
+    this.notifyDebugListeners(state, targetMechanismId);
+  }
+
   private updateTelemetrySnapshot(
     snapshot: SimulationTelemetrySnapshot,
     mechanismId: string | null,
@@ -473,6 +549,16 @@ class SimulationRuntime {
   ): void {
     for (const listener of this.telemetryListeners) {
       listener(snapshot, mechanismId);
+    }
+  }
+
+  private notifyDebugListeners(state: ProgramDebugState, mechanismId: string): void {
+    const listenersForMechanism = this.debugListeners.get(mechanismId);
+    if (!listenersForMechanism) {
+      return;
+    }
+    for (const listener of listenersForMechanism) {
+      listener(state);
     }
   }
 }

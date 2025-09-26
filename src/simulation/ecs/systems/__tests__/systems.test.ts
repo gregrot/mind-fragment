@@ -343,6 +343,7 @@ describe('simulation systems', () => {
       {
         kind: 'wait',
         duration: createNumberLiteralBinding(1, { label: 'Debug → wait' }),
+        sourceBlockId: 'debug-wait',
       },
       {
         kind: 'loop',
@@ -352,8 +353,10 @@ describe('simulation systems', () => {
             kind: 'gather',
             duration: createNumberLiteralBinding(2, { label: 'Debug → gather' }),
             target: 'auto',
+            sourceBlockId: 'debug-gather',
           },
         ],
+        sourceBlockId: 'debug-loop',
       },
     ];
 
@@ -364,6 +367,7 @@ describe('simulation systems', () => {
         kind: 'move',
         duration: createNumberLiteralBinding(2, { label: 'Debug → move duration' }),
         speed: createNumberLiteralBinding(3, { label: 'Debug → move speed' }),
+        sourceBlockId: 'debug-move',
       },
       timeRemaining: 1.25,
       frames: [{ kind: 'sequence', index: 0, length: 2 }],

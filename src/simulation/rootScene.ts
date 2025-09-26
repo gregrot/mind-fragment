@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Ticker } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { assetService } from './assetService';
 import type { CompiledProgram } from './runtime/blockProgram';
-import { type ProgramRunnerStatus } from './runtime/blockProgramRunner';
+import { type ProgramDebugState, type ProgramRunnerStatus } from './runtime/blockProgramRunner';
 import {
   SIMULATION_BLACKBOARD_EVENT_KEYS,
   SIMULATION_BLACKBOARD_FACT_KEYS,
@@ -37,6 +37,14 @@ const EMPTY_CHASSIS_SNAPSHOT: ChassisSnapshot = {
   slots: [],
 };
 
+const EMPTY_PROGRAM_DEBUG_STATE: ProgramDebugState = {
+  status: 'idle',
+  program: null,
+  currentInstruction: null,
+  timeRemaining: 0,
+  frames: [],
+};
+
 export class RootScene {
   private readonly app: Application;
   private readonly viewport: Viewport;
@@ -50,6 +58,7 @@ export class RootScene {
   private readonly programStatusByMechanism: Map<string, ProgramRunnerStatus>;
   private programStatus: ProgramRunnerStatus;
   private readonly programListeners: Set<(status: ProgramRunnerStatus, mechanismId: string) => void>;
+  private readonly programDebugListeners: Set<(state: ProgramDebugState, mechanismId: string) => void>;
   private readonly selectionListeners: Set<MechanismSelectionListener>;
   private pendingSelection: string | null;
   private readonly telemetryListeners: Set<TelemetryListener>;
@@ -60,6 +69,8 @@ export class RootScene {
     { snapshot: SimulationTelemetrySnapshot; signature: string }
   >;
   private defaultMechanismId: string;
+  private readonly programDebugStateByMechanism: Map<string, ProgramDebugState>;
+  private programDebugState: ProgramDebugState;
 
   constructor(app: Application) {
     this.app = app;
@@ -106,6 +117,7 @@ export class RootScene {
 
     this.programStatusByMechanism = new Map();
     this.programListeners = new Set();
+    this.programDebugListeners = new Set();
     this.selectionListeners = new Set();
     this.pendingSelection = null;
     this.defaultMechanismId = DEFAULT_MECHANISM_ID;
@@ -114,6 +126,8 @@ export class RootScene {
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
     this.telemetryMechanismId = null;
     this.telemetrySnapshotsByMechanism = new Map();
+    this.programDebugStateByMechanism = new Map();
+    this.programDebugState = EMPTY_PROGRAM_DEBUG_STATE;
 
     void this.initialiseSimulationWorld();
   }
@@ -133,6 +147,8 @@ export class RootScene {
 
     this.telemetrySnapshotsByMechanism.clear();
     this.programStatusByMechanism.clear();
+    this.programDebugStateByMechanism.clear();
+    this.programDebugState = EMPTY_PROGRAM_DEBUG_STATE;
 
     for (const mechanismId of context.entities.mechanisms.keys()) {
       const sprite = context.getSprite(mechanismId);
@@ -149,9 +165,11 @@ export class RootScene {
       const programRunner = context.getProgramRunner(mechanismId);
       if (programRunner) {
         programRunner.setStatusListener((status) => this.handleProgramStatus(mechanismId, status));
+        programRunner.setDebugStateListener((state) => this.handleProgramDebug(mechanismId, state));
         this.programStatusByMechanism.set(mechanismId, programRunner.getStatus());
       } else {
         this.programStatusByMechanism.set(mechanismId, 'idle');
+        this.programDebugStateByMechanism.set(mechanismId, EMPTY_PROGRAM_DEBUG_STATE);
       }
     }
 
@@ -162,6 +180,7 @@ export class RootScene {
     }
     this.pendingSelection = targetSelection;
     this.updateProgramStatusForSelection();
+    this.updateProgramDebugForSelection();
 
     this.flushPendingContextCallbacks(context);
 
@@ -289,6 +308,10 @@ export class RootScene {
     return this.programStatusByMechanism.get(mechanismId) ?? 'idle';
   }
 
+  getProgramDebugState(mechanismId: string = this.getActiveMechanismId()): ProgramDebugState {
+    return this.programDebugStateByMechanism.get(mechanismId) ?? this.programDebugState;
+  }
+
   getInventorySnapshot(mechanismId: string = this.getActiveMechanismId()): InventorySnapshot {
     const mechanismCore = this.context?.getMechanismCore(mechanismId);
     if (!mechanismCore) {
@@ -386,6 +409,20 @@ export class RootScene {
     };
   }
 
+  subscribeProgramDebug(listener: (state: ProgramDebugState, mechanismId: string) => void): () => void {
+    this.programDebugListeners.add(listener);
+    if (this.programDebugStateByMechanism.size > 0) {
+      for (const [mechanismId, state] of this.programDebugStateByMechanism) {
+        listener(state, mechanismId);
+      }
+    } else {
+      listener(this.programDebugState, this.getActiveMechanismId());
+    }
+    return () => {
+      this.programDebugListeners.delete(listener);
+    };
+  }
+
   subscribeMechanismSelection(listener: MechanismSelectionListener): () => void {
     this.selectionListeners.add(listener);
     const entityId =
@@ -451,6 +488,9 @@ export class RootScene {
     this.programListeners.clear();
     this.programStatusByMechanism.clear();
     this.programStatus = 'idle';
+    this.programDebugListeners.clear();
+    this.programDebugStateByMechanism.clear();
+    this.programDebugState = EMPTY_PROGRAM_DEBUG_STATE;
     this.notifyMechanismSelected(null);
     this.selectionListeners.clear();
     this.telemetryListeners.clear();
@@ -499,10 +539,30 @@ export class RootScene {
     }
   }
 
+  private handleProgramDebug(mechanismId: string, state: ProgramDebugState): void {
+    this.programDebugStateByMechanism.set(mechanismId, state);
+    if (this.getActiveMechanismId() === mechanismId) {
+      this.applyProgramDebugForActiveMechanism(state);
+    }
+    for (const listener of this.programDebugListeners) {
+      listener(state, mechanismId);
+    }
+  }
+
   private updateProgramStatusForSelection(): void {
     const activeMechanismId = this.getActiveMechanismId();
     const status = this.programStatusByMechanism.get(activeMechanismId) ?? 'idle';
     this.applyProgramStatusForActiveMechanism(activeMechanismId, status);
+  }
+
+  private updateProgramDebugForSelection(): void {
+    const activeMechanismId = this.getActiveMechanismId();
+    const state = this.programDebugStateByMechanism.get(activeMechanismId);
+    if (state) {
+      this.applyProgramDebugForActiveMechanism(state);
+      return;
+    }
+    this.applyProgramDebugForActiveMechanism(EMPTY_PROGRAM_DEBUG_STATE);
   }
 
   private applyProgramStatusForActiveMechanism(mechanismId: string, status: ProgramRunnerStatus): void {
@@ -515,6 +575,10 @@ export class RootScene {
         blackboard.publishEvent(SIMULATION_BLACKBOARD_EVENT_KEYS.ProgramStatusChanged, status);
       }
     }
+  }
+
+  private applyProgramDebugForActiveMechanism(state: ProgramDebugState): void {
+    this.programDebugState = state;
   }
 
   private notifyMechanismSelected(mechanismId: string | null): void {
@@ -541,6 +605,7 @@ export class RootScene {
     }
     this.updateProgramStatusForSelection();
     this.captureTelemetrySnapshot(true);
+    this.updateProgramDebugForSelection();
   }
 
   private getActiveMechanismId(context: SimulationWorldContext | null = this.context): string {

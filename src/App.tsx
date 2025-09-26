@@ -20,7 +20,7 @@ import type { ChassisSnapshot } from './simulation/mechanism';
 import type { InventorySnapshot } from './simulation/mechanism/inventory';
 import styles from './styles/App.module.css';
 import type { SlotSchema } from './types/slots';
-import type { ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
+import type { ProgramDebugState, ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
 import { compileWorkspaceProgram, type Diagnostic } from './simulation/runtime/blockProgram';
 
 const DEFAULT_MECHANISM_ID = 'MF-01';
@@ -55,20 +55,6 @@ const areDiagnosticsEqual = (
       && counterpart?.message === diagnostic.message
     );
   });
-};
-
-const resolveActiveBlockId = (workspace: WorkspaceState): string | null => {
-  if (workspace.length === 0) {
-    return null;
-  }
-
-  const startBlock = workspace.find((block) => block.type === 'start');
-  if (startBlock) {
-    const firstAction = startBlock.slots?.do?.[0];
-    return firstAction?.instanceId ?? startBlock.instanceId;
-  }
-
-  return workspace[0]?.instanceId ?? null;
 };
 
 const buildInventoryOverlayData = (snapshot: InventorySnapshot): InventoryOverlayView => {
@@ -167,10 +153,35 @@ const AppContent = (): JSX.Element => {
   const [inventoryOverlay, setInventoryOverlay] = useState<InventoryOverlayView>(() =>
     buildInventoryOverlayData(simulationRuntime.getInventorySnapshot()),
   );
+  const [debugStatesByMechanism, setDebugStatesByMechanism] = useState<Record<string, ProgramDebugState>>({});
 
   const activeMechanismId = useMemo(() => selectedMechanismId ?? DEFAULT_MECHANISM_ID, [selectedMechanismId]);
-
   useEffect(() => simulationRuntime.subscribeChassis(setChassisSnapshot), []);
+
+  useEffect(() => {
+    const nextState = simulationRuntime.getProgramDebugState(activeMechanismId);
+    setDebugStatesByMechanism((current) => {
+      const previous = current[activeMechanismId];
+      if (previous === nextState) {
+        return current;
+      }
+      return { ...current, [activeMechanismId]: nextState };
+    });
+  }, [activeMechanismId]);
+
+  useEffect(
+    () =>
+      simulationRuntime.subscribeProgramDebug(activeMechanismId, (state) => {
+        setDebugStatesByMechanism((current) => {
+          const previous = current[activeMechanismId];
+          if (previous === state) {
+            return current;
+          }
+          return { ...current, [activeMechanismId]: state };
+        });
+      }),
+    [activeMechanismId],
+  );
 
   useEffect(
     () =>
@@ -205,14 +216,15 @@ const AppContent = (): JSX.Element => {
       mechanismId: string,
       statusOverride?: ProgramRunnerStatus,
     ): EntityOverlayData['programState'] => {
-      const workspaceForMechanism = getWorkspaceForMechanism(mechanismId);
       const status = statusOverride ?? simulationRuntime.getStatus(mechanismId);
       const isRunning = status === 'running';
-      const activeBlockId = isRunning ? resolveActiveBlockId(workspaceForMechanism) : null;
+      const debugState = debugStatesByMechanism[mechanismId]
+        ?? simulationRuntime.getProgramDebugState(mechanismId);
+      const activeBlockId = isRunning ? debugState.currentInstruction?.sourceBlockId ?? null : null;
       const diagnostics = compileDiagnosticsByMechanism[mechanismId] ?? [];
       return { isRunning, activeBlockId, status, diagnostics };
     },
-    [compileDiagnosticsByMechanism, getWorkspaceForMechanism],
+    [compileDiagnosticsByMechanism, debugStatesByMechanism],
   );
 
   const resolveEntityId = useCallback(

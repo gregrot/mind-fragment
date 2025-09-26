@@ -73,11 +73,14 @@ const renderInspector = (
     diagnostics,
   };
 
-  return render(
-    <ProgrammingInspectorProvider value={contextValue}>
-      <MechanismProgrammingInspector entity={entity} onClose={() => {}} />
-    </ProgrammingInspectorProvider>,
-  );
+  return {
+    contextValue,
+    ...render(
+      <ProgrammingInspectorProvider value={contextValue}>
+        <MechanismProgrammingInspector entity={entity} onClose={() => {}} />
+      </ProgrammingInspectorProvider>,
+    ),
+  };
 };
 
 beforeEach(() => {
@@ -138,5 +141,27 @@ describe('MechanismProgrammingInspector', () => {
     expect(errorPanel).toHaveTextContent(/resolve compile errors/i);
     expect(errorPanel).toHaveTextContent(/fix the issues below/i);
     expect(errorPanel).toHaveTextContent(/When Started/i);
+  });
+
+  it('updates the active block highlight when the program state changes', () => {
+    mockStatus = 'running';
+    const workspace = createWorkspaceWithMoveBlock();
+    const moveBlockId = workspace[0]?.slots?.do?.[0]?.instanceId ?? null;
+    const baseEntity = createEntity({ programState: { isRunning: true, activeBlockId: null } });
+
+    const { rerender, contextValue } = renderInspector(baseEntity, workspace);
+
+    const moveBlock = screen.getByTestId('block-move');
+    expect(moveBlock).not.toHaveAttribute('data-state-active', 'true');
+
+    const updatedEntity = createEntity({ programState: { isRunning: true, activeBlockId: moveBlockId } });
+
+    rerender(
+      <ProgrammingInspectorProvider value={contextValue}>
+        <MechanismProgrammingInspector entity={updatedEntity} onClose={() => {}} />
+      </ProgrammingInspectorProvider>,
+    );
+
+    expect(screen.getByTestId('block-move')).toHaveAttribute('data-state-active', 'true');
   });
 });

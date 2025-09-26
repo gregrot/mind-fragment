@@ -37,7 +37,7 @@ test.describe('block workspace drag-and-drop', () => {
       window.localStorage.setItem('mf.skipOnboarding', '1');
     });
     await page.goto('/');
-    await page.getByTestId('select-robot').last().click();
+    await page.getByTestId('select-mechanism').last().click();
     await expect(page.getByTestId('entity-overlay')).toBeVisible();
 
     const stopButton = page.getByTestId('stop-program');

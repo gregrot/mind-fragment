@@ -1,6 +1,6 @@
-import type { RobotChassis } from '../robot';
-import type { ValuesSnapshot } from '../robot/moduleBus';
-import type { Vector2 } from '../robot/robotState';
+import type { MechanismChassis } from '../mechanism';
+import type { ValuesSnapshot } from '../mechanism/moduleBus';
+import type { Vector2 } from '../mechanism/mechanismState';
 import type { ResourceNode } from '../resources/resourceField';
 import type {
   BlockInstruction,
@@ -12,7 +12,7 @@ import type {
   NumberParameterBinding,
   SignalDescriptor,
 } from './blockProgram';
-import { SimpleNavigator } from '../robot/modules/navigator';
+import { SimpleNavigator } from '../mechanism/modules/navigator';
 
 export type ProgramRunnerStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -73,7 +73,7 @@ export interface ProgramDebugState {
 }
 
 export class BlockProgramRunner {
-  private readonly robot: RobotChassis;
+  private readonly mechanism: MechanismChassis;
   private readonly navigator = new SimpleNavigator();
   private program: CompiledProgram | null = null;
   private currentInstruction: BlockInstruction | null = null;
@@ -85,8 +85,8 @@ export class BlockProgramRunner {
   private activeProgram: CompiledProgram | null = null;
   private debugFrames: ProgramDebugFrame[] = [];
 
-  constructor(robot: RobotChassis, onStatusChange?: (status: ProgramRunnerStatus) => void) {
-    this.robot = robot;
+  constructor(mechanism: MechanismChassis, onStatusChange?: (status: ProgramRunnerStatus) => void) {
+    this.mechanism = mechanism;
     if (onStatusChange) {
       this.statusListener = onStatusChange;
     }
@@ -289,7 +289,7 @@ export class BlockProgramRunner {
       case 'move': {
         const speedLabel = instruction.speed.literal?.label ?? 'Move → speed';
         const speed = this.evaluateNumberBinding(instruction.speed, speedLabel, telemetry);
-        const orientation = this.robot.getStateSnapshot().orientation;
+        const orientation = this.mechanism.getStateSnapshot().orientation;
         const velocityX = Math.cos(orientation) * speed;
         const velocityY = Math.sin(orientation) * speed;
         this.applyLinearVelocity(velocityX, velocityY);
@@ -372,7 +372,7 @@ export class BlockProgramRunner {
       return;
     }
 
-    const state = this.robot.getStateSnapshot();
+    const state = this.mechanism.getStateSnapshot();
     const command = this.navigator.steerTowards(state, target, requestedSpeed);
     this.applyAngularVelocity(command.angularVelocity);
     this.applyLinearVelocity(command.linearVelocity.x, command.linearVelocity.y);
@@ -440,7 +440,7 @@ export class BlockProgramRunner {
       return null;
     }
 
-    const node = this.robot.resourceField
+    const node = this.mechanism.resourceField
       .list()
       .find((candidate) => candidate.id === hit.id);
     if (!node) {
@@ -456,27 +456,27 @@ export class BlockProgramRunner {
   }
 
   private applyLinearVelocity(x: number, y: number): void {
-    if (!this.robot.moduleStack.getModule(MOVEMENT_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(MOVEMENT_MODULE_ID)) {
       return;
     }
-    this.robot.invokeAction(MOVEMENT_MODULE_ID, 'setLinearVelocity', { x, y });
+    this.mechanism.invokeAction(MOVEMENT_MODULE_ID, 'setLinearVelocity', { x, y });
   }
 
   private applyAngularVelocity(value: number): void {
-    if (!this.robot.moduleStack.getModule(MOVEMENT_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(MOVEMENT_MODULE_ID)) {
       return;
     }
-    this.robot.invokeAction(MOVEMENT_MODULE_ID, 'setAngularVelocity', { value });
+    this.mechanism.invokeAction(MOVEMENT_MODULE_ID, 'setAngularVelocity', { value });
   }
 
   private executeScan(filter: string | null): void {
-    if (!this.robot.moduleStack.getModule(SCANNER_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(SCANNER_MODULE_ID)) {
       this.scanMemory = null;
       return;
     }
 
     const payload = filter ? { resourceType: filter } : {};
-    const result = this.robot.invokeAction(SCANNER_MODULE_ID, 'scan', payload);
+    const result = this.mechanism.invokeAction(SCANNER_MODULE_ID, 'scan', payload);
     this.recordScanResult(result);
   }
 
@@ -535,7 +535,7 @@ export class BlockProgramRunner {
   }
 
   private executeGather(): void {
-    if (!this.robot.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
       return;
     }
 
@@ -544,20 +544,20 @@ export class BlockProgramRunner {
       return;
     }
 
-    const result = this.robot.invokeAction(MANIPULATOR_MODULE_ID, 'gatherResource', { nodeId });
+    const result = this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'gatherResource', { nodeId });
     this.updateScanMemoryAfterGather(result);
   }
 
   private executeDeposit(): void {
-    if (!this.robot.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
       return;
     }
 
-    this.robot.invokeAction(MANIPULATOR_MODULE_ID, 'dropResource', {});
+    this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'dropResource', {});
   }
 
   private resolveGatherTarget(): string | null {
-    const nodes = this.robot.resourceField
+    const nodes = this.mechanism.resourceField
       .list()
       .filter((node) => node.quantity > 0);
     if (nodes.length === 0) {
@@ -599,8 +599,8 @@ export class BlockProgramRunner {
       }
     }
 
-    const state = this.robot.getStateSnapshot();
-    let closestToRobot: ResourceNode | null = null;
+    const state = this.mechanism.getStateSnapshot();
+    let closestToMechanism: ResourceNode | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     for (const node of nodes) {
@@ -609,11 +609,11 @@ export class BlockProgramRunner {
       const distance = Math.hypot(dx, dy);
       if (distance < bestDistance) {
         bestDistance = distance;
-        closestToRobot = node;
+        closestToMechanism = node;
       }
     }
 
-    return closestToRobot?.id ?? null;
+    return closestToMechanism?.id ?? null;
   }
 
   private updateScanMemoryAfterGather(result: unknown): void {
@@ -646,21 +646,21 @@ export class BlockProgramRunner {
   }
 
   private applyStatusToggle(): void {
-    if (!this.robot.moduleStack.getModule(STATUS_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(STATUS_MODULE_ID)) {
       return;
     }
-    this.robot.invokeAction(STATUS_MODULE_ID, 'toggleStatus', {});
+    this.mechanism.invokeAction(STATUS_MODULE_ID, 'toggleStatus', {});
   }
 
   private applyStatusSet(value: boolean): void {
-    if (!this.robot.moduleStack.getModule(STATUS_MODULE_ID)) {
+    if (!this.mechanism.moduleStack.getModule(STATUS_MODULE_ID)) {
       return;
     }
-    this.robot.invokeAction(STATUS_MODULE_ID, 'setStatus', { value });
+    this.mechanism.invokeAction(STATUS_MODULE_ID, 'setStatus', { value });
   }
 
   private getTelemetryValues(): ValuesSnapshot {
-    return this.robot.getTelemetrySnapshot().values ?? {};
+    return this.mechanism.getTelemetrySnapshot().values ?? {};
   }
 
   private evaluateNumberBinding(

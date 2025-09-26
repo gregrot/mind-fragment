@@ -19,7 +19,7 @@ interface ProgrammingInspectorContextValue {
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock: (instanceId: string) => void;
-  robotId: string;
+  mechanismId: string;
   runProgram: () => RunProgramResult;
   diagnostics: Diagnostic[];
 }

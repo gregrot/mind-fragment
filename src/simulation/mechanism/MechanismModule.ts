@@ -1,4 +1,4 @@
-export interface RobotModuleDefinition {
+export interface MechanismModuleDefinition {
   id: string;
   title?: string;
   attachment?: {
@@ -10,7 +10,7 @@ export interface RobotModuleDefinition {
   capacityCost?: number;
 }
 
-export interface ResolvedRobotModuleDefinition {
+export interface ResolvedMechanismModuleDefinition {
   id: string;
   title: string;
   attachment: {
@@ -22,12 +22,12 @@ export interface ResolvedRobotModuleDefinition {
   capacityCost: number;
 }
 
-export class RobotModule {
-  readonly definition: ResolvedRobotModuleDefinition;
+export class MechanismModule {
+  readonly definition: ResolvedMechanismModuleDefinition;
 
-  constructor(definition: RobotModuleDefinition) {
+  constructor(definition: MechanismModuleDefinition) {
     if (!definition?.id) {
-      throw new Error('Robot modules must define an id.');
+      throw new Error('Mechanism modules must define an id.');
     }
     this.definition = {
       id: definition.id,

@@ -65,7 +65,7 @@ const dispatchCancelableTouchMove = (
 
 const renderAppWithOverlay = async () => {
   render(<App />);
-  const programButtons = screen.getAllByTestId('select-robot');
+  const programButtons = screen.getAllByTestId('select-mechanism');
   const programButton = programButtons[programButtons.length - 1];
   await act(async () => {
     fireEvent.click(programButton);
@@ -242,7 +242,7 @@ describe('block workspace drag and drop', () => {
     expect(within(repeatBlocks[0]).getByTestId('block-move')).toBeInTheDocument();
   });
 
-  it('restores saved workspaces when switching between robots', async () => {
+  it('restores saved workspaces when switching between mechanisms', async () => {
     await renderAppWithOverlay();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
@@ -266,7 +266,7 @@ describe('block workspace drag and drop', () => {
     expect(within(startBlock).getByTestId('block-move')).toBeInTheDocument();
 
     act(() => {
-      simulationRuntime.setSelectedRobot('MF-02');
+      simulationRuntime.setSelectedMechanism('MF-02');
     });
 
     await waitFor(() => {
@@ -295,7 +295,7 @@ describe('block workspace drag and drop', () => {
     expect(within(startBlock).getByTestId('block-turn')).toBeInTheDocument();
 
     act(() => {
-      simulationRuntime.setSelectedRobot('MF-01');
+      simulationRuntime.setSelectedMechanism('MF-01');
     });
 
     await waitFor(() => {
@@ -306,7 +306,7 @@ describe('block workspace drag and drop', () => {
     });
 
     act(() => {
-      simulationRuntime.clearSelectedRobot();
+      simulationRuntime.clearSelectedMechanism();
     });
   });
 
@@ -493,20 +493,20 @@ describe('block workspace drag and drop', () => {
     const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
     const runButtons = screen.getAllByTestId('run-program');
     let matchedProgram: { instructions: BlockInstruction[] } | null = null;
-    let matchedRobotId: string | undefined;
+    let matchedMechanismId: string | undefined;
 
     for (const button of runButtons) {
       runSpy.mockClear();
       fireEvent.click(button);
-      const [robotId, program] = runSpy.mock.calls[0] ?? [];
+      const [mechanismId, program] = runSpy.mock.calls[0] ?? [];
       if (program?.instructions?.length) {
         matchedProgram = program;
-        matchedRobotId = robotId;
+        matchedMechanismId = mechanismId;
         break;
       }
     }
 
-    expect(matchedRobotId).toBe('MF-01');
+    expect(matchedMechanismId).toBe('MF-01');
 
     const instructions = matchedProgram?.instructions ?? [];
     expect(instructions).toHaveLength(1);

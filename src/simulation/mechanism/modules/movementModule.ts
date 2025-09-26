@@ -1,6 +1,6 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ModuleActionContext, ModuleUpdateContext } from '../RobotChassis';
+import type { ModuleActionContext, ModuleUpdateContext } from '../MechanismChassis';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -15,7 +15,7 @@ export interface MovementModuleOptions {
   maxAngularSpeed?: number;
 }
 
-export class MovementModule extends RobotModule {
+export class MovementModule extends MechanismModule {
   private readonly defaultMaxLinearSpeed: number;
   private readonly defaultMaxAngularSpeed: number;
   private port: ModulePort | null = null;
@@ -79,7 +79,7 @@ export class MovementModule extends RobotModule {
       (payload, context) => this.handleAngularCommand(payload, context),
       {
         label: 'Set angular velocity',
-        summary: 'Rotate the chassis at a bounded rate to reorient the robot.',
+        summary: 'Rotate the chassis at a bounded rate to reorient the mechanism.',
         parameters: [{ key: 'value', label: 'Angular velocity', unit: 'rad/s' }],
       },
     );

@@ -4,7 +4,7 @@ import BlockView from '../BlockView';
 import BlockParameterSignalSelect from '../BlockParameterSignalSelect';
 import { BLOCK_MAP, createBlockInstance } from '../../blocks/library';
 import type { BlockInstance } from '../../types/blocks';
-import useRobotTelemetry from '../../hooks/useRobotTelemetry';
+import useMechanismTelemetry from '../../hooks/useMechanismTelemetry';
 import { simulationRuntime } from '../../state/simulationRuntime';
 import type { SimulationTelemetrySnapshot } from '../../simulation/runtime/ecsBlackboard';
 
@@ -158,9 +158,9 @@ describe('Block parameter editors', () => {
       actions: {},
     };
 
-    let telemetryListener: ((snapshot: SimulationTelemetrySnapshot, robotId: string | null) => void) | null = null;
+    let telemetryListener: ((snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void) | null = null;
 
-    vi.spyOn(simulationRuntime, 'getSelectedRobot').mockReturnValue('MF-01');
+    vi.spyOn(simulationRuntime, 'getSelectedMechanism').mockReturnValue('MF-01');
     vi.spyOn(simulationRuntime, 'getTelemetrySnapshot').mockReturnValue(initialSnapshot);
     vi.spyOn(simulationRuntime, 'subscribeTelemetry').mockImplementation((listener) => {
       telemetryListener = listener;
@@ -169,7 +169,7 @@ describe('Block parameter editors', () => {
     });
 
     const Harness = () => {
-      const telemetry = useRobotTelemetry();
+      const telemetry = useMechanismTelemetry();
       return (
         <BlockParameterSignalSelect
           block={block}

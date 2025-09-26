@@ -23,7 +23,7 @@ import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
   createResourceFieldViewSystem,
-  createRobotPhysicsSystem,
+  createMechanismPhysicsSystem,
   createSelectableSystem,
   createSpriteSyncSystem,
   createStatusIndicatorSystem,
@@ -33,8 +33,8 @@ import {
   type ProgramDebugState,
 } from '../../../runtime/blockProgramRunner';
 import { createNumberLiteralBinding } from '../../../runtime/blockProgram';
-import { RobotChassis } from '../../../robot';
-import { STATUS_MODULE_ID } from '../../../robot/modules/statusModule';
+import { MechanismChassis } from '../../../mechanism';
+import { STATUS_MODULE_ID } from '../../../mechanism/modules/statusModule';
 import type {
   DebugOverlayComponent,
   StatusIndicatorComponent,
@@ -208,7 +208,7 @@ describe('simulation systems', () => {
     const world = new ECSWorld();
     const ProgramRunner = world.defineComponent<BlockProgramRunner>('ProgramRunner');
     const entity = world.createEntity();
-    const runner = new BlockProgramRunner(new RobotChassis());
+    const runner = new BlockProgramRunner(new MechanismChassis());
     const updateSpy = vi.spyOn(runner, 'update');
 
     ProgramRunner.set(entity, runner);
@@ -219,20 +219,20 @@ describe('simulation systems', () => {
     expect(updateSpy).toHaveBeenCalledWith(0.25);
   });
 
-  it('ticks robot cores and copies state into the transform component', () => {
+  it('ticks mechanism cores and copies state into the transform component', () => {
     const world = new ECSWorld();
     const Transform = world.defineComponent<TransformComponent>('Transform');
-    const RobotCore = world.defineComponent<RobotChassis>('RobotCore');
+    const MechanismCore = world.defineComponent<MechanismChassis>('MechanismCore');
     const entity = world.createEntity();
-    const robot = new RobotChassis();
+    const mechanism = new MechanismChassis();
 
-    robot.state.setLinearVelocity(2, -1);
-    robot.state.setAngularVelocity(Math.PI);
+    mechanism.state.setLinearVelocity(2, -1);
+    mechanism.state.setAngularVelocity(Math.PI);
 
-    RobotCore.set(entity, robot);
+    MechanismCore.set(entity, mechanism);
     Transform.set(entity, { position: { x: 0, y: 0 }, rotation: 0 });
 
-    world.addSystem(createRobotPhysicsSystem({ RobotCore, Transform }));
+    world.addSystem(createMechanismPhysicsSystem({ MechanismCore, Transform }));
     world.runSystems(0.5);
 
     const transform = Transform.get(entity);
@@ -265,13 +265,13 @@ describe('simulation systems', () => {
 
   it('updates status indicators using telemetry from the status module', () => {
     const world = new ECSWorld();
-    const RobotCore = world.defineComponent<RobotChassis>('RobotCore');
+    const MechanismCore = world.defineComponent<MechanismChassis>('MechanismCore');
     const StatusIndicator = world.defineComponent<StatusIndicatorComponent>('StatusIndicator');
     const entity = world.createEntity();
 
     const indicatorStub = { visible: false, alpha: 0 } as unknown as Graphics;
 
-    let telemetry: ReturnType<RobotChassis['getTelemetrySnapshot']> = {
+    let telemetry: ReturnType<MechanismChassis['getTelemetrySnapshot']> = {
       values: {
         [STATUS_MODULE_ID]: {
           active: createValueEntry(true),
@@ -281,18 +281,18 @@ describe('simulation systems', () => {
     };
 
     const getModule = vi.fn<() => unknown>(() => ({}));
-    const robotCoreStub = {
+    const mechanismCoreStub = {
       moduleStack: {
         getModule,
       },
       getTelemetrySnapshot: vi.fn(() => telemetry),
-    } as unknown as RobotChassis;
+    } as unknown as MechanismChassis;
 
-    RobotCore.set(entity, robotCoreStub);
+    MechanismCore.set(entity, mechanismCoreStub);
     StatusIndicator.set(entity, { indicator: indicatorStub } satisfies StatusIndicatorComponent);
 
     world.addSystem(
-      createStatusIndicatorSystem({ RobotCore, StatusIndicator }, { statusModuleId: STATUS_MODULE_ID }),
+      createStatusIndicatorSystem({ MechanismCore, StatusIndicator }, { statusModuleId: STATUS_MODULE_ID }),
     );
 
     world.runSystems(0);
@@ -324,7 +324,7 @@ describe('simulation systems', () => {
 
   it('renders debug overlays from program debug state and telemetry', () => {
     const world = new ECSWorld();
-    const RobotCore = world.defineComponent<RobotChassis>('RobotCore');
+    const MechanismCore = world.defineComponent<MechanismChassis>('MechanismCore');
     const ProgramRunner = world.defineComponent<BlockProgramRunner>('ProgramRunner');
     const SpriteRef = world.defineComponent<Sprite>('SpriteRef');
     const DebugOverlay = world.defineComponent<DebugOverlayComponent>('DebugOverlay');
@@ -369,7 +369,7 @@ describe('simulation systems', () => {
       frames: [{ kind: 'sequence', index: 0, length: 2 }],
     } satisfies ProgramDebugState;
 
-    let telemetry: ReturnType<RobotChassis['getTelemetrySnapshot']> = {
+    let telemetry: ReturnType<MechanismChassis['getTelemetrySnapshot']> = {
       values: {
         moduleA: {
           active: createValueEntry(true),
@@ -383,22 +383,22 @@ describe('simulation systems', () => {
       },
     };
 
-    const robotCoreStub = {
+    const mechanismCoreStub = {
       getTelemetrySnapshot: vi.fn(() => telemetry),
-    } as unknown as RobotChassis;
+    } as unknown as MechanismChassis;
 
     const programRunnerStub = {
       getDebugState: vi.fn(() => debugState),
     } as unknown as BlockProgramRunner;
 
-    RobotCore.set(entity, robotCoreStub);
+    MechanismCore.set(entity, mechanismCoreStub);
     ProgramRunner.set(entity, programRunnerStub);
     SpriteRef.set(entity, sprite);
     DebugOverlay.set(entity, overlayComponent);
 
     world.addSystem(
       createDebugOverlaySystem(
-        { RobotCore, ProgramRunner, SpriteRef, DebugOverlay },
+        { MechanismCore, ProgramRunner, SpriteRef, DebugOverlay },
         { overlayLayer, viewport },
       ),
     );

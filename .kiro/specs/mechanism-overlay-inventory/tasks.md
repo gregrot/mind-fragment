@@ -39,7 +39,7 @@
   - Write tests for chassis inspector functionality
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
 
-- [✅] 6. Extend RobotChassis with slot schema support
+- [✅] 6. Extend MechanismChassis with slot schema support
   - Add slot-based access methods to ModuleStack
   - Implement slot schema conversion utilities
   - Add module attachment/detachment event handling
@@ -72,7 +72,7 @@
   - _Requirements: 2.5, 2.6, 3.8, 3.9_
 
 - [✅] 10. Create ProgramInspector integration
-  - Adapt existing RobotProgrammingPanel for inspector framework
+  - Adapt existing MechanismProgrammingPanel for inspector framework
   - Add execution state awareness and read-only mode
   - Implement program lock state messaging and controls
   - Add chassis change detection for module warnings

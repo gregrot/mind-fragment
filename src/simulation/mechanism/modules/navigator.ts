@@ -1,5 +1,5 @@
-import type { RobotStateSnapshot, Vector2 } from '../robotState';
-import { robotStateUtils } from '../robotState';
+import type { MechanismStateSnapshot, Vector2 } from '../mechanismState';
+import { mechanismStateUtils } from '../mechanismState';
 
 export interface SimpleNavigatorOptions {
   alignmentTolerance?: number;
@@ -34,7 +34,7 @@ export class SimpleNavigator {
     this.arrivalRadius = Math.max(arrivalRadius, 0);
   }
 
-  steerTowards(state: RobotStateSnapshot, target: Vector2, desiredSpeed: number): SteeringCommand {
+  steerTowards(state: MechanismStateSnapshot, target: Vector2, desiredSpeed: number): SteeringCommand {
     const dx = target.x - state.position.x;
     const dy = target.y - state.position.y;
     const distance = Math.hypot(dx, dy);
@@ -50,7 +50,7 @@ export class SimpleNavigator {
     }
 
     const desiredHeading = Math.atan2(dy, dx);
-    const headingError = robotStateUtils.normaliseAngle(desiredHeading - state.orientation);
+    const headingError = mechanismStateUtils.normaliseAngle(desiredHeading - state.orientation);
     const aligned = Math.abs(headingError) <= this.alignmentTolerance;
     const withinArrival = distance <= this.arrivalRadius;
 

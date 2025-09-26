@@ -23,13 +23,13 @@ import type {
   ProgramDebugState,
 } from '../../runtime/blockProgramRunner';
 import type { BlockProgramRunner } from '../../runtime/blockProgramRunner';
-import type { RobotChassis } from '../../robot';
+import type { MechanismChassis } from '../../mechanism';
 import type { ComponentHandle, EntityId, System } from '../world';
 
 interface DebugOverlaySystemDependencies
   extends Pick<
     SimulationWorldComponents,
-    'RobotCore' | 'ProgramRunner' | 'SpriteRef' | 'DebugOverlay'
+    'MechanismCore' | 'ProgramRunner' | 'SpriteRef' | 'DebugOverlay'
   > {}
 
 interface DebugOverlaySystemOptions {
@@ -37,20 +37,20 @@ interface DebugOverlaySystemOptions {
   viewport: Viewport;
 }
 
-type TelemetrySnapshot = ReturnType<RobotChassis['getTelemetrySnapshot']>;
+type TelemetrySnapshot = ReturnType<MechanismChassis['getTelemetrySnapshot']>;
 
 export function createDebugOverlaySystem(
-  { RobotCore, ProgramRunner, SpriteRef, DebugOverlay }: DebugOverlaySystemDependencies,
+  { MechanismCore, ProgramRunner, SpriteRef, DebugOverlay }: DebugOverlaySystemDependencies,
   { overlayLayer, viewport }: DebugOverlaySystemOptions,
 ): System<[
-  ComponentHandle<RobotChassis>,
+  ComponentHandle<MechanismChassis>,
   ComponentHandle<BlockProgramRunner>,
   ComponentHandle<Sprite>,
   ComponentHandle<DebugOverlayComponent>,
 ]> {
   return {
     name: 'DebugOverlaySystem',
-    components: [RobotCore, ProgramRunner, SpriteRef, DebugOverlay],
+    components: [MechanismCore, ProgramRunner, SpriteRef, DebugOverlay],
     update: (_world, entities) => {
       const processed = new Set<EntityId>();
 
@@ -62,11 +62,11 @@ export function createDebugOverlaySystem(
         processed.add(entity);
       }
 
-      for (const [entity, robotCore, programRunner, sprite, overlay] of entities) {
+      for (const [entity, mechanismCore, programRunner, sprite, overlay] of entities) {
         processed.delete(entity);
         updateDebugOverlay({
           overlay,
-          robotCore,
+          mechanismCore,
           programRunner,
           sprite,
           viewport,
@@ -86,15 +86,15 @@ export function createDebugOverlaySystem(
 
 interface UpdateDebugOverlayOptions {
   overlay: DebugOverlayComponent;
-  robotCore: RobotChassis;
+  mechanismCore: MechanismChassis;
   programRunner: BlockProgramRunner;
   sprite: Sprite;
   viewport: Viewport;
 }
 
-function updateDebugOverlay({ overlay, robotCore, programRunner, sprite, viewport }: UpdateDebugOverlayOptions): void {
+function updateDebugOverlay({ overlay, mechanismCore, programRunner, sprite, viewport }: UpdateDebugOverlayOptions): void {
   const programDebug = programRunner.getDebugState();
-  const telemetry = robotCore.getTelemetrySnapshot();
+  const telemetry = mechanismCore.getTelemetrySnapshot();
 
   const lines: string[] = [];
   const programLines = describeProgramDebug(programDebug);

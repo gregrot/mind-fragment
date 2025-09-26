@@ -6,8 +6,8 @@ import {
   DEFAULT_SLOT,
 } from './moduleStack';
 import { ModuleBus, ModulePort } from './moduleBus';
-import { RobotState, type RobotStateSnapshot, type RobotStateOptions, robotStateUtils } from './robotState';
-import type { RobotModule } from './RobotModule';
+import { MechanismState, type MechanismStateSnapshot, type MechanismStateOptions, mechanismStateUtils } from './mechanismState';
+import type { MechanismModule } from './MechanismModule';
 import { InventoryStore } from './inventory';
 import { ResourceField, createDefaultResourceNodes } from '../resources/resourceField';
 import type { SlotMetadata, SlotSchema } from '../../types/slots';
@@ -16,9 +16,9 @@ const DEFAULT_CAPACITY = 8;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-interface RobotChassisOptions {
+interface MechanismChassisOptions {
   capacity?: number;
-  state?: RobotStateOptions;
+  state?: MechanismStateOptions;
   slotSchema?: SlotDefinitionInit[];
 }
 
@@ -33,7 +33,7 @@ interface ActuatorResolutionContext {
   channel: string;
   request: ActuatorRequest;
   allRequests: ActuatorRequest[];
-  state: RobotState;
+  state: MechanismState;
 }
 
 type ActuatorHandler = (context: ActuatorResolutionContext) => void;
@@ -79,16 +79,16 @@ const formatModuleSubtype = (slot: string): string | undefined => {
 
 export interface ModuleUpdateContext {
   stepSeconds: number;
-  state: RobotStateSnapshot;
+  state: MechanismStateSnapshot;
   port: ModulePort;
 }
 
 export interface ModuleActionContext {
-  state: RobotStateSnapshot;
+  state: MechanismStateSnapshot;
   port: ModulePort;
   requestActuator: (channel: string, args: unknown, priority?: number) => void;
   utilities: {
-    robotStateUtils: typeof robotStateUtils;
+    mechanismStateUtils: typeof mechanismStateUtils;
     inventory: InventoryStore;
     resourceField: ResourceField;
   };
@@ -99,8 +99,8 @@ export interface ModuleRuntimeContext {
   resourceField: ResourceField;
 }
 
-export class RobotChassis {
-  readonly state: RobotState;
+export class MechanismChassis {
+  readonly state: MechanismState;
   readonly moduleStack: ModuleStack;
   readonly inventory: InventoryStore;
   readonly resourceField: ResourceField;
@@ -111,8 +111,8 @@ export class RobotChassis {
   private readonly slotDefinitions = new Map<string, SlotDefinition>();
   private readonly slotListeners = new Set<SlotListener>();
 
-  constructor({ capacity = DEFAULT_CAPACITY, state = {}, slotSchema }: RobotChassisOptions = {}) {
-    this.state = new RobotState(state);
+  constructor({ capacity = DEFAULT_CAPACITY, state = {}, slotSchema }: MechanismChassisOptions = {}) {
+    this.state = new MechanismState(state);
     this.moduleStack = new ModuleStack({ capacity });
     this.bus = new ModuleBus();
     this.inventory = new InventoryStore();
@@ -215,7 +215,7 @@ export class RobotChassis {
     };
   }
 
-  getStateSnapshot(): RobotStateSnapshot {
+  getStateSnapshot(): MechanismStateSnapshot {
     return this.state.getSnapshot();
   }
 
@@ -238,7 +238,7 @@ export class RobotChassis {
     this.actuatorHandlers.set(channel, handler);
   }
 
-  attachModule(module: RobotModule): ModuleMetadata {
+  attachModule(module: MechanismModule): ModuleMetadata {
     const meta = this.moduleStack.attach(module);
     this.ensureSlotDefinition(meta.slot, meta.index);
     const port = this.bus.registerModule(module.definition.id, (moduleId, channel, payload, priority) =>
@@ -256,7 +256,7 @@ export class RobotChassis {
     return meta;
   }
 
-  detachModule(moduleId: string): RobotModule | null {
+  detachModule(moduleId: string): MechanismModule | null {
     const module = this.moduleStack.detach(moduleId);
     if (!module) {
       return null;
@@ -358,7 +358,7 @@ export class RobotChassis {
       requestActuator: (channel, args, priority = 0) =>
         this.queueActuatorRequest(moduleId, channel, args, priority),
       utilities: {
-        robotStateUtils,
+        mechanismStateUtils,
         inventory: this.inventory,
         resourceField: this.resourceField,
       },
@@ -368,4 +368,4 @@ export class RobotChassis {
   }
 }
 
-export const robotChassisUtils = { RobotState, robotStateUtils };
+export const mechanismChassisUtils = { MechanismState, mechanismStateUtils };

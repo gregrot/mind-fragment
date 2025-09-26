@@ -9,7 +9,7 @@ export type InspectorTabId = 'systems' | 'programming' | 'info';
 
 export interface EntityOverlayData {
   entityId: EntityId;
-  robotId?: string;
+  mechanismId?: string;
   name: string;
   description?: string;
   overlayType: OverlayType;

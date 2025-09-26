@@ -1,34 +1,34 @@
 import type { SimulationWorldComponents, StatusIndicatorComponent } from '../../runtime/simulationWorld';
-import type { RobotChassis } from '../../robot';
+import type { MechanismChassis } from '../../mechanism';
 import type { ComponentHandle, System } from '../world';
 
 interface StatusIndicatorSystemDependencies
-  extends Pick<SimulationWorldComponents, 'RobotCore' | 'StatusIndicator'> {}
+  extends Pick<SimulationWorldComponents, 'MechanismCore' | 'StatusIndicator'> {}
 
 interface StatusIndicatorSystemOptions {
   statusModuleId: string;
 }
 
 export function createStatusIndicatorSystem(
-  { RobotCore, StatusIndicator }: StatusIndicatorSystemDependencies,
+  { MechanismCore, StatusIndicator }: StatusIndicatorSystemDependencies,
   { statusModuleId }: StatusIndicatorSystemOptions,
 ): System<[
-  ComponentHandle<RobotChassis>,
+  ComponentHandle<MechanismChassis>,
   ComponentHandle<StatusIndicatorComponent>,
 ]> {
   return {
     name: 'StatusIndicatorSystem',
-    components: [RobotCore, StatusIndicator],
+    components: [MechanismCore, StatusIndicator],
     update: (_world, entities) => {
-      for (const [, robotCore, { indicator }] of entities) {
-        const hasStatusModule = Boolean(robotCore.moduleStack.getModule(statusModuleId));
+      for (const [, mechanismCore, { indicator }] of entities) {
+        const hasStatusModule = Boolean(mechanismCore.moduleStack.getModule(statusModuleId));
 
         if (!hasStatusModule) {
           indicator.visible = false;
           continue;
         }
 
-        const telemetry = robotCore.getTelemetrySnapshot();
+        const telemetry = mechanismCore.getTelemetrySnapshot();
         const statusTelemetry = telemetry.values?.[statusModuleId];
         const activeEntry = statusTelemetry?.active;
         const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;

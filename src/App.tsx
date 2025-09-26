@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import SimulationShell from './simulation/SimulationShell';
 import { useBlockWorkspace } from './hooks/useBlockWorkspace';
 import OnboardingFlow from './onboarding/OnboardingFlow';
-import { useRobotSelection } from './hooks/useRobotSelection';
+import { useMechanismSelection } from './hooks/useMechanismSelection';
 import { simulationRuntime } from './state/simulationRuntime';
 import {
   EntityOverlayManagerProvider,
@@ -16,14 +16,14 @@ import { ensureDefaultInspectorsRegistered } from './overlay/defaultInspectors';
 import type { WorkspaceState } from './types/blocks';
 import type { EntityOverlayData } from './types/overlay';
 import type { EntityId } from './simulation/ecs/world';
-import type { ChassisSnapshot } from './simulation/robot';
-import type { InventorySnapshot } from './simulation/robot/inventory';
+import type { ChassisSnapshot } from './simulation/mechanism';
+import type { InventorySnapshot } from './simulation/mechanism/inventory';
 import styles from './styles/App.module.css';
 import type { SlotSchema } from './types/slots';
 import type { ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
 import { compileWorkspaceProgram, type Diagnostic } from './simulation/runtime/blockProgram';
 
-const DEFAULT_ROBOT_ID = 'MF-01';
+const DEFAULT_MECHANISM_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
 
 ensureDefaultInspectorsRegistered();
@@ -117,17 +117,17 @@ const areInventoryOverlaysEqual = (
   return true;
 };
 
-const buildRobotOverlayData = (
-  robotId: string,
+const buildMechanismOverlayData = (
+  mechanismId: string,
   entityId: EntityId,
   chassis: ChassisSnapshot,
   inventory: InventoryOverlayView,
   programState: EntityOverlayData['programState'],
 ): EntityOverlayData => ({
   entityId,
-  robotId,
-  name: `Robot ${robotId}`,
-  description: `Configure systems and programming for chassis ${robotId}.`,
+  mechanismId,
+  name: `Mechanism ${mechanismId}`,
+  description: `Configure systems and programming for chassis ${mechanismId}.`,
   overlayType: 'complex',
   chassis: {
     capacity: chassis.capacity,
@@ -146,7 +146,7 @@ const AppContent = (): JSX.Element => {
     updateBlockInstance,
     removeBlockInstance,
   } = useBlockWorkspace();
-  const { selectedRobotId, selectedEntityId, clearSelection } = useRobotSelection();
+  const { selectedMechanismId, selectedEntityId, clearSelection } = useMechanismSelection();
   const {
     isOpen,
     activeTab,
@@ -156,19 +156,19 @@ const AppContent = (): JSX.Element => {
     getEntityData,
     upsertEntityData,
   } = useEntityOverlayManager();
-  const [robotPrograms, setRobotPrograms] = useState<Record<string, WorkspaceState>>({});
-  const [compileDiagnosticsByRobot, setCompileDiagnosticsByRobot] = useState<Record<string, Diagnostic[]>>({});
-  const [workspaceRobotId, setWorkspaceRobotId] = useState<string>(
-    () => selectedRobotId ?? DEFAULT_ROBOT_ID,
+  const [mechanismPrograms, setMechanismPrograms] = useState<Record<string, WorkspaceState>>({});
+  const [compileDiagnosticsByMechanism, setCompileDiagnosticsByMechanism] = useState<Record<string, Diagnostic[]>>({});
+  const [workspaceMechanismId, setWorkspaceMechanismId] = useState<string>(
+    () => selectedMechanismId ?? DEFAULT_MECHANISM_ID,
   );
   const [chassisSnapshot, setChassisSnapshot] = useState<ChassisSnapshot>(() =>
-    simulationRuntime.getChassisSnapshot(selectedRobotId ?? DEFAULT_ROBOT_ID),
+    simulationRuntime.getChassisSnapshot(selectedMechanismId ?? DEFAULT_MECHANISM_ID),
   );
   const [inventoryOverlay, setInventoryOverlay] = useState<InventoryOverlayView>(() =>
     buildInventoryOverlayData(simulationRuntime.getInventorySnapshot()),
   );
 
-  const activeRobotId = useMemo(() => selectedRobotId ?? DEFAULT_ROBOT_ID, [selectedRobotId]);
+  const activeMechanismId = useMemo(() => selectedMechanismId ?? DEFAULT_MECHANISM_ID, [selectedMechanismId]);
 
   useEffect(() => simulationRuntime.subscribeChassis(setChassisSnapshot), []);
 
@@ -187,32 +187,32 @@ const AppContent = (): JSX.Element => {
   );
 
   useEffect(() => {
-    setChassisSnapshot(simulationRuntime.getChassisSnapshot(selectedRobotId));
-  }, [selectedRobotId]);
+    setChassisSnapshot(simulationRuntime.getChassisSnapshot(selectedMechanismId));
+  }, [selectedMechanismId]);
 
-  const getWorkspaceForRobot = useCallback(
-    (robotId: string): WorkspaceState => {
-      if (robotId === workspaceRobotId) {
+  const getWorkspaceForMechanism = useCallback(
+    (mechanismId: string): WorkspaceState => {
+      if (mechanismId === workspaceMechanismId) {
         return workspace;
       }
-      return robotPrograms[robotId] ?? [];
+      return mechanismPrograms[mechanismId] ?? [];
     },
-    [robotPrograms, workspace, workspaceRobotId],
+    [mechanismPrograms, workspace, workspaceMechanismId],
   );
 
-  const buildProgramStateForRobot = useCallback(
+  const buildProgramStateForMechanism = useCallback(
     (
-      robotId: string,
+      mechanismId: string,
       statusOverride?: ProgramRunnerStatus,
     ): EntityOverlayData['programState'] => {
-      const workspaceForRobot = getWorkspaceForRobot(robotId);
-      const status = statusOverride ?? simulationRuntime.getStatus(robotId);
+      const workspaceForMechanism = getWorkspaceForMechanism(mechanismId);
+      const status = statusOverride ?? simulationRuntime.getStatus(mechanismId);
       const isRunning = status === 'running';
-      const activeBlockId = isRunning ? resolveActiveBlockId(workspaceForRobot) : null;
-      const diagnostics = compileDiagnosticsByRobot[robotId] ?? [];
+      const activeBlockId = isRunning ? resolveActiveBlockId(workspaceForMechanism) : null;
+      const diagnostics = compileDiagnosticsByMechanism[mechanismId] ?? [];
       return { isRunning, activeBlockId, status, diagnostics };
     },
-    [compileDiagnosticsByRobot, getWorkspaceForRobot],
+    [compileDiagnosticsByMechanism, getWorkspaceForMechanism],
   );
 
   const resolveEntityId = useCallback(
@@ -228,44 +228,44 @@ const AppContent = (): JSX.Element => {
     [overlayEntityId],
   );
 
-  const openOverlayForRobot = useCallback(
-    (robotId: string, entityId: EntityId | null, initialTab?: 'systems' | 'programming' | 'info') => {
+  const openOverlayForMechanism = useCallback(
+    (mechanismId: string, entityId: EntityId | null, initialTab?: 'systems' | 'programming' | 'info') => {
       const resolvedEntity = resolveEntityId(entityId);
-      const chassis = simulationRuntime.getChassisSnapshot(robotId);
-      const programState = buildProgramStateForRobot(robotId);
-      openOverlay(buildRobotOverlayData(robotId, resolvedEntity, chassis, inventoryOverlay, programState), {
+      const chassis = simulationRuntime.getChassisSnapshot(mechanismId);
+      const programState = buildProgramStateForMechanism(mechanismId);
+      openOverlay(buildMechanismOverlayData(mechanismId, resolvedEntity, chassis, inventoryOverlay, programState), {
         initialTab,
       });
     },
-    [buildProgramStateForRobot, inventoryOverlay, openOverlay, resolveEntityId],
+    [buildProgramStateForMechanism, inventoryOverlay, openOverlay, resolveEntityId],
   );
 
   const handleEntitySelect = useCallback(
-    ({ robotId, entityId }: { robotId: string; entityId: EntityId }) => {
-      openOverlayForRobot(robotId, entityId, 'systems');
+    ({ mechanismId, entityId }: { mechanismId: string; entityId: EntityId }) => {
+      openOverlayForMechanism(mechanismId, entityId, 'systems');
     },
-    [openOverlayForRobot],
+    [openOverlayForMechanism],
   );
 
   const handleEntityClear = useCallback(() => {
     closeOverlay();
   }, [closeOverlay]);
 
-  const handleProgramRobot = useCallback(() => {
-    const robotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
+  const handleProgramMechanism = useCallback(() => {
+    const mechanismId = selectedMechanismId ?? DEFAULT_MECHANISM_ID;
     const resolvedEntity = resolveEntityId(selectedEntityId ?? overlayEntityId ?? null);
-    simulationRuntime.setSelectedRobot(robotId, resolvedEntity);
-    openOverlayForRobot(robotId, resolvedEntity, 'programming');
-  }, [openOverlayForRobot, overlayEntityId, resolveEntityId, selectedEntityId, selectedRobotId]);
+    simulationRuntime.setSelectedMechanism(mechanismId, resolvedEntity);
+    openOverlayForMechanism(mechanismId, resolvedEntity, 'programming');
+  }, [openOverlayForMechanism, overlayEntityId, resolveEntityId, selectedEntityId, selectedMechanismId]);
 
   const handleTabShortcut = useCallback(
     (tab: 'systems' | 'info' | 'programming') => {
-      const robotId = selectedRobotId ?? DEFAULT_ROBOT_ID;
+      const mechanismId = selectedMechanismId ?? DEFAULT_MECHANISM_ID;
       const resolvedEntity = resolveEntityId(selectedEntityId ?? overlayEntityId ?? null);
-      simulationRuntime.setSelectedRobot(robotId, resolvedEntity);
-      openOverlayForRobot(robotId, resolvedEntity, tab);
+      simulationRuntime.setSelectedMechanism(mechanismId, resolvedEntity);
+      openOverlayForMechanism(mechanismId, resolvedEntity, tab);
     },
-    [openOverlayForRobot, overlayEntityId, resolveEntityId, selectedEntityId, selectedRobotId],
+    [openOverlayForMechanism, overlayEntityId, resolveEntityId, selectedEntityId, selectedMechanismId],
   );
 
   const handleOverlayClose = useCallback(() => {
@@ -273,40 +273,40 @@ const AppContent = (): JSX.Element => {
     clearSelection();
   }, [clearSelection, closeOverlay]);
 
-  const runProgramForActiveRobot = useCallback<() => RunProgramResult>(() => {
+  const runProgramForActiveMechanism = useCallback<() => RunProgramResult>(() => {
     const result = compileWorkspaceProgram(workspace);
     const diagnostics = result.diagnostics;
-    setCompileDiagnosticsByRobot((current) => {
-      const existing = current[activeRobotId];
+    setCompileDiagnosticsByMechanism((current) => {
+      const existing = current[activeMechanismId];
       const next = { ...current };
       if (diagnostics.length === 0) {
         if (existing) {
-          delete next[activeRobotId];
+          delete next[activeMechanismId];
           return next;
         }
         return current;
       }
-      next[activeRobotId] = diagnostics;
+      next[activeMechanismId] = diagnostics;
       return next;
     });
-    simulationRuntime.reportCompileDiagnostics(activeRobotId, diagnostics);
+    simulationRuntime.reportCompileDiagnostics(activeMechanismId, diagnostics);
     const blocked = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
     if (!blocked) {
-      simulationRuntime.runProgram(activeRobotId, result.program);
+      simulationRuntime.runProgram(activeMechanismId, result.program);
     }
     return {
       diagnostics,
       stepCount: result.program.instructions.length,
       blocked,
     };
-  }, [activeRobotId, setCompileDiagnosticsByRobot, workspace]);
+  }, [activeMechanismId, setCompileDiagnosticsByMechanism, workspace]);
 
   useEffect(() => {
-    if (workspaceRobotId === activeRobotId) {
+    if (workspaceMechanismId === activeMechanismId) {
       return;
     }
 
-    const targetProgram = robotPrograms[activeRobotId];
+    const targetProgram = mechanismPrograms[activeMechanismId];
     if (targetProgram) {
       if (workspace !== targetProgram) {
         replaceWorkspace(() => targetProgram);
@@ -315,12 +315,12 @@ const AppContent = (): JSX.Element => {
       replaceWorkspace(() => []);
     }
 
-    setWorkspaceRobotId(activeRobotId);
-  }, [activeRobotId, robotPrograms, replaceWorkspace, workspace, workspaceRobotId]);
+    setWorkspaceMechanismId(activeMechanismId);
+  }, [activeMechanismId, mechanismPrograms, replaceWorkspace, workspace, workspaceMechanismId]);
 
   useEffect(() => {
-    setRobotPrograms((current) => {
-      const existing = current[workspaceRobotId];
+    setMechanismPrograms((current) => {
+      const existing = current[workspaceMechanismId];
       if (existing === workspace) {
         return current;
       }
@@ -329,10 +329,10 @@ const AppContent = (): JSX.Element => {
       }
       return {
         ...current,
-        [workspaceRobotId]: workspace,
+        [workspaceMechanismId]: workspace,
       };
     });
-  }, [workspace, workspaceRobotId]);
+  }, [workspace, workspaceMechanismId]);
 
   useEffect(() => {
     const isEditableElement = (target: EventTarget | null): boolean => {
@@ -371,7 +371,7 @@ const AppContent = (): JSX.Element => {
       }
 
       if (key === 'p') {
-        handleProgramRobot();
+        handleProgramMechanism();
       }
     };
 
@@ -380,7 +380,7 @@ const AppContent = (): JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleProgramRobot, handleTabShortcut]);
+  }, [handleProgramMechanism, handleTabShortcut]);
 
   useEffect(() => {
     if (overlayEntityId === null) {
@@ -435,10 +435,10 @@ const AppContent = (): JSX.Element => {
       return;
     }
     const entity = getEntityData(overlayEntityId);
-    if (!entity || entity.overlayType !== 'complex' || !entity.robotId) {
+    if (!entity || entity.overlayType !== 'complex' || !entity.mechanismId) {
       return;
     }
-    const nextProgramState = buildProgramStateForRobot(entity.robotId);
+    const nextProgramState = buildProgramStateForMechanism(entity.mechanismId);
     const previousProgramState = entity.programState ?? {
       isRunning: false,
       activeBlockId: null,
@@ -454,24 +454,24 @@ const AppContent = (): JSX.Element => {
       upsertEntityData({ ...entity, programState: nextProgramState }, { silent: true });
     }
   }, [
-    buildProgramStateForRobot,
+    buildProgramStateForMechanism,
     getEntityData,
     overlayEntityId,
-    robotPrograms,
+    mechanismPrograms,
     upsertEntityData,
     workspace,
   ]);
 
   useEffect(() => {
-    const unsubscribe = simulationRuntime.subscribeStatus(activeRobotId, (status) => {
+    const unsubscribe = simulationRuntime.subscribeStatus(activeMechanismId, (status) => {
       if (overlayEntityId === null) {
         return;
       }
       const entity = getEntityData(overlayEntityId);
-      if (!entity || entity.overlayType !== 'complex' || entity.robotId !== activeRobotId) {
+      if (!entity || entity.overlayType !== 'complex' || entity.mechanismId !== activeMechanismId) {
         return;
       }
-      const nextProgramState = buildProgramStateForRobot(activeRobotId, status);
+      const nextProgramState = buildProgramStateForMechanism(activeMechanismId, status);
       const previousProgramState = entity.programState ?? {
         isRunning: false,
         activeBlockId: null,
@@ -489,8 +489,8 @@ const AppContent = (): JSX.Element => {
     });
     return unsubscribe;
   }, [
-    activeRobotId,
-    buildProgramStateForRobot,
+    activeMechanismId,
+    buildProgramStateForMechanism,
     getEntityData,
     overlayEntityId,
     upsertEntityData,
@@ -503,17 +503,17 @@ const AppContent = (): JSX.Element => {
       onTouchDrop: handleTouchDrop,
       onUpdateBlock: updateBlockInstance,
       onRemoveBlock: removeBlockInstance,
-      robotId: activeRobotId,
-      runProgram: runProgramForActiveRobot,
-      diagnostics: compileDiagnosticsByRobot[activeRobotId] ?? [],
+      mechanismId: activeMechanismId,
+      runProgram: runProgramForActiveMechanism,
+      diagnostics: compileDiagnosticsByMechanism[activeMechanismId] ?? [],
     }),
     [
-      activeRobotId,
-      compileDiagnosticsByRobot,
+      activeMechanismId,
+      compileDiagnosticsByMechanism,
       handleDrop,
       handleTouchDrop,
       removeBlockInstance,
-      runProgramForActiveRobot,
+      runProgramForActiveMechanism,
       updateBlockInstance,
       workspace,
     ],
@@ -542,11 +542,11 @@ const AppContent = (): JSX.Element => {
         <button
           type="button"
           className={`${styles.controlButton} ${styles.controlButtonPrimary}`}
-          onClick={handleProgramRobot}
+          onClick={handleProgramMechanism}
           data-active={isOpen && activeTab === 'programming'}
-          data-testid="select-robot"
+          data-testid="select-mechanism"
         >
-          Program robot
+          Program mechanism
         </button>
       </div>
       <ProgrammingInspectorProvider value={programmingContextValue}>
@@ -557,7 +557,7 @@ const AppContent = (): JSX.Element => {
       {ONBOARDING_ENABLED ? (
         <OnboardingFlow
           replaceWorkspace={replaceWorkspace}
-          openProgrammingOverlay={handleProgramRobot}
+          openProgrammingOverlay={handleProgramMechanism}
         />
       ) : null}
     </div>

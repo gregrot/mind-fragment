@@ -1,6 +1,6 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ModuleActionContext, ModuleUpdateContext } from '../RobotChassis';
+import type { ModuleActionContext, ModuleUpdateContext } from '../MechanismChassis';
 
 const roundTo = (value: number, decimals: number): number => {
   const factor = 10 ** decimals;
@@ -17,7 +17,7 @@ export interface ScanningModuleOptions {
   cooldownSeconds?: number;
 }
 
-export class ScanningModule extends RobotModule {
+export class ScanningModule extends MechanismModule {
   private readonly defaultScanRange: number;
   private readonly defaultCooldown: number;
   private port: ModulePort | null = null;

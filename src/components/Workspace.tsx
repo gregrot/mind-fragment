@@ -1,7 +1,7 @@
 import { Fragment, useCallback } from 'react';
 import BlockView from './BlockView';
 import DropZone from './DropZone';
-import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
+import type { MechanismTelemetryData } from '../hooks/useMechanismTelemetry';
 import type { BlockInstance, DropTarget, DragPayload } from '../types/blocks';
 import styles from '../styles/Workspace.module.css';
 
@@ -11,7 +11,7 @@ interface WorkspaceProps {
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock: (instanceId: string) => void;
-  telemetry?: RobotTelemetryData;
+  telemetry?: MechanismTelemetryData;
   activeBlockId?: string | null;
   warningBlockIds?: Set<string>;
 }

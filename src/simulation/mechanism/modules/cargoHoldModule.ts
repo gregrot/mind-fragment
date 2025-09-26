@@ -1,6 +1,6 @@
-import { RobotModule } from '../RobotModule';
+import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
-import type { ModuleRuntimeContext } from '../RobotChassis';
+import type { ModuleRuntimeContext } from '../MechanismChassis';
 import type { InventoryStore, InventorySnapshot } from '../inventory';
 
 interface CapacityPayload {
@@ -44,7 +44,7 @@ export interface CargoHoldModuleOptions {
   capacity?: number;
 }
 
-export class CargoHoldModule extends RobotModule {
+export class CargoHoldModule extends MechanismModule {
   private readonly defaultCapacity: number;
   private port: ModulePort | null = null;
   private inventory: InventoryStore | null = null;

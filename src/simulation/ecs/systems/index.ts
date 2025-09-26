@@ -1,5 +1,5 @@
 export * from './programRunnerSystem';
-export * from './robotPhysicsSystem';
+export * from './mechanismPhysicsSystem';
 export * from './resourceFieldViewSystem';
 export * from './selectableSystem';
 export * from './spriteSyncSystem';

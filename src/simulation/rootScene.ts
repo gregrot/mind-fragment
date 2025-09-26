@@ -8,10 +8,10 @@ import {
   SIMULATION_BLACKBOARD_FACT_KEYS,
   type SimulationTelemetrySnapshot,
 } from './runtime/ecsBlackboard';
-import { createSimulationWorld, DEFAULT_ROBOT_ID, type SimulationWorldContext } from './runtime/simulationWorld';
+import { createSimulationWorld, DEFAULT_MECHANISM_ID, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { EntityId } from './ecs/world';
-import type { InventorySnapshot } from './robot/inventory';
-import type { ChassisSnapshot } from './robot';
+import type { InventorySnapshot } from './mechanism/inventory';
+import type { ChassisSnapshot } from './mechanism';
 
 interface TickPayload {
   deltaMS: number;
@@ -20,10 +20,10 @@ interface TickPayload {
 const STEP_MS = 1000 / 60;
 const GRID_EXTENT = 2000;
 const GRID_SPACING = 80;
-type RobotSelectionListener = (robotId: string | null, entityId: EntityId | null) => void;
+type MechanismSelectionListener = (mechanismId: string | null, entityId: EntityId | null) => void;
 type TelemetryListener = (
   snapshot: SimulationTelemetrySnapshot,
-  robotId: string | null,
+  mechanismId: string | null,
 ) => void;
 type ChassisListener = (snapshot: ChassisSnapshot) => void;
 
@@ -47,19 +47,19 @@ export class RootScene {
   private hasPlayerPanned: boolean;
   private accumulator: number;
   private readonly tickHandler: (payload: TickPayload) => void;
-  private readonly programStatusByRobot: Map<string, ProgramRunnerStatus>;
+  private readonly programStatusByMechanism: Map<string, ProgramRunnerStatus>;
   private programStatus: ProgramRunnerStatus;
-  private readonly programListeners: Set<(status: ProgramRunnerStatus, robotId: string) => void>;
-  private readonly selectionListeners: Set<RobotSelectionListener>;
+  private readonly programListeners: Set<(status: ProgramRunnerStatus, mechanismId: string) => void>;
+  private readonly selectionListeners: Set<MechanismSelectionListener>;
   private pendingSelection: string | null;
   private readonly telemetryListeners: Set<TelemetryListener>;
   private telemetrySnapshot: SimulationTelemetrySnapshot;
-  private telemetryRobotId: string | null;
-  private readonly telemetrySnapshotsByRobot: Map<
+  private telemetryMechanismId: string | null;
+  private readonly telemetrySnapshotsByMechanism: Map<
     string,
     { snapshot: SimulationTelemetrySnapshot; signature: string }
   >;
-  private defaultRobotId: string;
+  private defaultMechanismId: string;
 
   constructor(app: Application) {
     this.app = app;
@@ -104,16 +104,16 @@ export class RootScene {
     this.tickHandler = this.tick.bind(this);
     app.ticker.add(this.tickHandler as (ticker: Ticker) => void);
 
-    this.programStatusByRobot = new Map();
+    this.programStatusByMechanism = new Map();
     this.programListeners = new Set();
     this.selectionListeners = new Set();
     this.pendingSelection = null;
-    this.defaultRobotId = DEFAULT_ROBOT_ID;
+    this.defaultMechanismId = DEFAULT_MECHANISM_ID;
     this.programStatus = 'idle';
     this.telemetryListeners = new Set();
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-    this.telemetryRobotId = null;
-    this.telemetrySnapshotsByRobot = new Map();
+    this.telemetryMechanismId = null;
+    this.telemetrySnapshotsByMechanism = new Map();
 
     void this.initialiseSimulationWorld();
   }
@@ -121,44 +121,44 @@ export class RootScene {
   private async initialiseSimulationWorld(): Promise<void> {
     const context = await createSimulationWorld({
       renderer: this.app.renderer,
-      onRobotSelected: (robotId) => this.notifyRobotSelected(robotId),
+      onMechanismSelected: (mechanismId) => this.notifyMechanismSelected(mechanismId),
       overlayLayer: this.rootLayer,
       viewport: this.viewport,
     });
 
     this.context = context;
-    this.defaultRobotId = context.defaultRobotId ?? DEFAULT_ROBOT_ID;
+    this.defaultMechanismId = context.defaultMechanismId ?? DEFAULT_MECHANISM_ID;
 
     context.world.runSystems(0);
 
-    this.telemetrySnapshotsByRobot.clear();
-    this.programStatusByRobot.clear();
+    this.telemetrySnapshotsByMechanism.clear();
+    this.programStatusByMechanism.clear();
 
-    for (const robotId of context.entities.robots.keys()) {
-      const sprite = context.getSprite(robotId);
+    for (const mechanismId of context.entities.mechanisms.keys()) {
+      const sprite = context.getSprite(mechanismId);
       if (sprite && sprite.parent !== this.rootLayer) {
         this.rootLayer.addChild(sprite);
       }
 
-      const transform = context.getTransform(robotId);
+      const transform = context.getTransform(mechanismId);
       if (transform && sprite) {
         sprite.position.set(transform.position.x, transform.position.y);
         sprite.rotation = transform.rotation;
       }
 
-      const programRunner = context.getProgramRunner(robotId);
+      const programRunner = context.getProgramRunner(mechanismId);
       if (programRunner) {
-        programRunner.setStatusListener((status) => this.handleProgramStatus(robotId, status));
-        this.programStatusByRobot.set(robotId, programRunner.getStatus());
+        programRunner.setStatusListener((status) => this.handleProgramStatus(mechanismId, status));
+        this.programStatusByMechanism.set(mechanismId, programRunner.getStatus());
       } else {
-        this.programStatusByRobot.set(robotId, 'idle');
+        this.programStatusByMechanism.set(mechanismId, 'idle');
       }
     }
 
     const targetSelection =
-      this.pendingSelection ?? context.getSelectedRobot() ?? this.defaultRobotId ?? DEFAULT_ROBOT_ID;
-    if (context.getSelectedRobot() !== targetSelection) {
-      context.selectRobot(targetSelection);
+      this.pendingSelection ?? context.getSelectedMechanism() ?? this.defaultMechanismId ?? DEFAULT_MECHANISM_ID;
+    if (context.getSelectedMechanism() !== targetSelection) {
+      context.selectMechanism(targetSelection);
     }
     this.pendingSelection = targetSelection;
     this.updateProgramStatusForSelection();
@@ -166,8 +166,8 @@ export class RootScene {
     this.flushPendingContextCallbacks(context);
 
     if (!this.hasPlayerPanned) {
-      const focusRobotId = this.getActiveRobotId(context);
-      const focusSprite = context.getSprite(focusRobotId);
+      const focusMechanismId = this.getActiveMechanismId(context);
+      const focusSprite = context.getSprite(focusMechanismId);
       if (focusSprite) {
         this.viewport.moveCenter(focusSprite.position.x, focusSprite.position.y);
       }
@@ -255,17 +255,17 @@ export class RootScene {
 
     if (!this.hasPlayerPanned) {
       const context = this.context;
-      const robotId = this.getActiveRobotId(context);
-      const sprite = context?.getSprite(robotId);
+      const mechanismId = this.getActiveMechanismId(context);
+      const sprite = context?.getSprite(mechanismId);
       const targetX = sprite?.position.x ?? 0;
       const targetY = sprite?.position.y ?? 0;
       this.viewport.moveCenter(targetX, targetY);
     }
   }
 
-  runProgram(robotId: string, program: CompiledProgram): void {
+  runProgram(mechanismId: string, program: CompiledProgram): void {
     const execute = (context: SimulationWorldContext) => {
-      context.getProgramRunner(robotId)?.load(program);
+      context.getProgramRunner(mechanismId)?.load(program);
     };
     if (this.context) {
       execute(this.context);
@@ -274,9 +274,9 @@ export class RootScene {
     this.onContextReady(execute);
   }
 
-  stopProgram(robotId: string): void {
+  stopProgram(mechanismId: string): void {
     const execute = (context: SimulationWorldContext) => {
-      context.getProgramRunner(robotId)?.stop();
+      context.getProgramRunner(mechanismId)?.stop();
     };
     if (this.context) {
       execute(this.context);
@@ -285,24 +285,24 @@ export class RootScene {
     this.onContextReady(execute);
   }
 
-  getProgramStatus(robotId: string = this.getActiveRobotId()): ProgramRunnerStatus {
-    return this.programStatusByRobot.get(robotId) ?? 'idle';
+  getProgramStatus(mechanismId: string = this.getActiveMechanismId()): ProgramRunnerStatus {
+    return this.programStatusByMechanism.get(mechanismId) ?? 'idle';
   }
 
-  getInventorySnapshot(robotId: string = this.getActiveRobotId()): InventorySnapshot {
-    const robotCore = this.context?.getRobotCore(robotId);
-    if (!robotCore) {
+  getInventorySnapshot(mechanismId: string = this.getActiveMechanismId()): InventorySnapshot {
+    const mechanismCore = this.context?.getMechanismCore(mechanismId);
+    if (!mechanismCore) {
       return { capacity: 0, used: 0, available: 0, entries: [], slots: [], slotCapacity: 0 };
     }
-    return robotCore.getInventorySnapshot();
+    return mechanismCore.getInventorySnapshot();
   }
 
-  getChassisSnapshot(robotId: string = this.getActiveRobotId()): ChassisSnapshot {
-    const robotCore = this.context?.getRobotCore(robotId);
-    if (!robotCore) {
+  getChassisSnapshot(mechanismId: string = this.getActiveMechanismId()): ChassisSnapshot {
+    const mechanismCore = this.context?.getMechanismCore(mechanismId);
+    if (!mechanismCore) {
       return EMPTY_CHASSIS_SNAPSHOT;
     }
-    return robotCore.getSlotSchemaSnapshot();
+    return mechanismCore.getSlotSchemaSnapshot();
   }
 
   subscribeInventory(listener: (snapshot: InventorySnapshot) => void): () => void {
@@ -315,12 +315,12 @@ export class RootScene {
       if (unsubscribed) {
         return;
       }
-      const robotId = this.getActiveRobotId(context);
-      const robotCore = context.getRobotCore(robotId);
-      if (!robotCore) {
+      const mechanismId = this.getActiveMechanismId(context);
+      const mechanismCore = context.getMechanismCore(mechanismId);
+      if (!mechanismCore) {
         return;
       }
-      teardown = robotCore.inventory.subscribe(listener);
+      teardown = mechanismCore.inventory.subscribe(listener);
     });
 
     return () => {
@@ -343,21 +343,21 @@ export class RootScene {
         return;
       }
 
-      const attach = (robotId: string | null) => {
+      const attach = (mechanismId: string | null) => {
         if (unsubscribed) {
           return;
         }
-        const targetId = robotId ?? this.getActiveRobotId(context);
-        const robotCore = context.getRobotCore(targetId);
-        if (!robotCore) {
+        const targetId = mechanismId ?? this.getActiveMechanismId(context);
+        const mechanismCore = context.getMechanismCore(targetId);
+        if (!mechanismCore) {
           return;
         }
         teardown?.();
-        teardown = robotCore.subscribeSlots(listener);
+        teardown = mechanismCore.subscribeSlots(listener);
       };
 
-      selectionUnsubscribe = this.subscribeRobotSelection((robotId) => {
-        attach(robotId);
+      selectionUnsubscribe = this.subscribeMechanismSelection((mechanismId) => {
+        attach(mechanismId);
       });
 
       attach(this.pendingSelection);
@@ -373,24 +373,24 @@ export class RootScene {
     };
   }
 
-  subscribeProgramStatus(listener: (status: ProgramRunnerStatus, robotId: string) => void): () => void {
+  subscribeProgramStatus(listener: (status: ProgramRunnerStatus, mechanismId: string) => void): () => void {
     this.programListeners.add(listener);
-    for (const [robotId, status] of this.programStatusByRobot) {
-      listener(status, robotId);
+    for (const [mechanismId, status] of this.programStatusByMechanism) {
+      listener(status, mechanismId);
     }
-    if (this.programStatusByRobot.size === 0) {
-      listener(this.programStatus, this.getActiveRobotId());
+    if (this.programStatusByMechanism.size === 0) {
+      listener(this.programStatus, this.getActiveMechanismId());
     }
     return () => {
       this.programListeners.delete(listener);
     };
   }
 
-  subscribeRobotSelection(listener: RobotSelectionListener): () => void {
+  subscribeMechanismSelection(listener: MechanismSelectionListener): () => void {
     this.selectionListeners.add(listener);
     const entityId =
       this.pendingSelection && this.context
-        ? this.context.getRobotEntity(this.pendingSelection) ?? null
+        ? this.context.getMechanismEntity(this.pendingSelection) ?? null
         : null;
     listener(this.pendingSelection, entityId);
     return () => {
@@ -400,47 +400,47 @@ export class RootScene {
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
     this.telemetryListeners.add(listener);
-    if (this.telemetrySnapshotsByRobot.size > 0) {
-      for (const [robotId, entry] of this.telemetrySnapshotsByRobot) {
-        listener(entry.snapshot, robotId);
+    if (this.telemetrySnapshotsByMechanism.size > 0) {
+      for (const [mechanismId, entry] of this.telemetrySnapshotsByMechanism) {
+        listener(entry.snapshot, mechanismId);
       }
     } else {
-      listener(this.telemetrySnapshot, this.telemetryRobotId);
+      listener(this.telemetrySnapshot, this.telemetryMechanismId);
     }
     return () => {
       this.telemetryListeners.delete(listener);
     };
   }
 
-  selectRobot(robotId: string): void {
-    this.notifyRobotSelected(robotId);
+  selectMechanism(mechanismId: string): void {
+    this.notifyMechanismSelected(mechanismId);
   }
 
-  clearRobotSelection(): void {
-    this.notifyRobotSelected(null);
+  clearMechanismSelection(): void {
+    this.notifyMechanismSelected(null);
   }
 
-  getSelectedRobot(): string | null {
+  getSelectedMechanism(): string | null {
     return this.pendingSelection;
   }
 
-  getTelemetrySnapshot(robotId: string = this.getActiveRobotId()): SimulationTelemetrySnapshot {
+  getTelemetrySnapshot(mechanismId: string = this.getActiveMechanismId()): SimulationTelemetrySnapshot {
     if (!this.context) {
-      const cached = this.telemetrySnapshotsByRobot.get(robotId);
+      const cached = this.telemetrySnapshotsByMechanism.get(mechanismId);
       if (cached) {
         return cached.snapshot;
       }
-      if (this.telemetryRobotId === robotId) {
+      if (this.telemetryMechanismId === mechanismId) {
         return this.telemetrySnapshot;
       }
       return EMPTY_TELEMETRY_SNAPSHOT;
     }
     this.captureTelemetrySnapshot();
-    const entry = this.telemetrySnapshotsByRobot.get(robotId);
+    const entry = this.telemetrySnapshotsByMechanism.get(mechanismId);
     if (entry) {
       return entry.snapshot;
     }
-    if (this.telemetryRobotId === robotId) {
+    if (this.telemetryMechanismId === mechanismId) {
       return this.telemetrySnapshot;
     }
     return EMPTY_TELEMETRY_SNAPSHOT;
@@ -449,33 +449,33 @@ export class RootScene {
   destroy(): void {
     this.app.ticker.remove(this.tickHandler as (ticker: Ticker) => void);
     this.programListeners.clear();
-    this.programStatusByRobot.clear();
+    this.programStatusByMechanism.clear();
     this.programStatus = 'idle';
-    this.notifyRobotSelected(null);
+    this.notifyMechanismSelected(null);
     this.selectionListeners.clear();
     this.telemetryListeners.clear();
-    this.telemetrySnapshotsByRobot.clear();
+    this.telemetrySnapshotsByMechanism.clear();
     this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-    this.telemetryRobotId = null;
+    this.telemetryMechanismId = null;
     this.pendingContextCallbacks.length = 0;
-    this.defaultRobotId = DEFAULT_ROBOT_ID;
+    this.defaultMechanismId = DEFAULT_MECHANISM_ID;
     const context = this.context;
     if (context) {
-      for (const robotId of context.entities.robots.keys()) {
-        context.getProgramRunner(robotId)?.stop();
+      for (const mechanismId of context.entities.mechanisms.keys()) {
+        context.getProgramRunner(mechanismId)?.stop();
 
-        const robotCore = context.getRobotCore(robotId);
-        if (robotCore) {
-          const modules = [...robotCore.moduleStack.list()].reverse();
+        const mechanismCore = context.getMechanismCore(mechanismId);
+        if (mechanismCore) {
+          const modules = [...mechanismCore.moduleStack.list()].reverse();
           for (const module of modules) {
-            robotCore.detachModule(module.definition.id);
+            mechanismCore.detachModule(module.definition.id);
           }
         }
 
-        const sprite = context.getSprite(robotId);
+        const sprite = context.getSprite(mechanismId);
         sprite?.destroy({ children: true });
 
-        const entity = context.entities.robots.get(robotId);
+        const entity = context.entities.mechanisms.get(mechanismId);
         if (entity !== undefined) {
           context.world.destroyEntity(entity);
         }
@@ -489,23 +489,23 @@ export class RootScene {
     assetService.disposeAll();
   }
 
-  private handleProgramStatus(robotId: string, status: ProgramRunnerStatus): void {
-    this.programStatusByRobot.set(robotId, status);
-    if (this.getActiveRobotId() === robotId) {
-      this.applyProgramStatusForActiveRobot(robotId, status);
+  private handleProgramStatus(mechanismId: string, status: ProgramRunnerStatus): void {
+    this.programStatusByMechanism.set(mechanismId, status);
+    if (this.getActiveMechanismId() === mechanismId) {
+      this.applyProgramStatusForActiveMechanism(mechanismId, status);
     }
     for (const listener of this.programListeners) {
-      listener(status, robotId);
+      listener(status, mechanismId);
     }
   }
 
   private updateProgramStatusForSelection(): void {
-    const activeRobotId = this.getActiveRobotId();
-    const status = this.programStatusByRobot.get(activeRobotId) ?? 'idle';
-    this.applyProgramStatusForActiveRobot(activeRobotId, status);
+    const activeMechanismId = this.getActiveMechanismId();
+    const status = this.programStatusByMechanism.get(activeMechanismId) ?? 'idle';
+    this.applyProgramStatusForActiveMechanism(activeMechanismId, status);
   }
 
-  private applyProgramStatusForActiveRobot(robotId: string, status: ProgramRunnerStatus): void {
+  private applyProgramStatusForActiveMechanism(mechanismId: string, status: ProgramRunnerStatus): void {
     const previousStatus = this.programStatus;
     this.programStatus = status;
     const blackboard = this.context?.blackboard;
@@ -517,42 +517,42 @@ export class RootScene {
     }
   }
 
-  private notifyRobotSelected(robotId: string | null): void {
-    if (this.pendingSelection === robotId) {
+  private notifyMechanismSelected(mechanismId: string | null): void {
+    if (this.pendingSelection === mechanismId) {
       return;
     }
-    this.pendingSelection = robotId;
+    this.pendingSelection = mechanismId;
     if (this.context) {
-      const current = this.context.getSelectedRobot();
-      if (current !== robotId) {
-        this.context.selectRobot(robotId);
+      const current = this.context.getSelectedMechanism();
+      if (current !== mechanismId) {
+        this.context.selectMechanism(mechanismId);
       }
-      if (!this.hasPlayerPanned && robotId) {
-        const sprite = this.context.getSprite(robotId);
+      if (!this.hasPlayerPanned && mechanismId) {
+        const sprite = this.context.getSprite(mechanismId);
         if (sprite) {
           this.viewport.moveCenter(sprite.position.x, sprite.position.y);
         }
       }
     }
     const entityId =
-      robotId && this.context ? this.context.getRobotEntity(robotId) ?? null : null;
+      mechanismId && this.context ? this.context.getMechanismEntity(mechanismId) ?? null : null;
     for (const listener of this.selectionListeners) {
-      listener(robotId, entityId);
+      listener(mechanismId, entityId);
     }
     this.updateProgramStatusForSelection();
     this.captureTelemetrySnapshot(true);
   }
 
-  private getActiveRobotId(context: SimulationWorldContext | null = this.context): string {
-    const fallback = context?.defaultRobotId ?? this.defaultRobotId ?? DEFAULT_ROBOT_ID;
-    const selected = this.pendingSelection ?? context?.getSelectedRobot() ?? fallback;
+  private getActiveMechanismId(context: SimulationWorldContext | null = this.context): string {
+    const fallback = context?.defaultMechanismId ?? this.defaultMechanismId ?? DEFAULT_MECHANISM_ID;
+    const selected = this.pendingSelection ?? context?.getSelectedMechanism() ?? fallback;
     if (!context) {
       return selected ?? fallback;
     }
-    if (selected && context.entities.robots.has(selected)) {
+    if (selected && context.entities.mechanisms.has(selected)) {
       return selected;
     }
-    const iterator = context.entities.robots.keys();
+    const iterator = context.entities.mechanisms.keys();
     const next = iterator.next();
     if (!next.done) {
       return next.value;
@@ -563,57 +563,57 @@ export class RootScene {
   private captureTelemetrySnapshot(force = false): void {
     const context = this.context;
     if (!context) {
-      if (force && (this.telemetrySnapshotsByRobot.size > 0 || this.telemetryRobotId !== null)) {
-        this.telemetrySnapshotsByRobot.clear();
+      if (force && (this.telemetrySnapshotsByMechanism.size > 0 || this.telemetryMechanismId !== null)) {
+        this.telemetrySnapshotsByMechanism.clear();
         this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-        this.telemetryRobotId = null;
+        this.telemetryMechanismId = null;
         this.notifyTelemetryListeners(null, this.telemetrySnapshot);
       }
       return;
     }
 
-    const activeRobotId = this.getActiveRobotId(context);
+    const activeMechanismId = this.getActiveMechanismId(context);
     let hasActiveSnapshot = false;
 
-    for (const robotId of context.entities.robots.keys()) {
-      const robotCore = context.getRobotCore(robotId);
-      if (!robotCore) {
+    for (const mechanismId of context.entities.mechanisms.keys()) {
+      const mechanismCore = context.getMechanismCore(mechanismId);
+      if (!mechanismCore) {
         continue;
       }
-      const snapshot = robotCore.getTelemetrySnapshot();
+      const snapshot = mechanismCore.getTelemetrySnapshot();
       const signature = JSON.stringify(snapshot);
-      const existing = this.telemetrySnapshotsByRobot.get(robotId);
+      const existing = this.telemetrySnapshotsByMechanism.get(mechanismId);
       const hasChanged = force || !existing || existing.signature !== signature;
       if (hasChanged) {
-        this.telemetrySnapshotsByRobot.set(robotId, { snapshot, signature });
-        this.notifyTelemetryListeners(robotId, snapshot);
+        this.telemetrySnapshotsByMechanism.set(mechanismId, { snapshot, signature });
+        this.notifyTelemetryListeners(mechanismId, snapshot);
       }
-      if (robotId === activeRobotId) {
+      if (mechanismId === activeMechanismId) {
         this.telemetrySnapshot = snapshot;
-        this.telemetryRobotId = robotId;
+        this.telemetryMechanismId = mechanismId;
         hasActiveSnapshot = true;
       }
     }
 
     if (!hasActiveSnapshot) {
-      const activeEntry = this.telemetrySnapshotsByRobot.get(activeRobotId);
+      const activeEntry = this.telemetrySnapshotsByMechanism.get(activeMechanismId);
       if (activeEntry) {
         this.telemetrySnapshot = activeEntry.snapshot;
-        this.telemetryRobotId = activeRobotId;
+        this.telemetryMechanismId = activeMechanismId;
       } else if (force) {
         this.telemetrySnapshot = EMPTY_TELEMETRY_SNAPSHOT;
-        this.telemetryRobotId = null;
+        this.telemetryMechanismId = null;
         this.notifyTelemetryListeners(null, this.telemetrySnapshot);
       }
     }
   }
 
   private notifyTelemetryListeners(
-    robotId: string | null,
+    mechanismId: string | null,
     snapshot: SimulationTelemetrySnapshot,
   ): void {
     for (const listener of this.telemetryListeners) {
-      listener(snapshot, robotId);
+      listener(snapshot, mechanismId);
     }
   }
 }

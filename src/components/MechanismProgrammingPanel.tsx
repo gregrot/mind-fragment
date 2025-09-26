@@ -4,18 +4,18 @@ import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
 import { BLOCK_LIBRARY } from '../blocks/library';
 import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
-import styles from '../styles/RobotProgrammingPanel.module.css';
-import useRobotTelemetry from '../hooks/useRobotTelemetry';
+import styles from '../styles/MechanismProgrammingPanel.module.css';
+import useMechanismTelemetry from '../hooks/useMechanismTelemetry';
 import type { Diagnostic } from '../simulation/runtime/blockProgram';
 import type { RunProgramResult } from '../state/ProgrammingInspectorContext';
 
-interface RobotProgrammingPanelProps {
+interface MechanismProgrammingPanelProps {
   workspace: WorkspaceState;
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock: (instanceId: string) => void;
-  robotId: string;
+  mechanismId: string;
   isReadOnly?: boolean;
   lockMessage?: string;
   onRequestStop?: () => void;
@@ -26,13 +26,13 @@ interface RobotProgrammingPanelProps {
   onRunProgram: () => RunProgramResult;
 }
 
-const RobotProgrammingPanel = ({
+const MechanismProgrammingPanel = ({
   workspace,
   onDrop,
   onTouchDrop,
   onUpdateBlock,
   onRemoveBlock,
-  robotId,
+  mechanismId,
   isReadOnly = false,
   lockMessage,
   onRequestStop,
@@ -41,9 +41,9 @@ const RobotProgrammingPanel = ({
   warningBlockIds,
   diagnostics,
   onRunProgram,
-}: RobotProgrammingPanelProps): JSX.Element => {
+}: MechanismProgrammingPanelProps): JSX.Element => {
   const paletteRef = useRef<HTMLDivElement | null>(null);
-  const telemetry = useRobotTelemetry();
+  const telemetry = useMechanismTelemetry();
   const resolvedLockMessage = lockMessage
     ?? 'The routine is executing. Stop the program to edit blocks.';
   const hasWarnings = Array.isArray(moduleWarnings) && moduleWarnings.length > 0;
@@ -56,13 +56,13 @@ const RobotProgrammingPanel = ({
     if (target && typeof target.scrollIntoView === 'function') {
       target.scrollIntoView({ block: 'start' });
     }
-  }, [robotId]);
+  }, [mechanismId]);
 
   return (
     <div className={styles.programming}>
       <div className={styles.summary}>
-        <p className={styles.kicker}>Selected robot</p>
-        <h3 className={styles.title}>Chassis {robotId}</h3>
+        <p className={styles.kicker}>Selected mechanism</p>
+        <h3 className={styles.title}>Chassis {mechanismId}</h3>
         <p className={styles.description}>
           Combine blocks from the palette and deploy updates to steer the prototype within the simulation.
         </p>
@@ -134,11 +134,11 @@ const RobotProgrammingPanel = ({
         </section>
       </div>
       <footer className={styles.footer}>
-        <RuntimeControls robotId={robotId} onRun={onRunProgram} diagnostics={diagnostics} />
+        <RuntimeControls mechanismId={mechanismId} onRun={onRunProgram} diagnostics={diagnostics} />
         <p className={styles.autosaveHint}>Changes save automatically while you edit.</p>
       </footer>
     </div>
   );
 };
 
-export default RobotProgrammingPanel;
+export default MechanismProgrammingPanel;

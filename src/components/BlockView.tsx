@@ -7,7 +7,7 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from 'react';
 import { BLOCK_MAP } from '../blocks/library';
-import type { RobotTelemetryData } from '../hooks/useRobotTelemetry';
+import type { MechanismTelemetryData } from '../hooks/useMechanismTelemetry';
 import type { BlockInstance, DragPayload, DropTarget } from '../types/blocks';
 import styles from '../styles/BlockView.module.css';
 import { getDropTargetFromTouchEvent } from '../utils/dropTarget';
@@ -31,7 +31,7 @@ interface BlockViewProps {
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock?: (instanceId: string) => void;
-  telemetry?: RobotTelemetryData;
+  telemetry?: MechanismTelemetryData;
   activeBlockId?: string | null;
   warningBlockIds?: Set<string>;
 }
@@ -373,7 +373,7 @@ interface SlotViewProps {
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
   onUpdateBlock?: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock?: (instanceId: string) => void;
-  telemetry?: RobotTelemetryData;
+  telemetry?: MechanismTelemetryData;
   activeBlockId?: string | null;
   warningBlockIds?: Set<string>;
 }

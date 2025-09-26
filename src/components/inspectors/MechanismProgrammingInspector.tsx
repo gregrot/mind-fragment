@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import RobotProgrammingPanel from '../RobotProgrammingPanel';
+import MechanismProgrammingPanel from '../MechanismProgrammingPanel';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useProgrammingInspector } from '../../state/ProgrammingInspectorContext';
 import { useSimulationRuntime } from '../../hooks/useSimulationRuntime';
-import { MODULE_LIBRARY } from '../../simulation/robot/modules/moduleLibrary';
+import { MODULE_LIBRARY } from '../../simulation/mechanism/modules/moduleLibrary';
 import type { BlockInstance, WorkspaceState } from '../../types/blocks';
 
 const MODULE_LABELS = new Map(MODULE_LIBRARY.map((module) => [module.id, module.title]));
@@ -59,18 +59,18 @@ const gatherModuleRequirements = (
   return requirements;
 };
 
-const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
+const MechanismProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
   const {
     workspace,
     onDrop,
     onTouchDrop,
     onUpdateBlock,
     onRemoveBlock,
-    robotId,
+    mechanismId,
     runProgram,
     diagnostics,
   } = useProgrammingInspector();
-  const { status, stopProgram } = useSimulationRuntime(robotId);
+  const { status, stopProgram } = useSimulationRuntime(mechanismId);
 
   const installedModules = useMemo(() => {
     const slots = entity.chassis?.slots ?? [];
@@ -120,13 +120,13 @@ const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
   const canStopProgram = status === 'running' ? stopProgram : undefined;
 
   return (
-    <RobotProgrammingPanel
+    <MechanismProgrammingPanel
       workspace={workspace}
       onDrop={onDrop}
       onTouchDrop={onTouchDrop}
       onUpdateBlock={onUpdateBlock}
       onRemoveBlock={onRemoveBlock}
-      robotId={robotId}
+      mechanismId={mechanismId}
       isReadOnly={isRunning}
       onRequestStop={canStopProgram}
       moduleWarnings={moduleWarnings}
@@ -138,4 +138,4 @@ const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
   );
 };
 
-export default RobotProgrammingInspector;
+export default MechanismProgrammingInspector;

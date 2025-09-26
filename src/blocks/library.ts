@@ -94,7 +94,7 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     id: 'broadcast-signal',
     label: 'Broadcast Signal',
     category: 'action',
-    summary: 'Emit one of the robot signals onto the shared channel.',
+    summary: 'Emit one of the mechanism signals onto the shared channel.',
     parameters: {
       signal: {
         kind: 'signal',
@@ -201,7 +201,7 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     id: 'read-signal',
     label: 'Read Signal',
     category: 'value',
-    summary: 'Returns the most recent value reported by a selected robot signal.',
+    summary: 'Returns the most recent value reported by a selected mechanism signal.',
     parameters: {
       signal: {
         kind: 'signal',

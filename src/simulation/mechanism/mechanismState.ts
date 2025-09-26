@@ -26,7 +26,7 @@ export interface ResourcePool {
   max: number;
 }
 
-export interface RobotStateSnapshot {
+export interface MechanismStateSnapshot {
   position: Vector2;
   orientation: number;
   velocity: {
@@ -37,7 +37,7 @@ export interface RobotStateSnapshot {
   heat: ResourcePool;
 }
 
-export interface RobotStateOptions {
+export interface MechanismStateOptions {
   position?: Partial<Vector2>;
   orientation?: number;
   velocity?: {
@@ -48,7 +48,7 @@ export interface RobotStateOptions {
   heat?: Partial<ResourcePool>;
 }
 
-export class RobotState {
+export class MechanismState {
   private readonly position: Vector2;
   private orientation: number;
   private readonly velocity: {
@@ -64,7 +64,7 @@ export class RobotState {
     velocity = { linear: { x: 0, y: 0 }, angular: 0 },
     energy = { current: 100, max: 100 },
     heat = { current: 0, max: 100 },
-  }: RobotStateOptions = {}) {
+  }: MechanismStateOptions = {}) {
     this.position = { x: position.x ?? 0, y: position.y ?? 0 };
     this.orientation = normaliseAngle(orientation ?? 0);
     this.velocity = {
@@ -109,7 +109,7 @@ export class RobotState {
     this.orientation = normaliseAngle(this.orientation + this.velocity.angular * stepSeconds);
   }
 
-  getSnapshot(): RobotStateSnapshot {
+  getSnapshot(): MechanismStateSnapshot {
     return {
       position: { ...this.position },
       orientation: this.orientation,
@@ -123,4 +123,4 @@ export class RobotState {
   }
 }
 
-export const robotStateUtils = { normaliseAngle };
+export const mechanismStateUtils = { normaliseAngle };

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This feature implements a comprehensive robot overlay system that provides players with an intuitive interface for managing robot chassis, inventory, and programming. The overlay appears when clicking on entities and provides tabbed access to different aspects of robot management including module installation, inventory management, and block programming. The system emphasizes immediate persistence, drag-and-drop interactions, and a unified inspector framework that can be extended to other entity types.
+This feature implements a comprehensive mechanism overlay system that provides players with an intuitive interface for managing mechanism chassis, inventory, and programming. The overlay appears when clicking on entities and provides tabbed access to different aspects of mechanism management including module installation, inventory management, and block programming. The system emphasizes immediate persistence, drag-and-drop interactions, and a unified inspector framework that can be extended to other entity types.
 
 ## Requirements
 
@@ -14,17 +14,17 @@ This feature implements a comprehensive robot overlay system that provides playe
 
 1. WHEN a player clicks on any entity THEN the system SHALL display an appropriate overlay for that entity
 2. WHEN the entity is simple (resource nodes, loose objects) THEN the system SHALL display a compact info bubble
-3. WHEN the entity is complex (robots) THEN the system SHALL display a full tabbed overlay
+3. WHEN the entity is complex (mechanisms) THEN the system SHALL display a full tabbed overlay
 4. WHEN the player clicks outside the overlay OR presses Escape THEN the system SHALL close the overlay automatically
 5. WHEN the player clicks on the same entity repeatedly THEN the system SHALL retain focus state and refresh content in place rather than recreating the overlay
 
 ### Requirement 2
 
-**User Story:** As a player, I want to manage my robot's chassis configuration through a dedicated inspector, so that I can equip and swap modules to customize my robot's capabilities.
+**User Story:** As a player, I want to manage my mechanism's chassis configuration through a dedicated inspector, so that I can equip and swap modules to customize my mechanism's capabilities.
 
 #### Acceptance Criteria
 
-1. WHEN viewing a robot overlay THEN the system SHALL provide a Systems tab containing a ChassisInspector
+1. WHEN viewing a mechanism overlay THEN the system SHALL provide a Systems tab containing a ChassisInspector
 2. WHEN displaying the chassis inspector THEN the system SHALL show 3 generic module slots by default
 3. WHEN a chassis slot is occupied THEN the system SHALL display the module's live thumbnail and name
 4. WHEN hovering over an occupied slot THEN the system SHALL show a tooltip with module stats and effects
@@ -35,11 +35,11 @@ This feature implements a comprehensive robot overlay system that provides playe
 
 ### Requirement 3
 
-**User Story:** As a player, I want to manage my robot's inventory through a dedicated inspector, so that I can organize items and modules for use during missions.
+**User Story:** As a player, I want to manage my mechanism's inventory through a dedicated inspector, so that I can organize items and modules for use during missions.
 
 #### Acceptance Criteria
 
-1. WHEN viewing a robot overlay THEN the system SHALL provide an InventoryInspector in the Systems tab
+1. WHEN viewing a mechanism overlay THEN the system SHALL provide an InventoryInspector in the Systems tab
 2. WHEN displaying the inventory inspector THEN the system SHALL show 10 slots by default
 3. WHEN the inventory accepts any game object THEN the system SHALL allow modules and items to be stored
 4. WHEN items share the same identifier and support stacking THEN the system SHALL stack them automatically
@@ -51,15 +51,15 @@ This feature implements a comprehensive robot overlay system that provides playe
 
 ### Requirement 4
 
-**User Story:** As a player, I want to program my robot through the overlay interface, so that I can define behaviors while viewing the robot's current configuration.
+**User Story:** As a player, I want to program my mechanism through the overlay interface, so that I can define behaviors while viewing the mechanism's current configuration.
 
 #### Acceptance Criteria
 
-1. WHEN viewing a robot overlay THEN the system SHALL provide a Programming tab containing a ProgramInspector
+1. WHEN viewing a mechanism overlay THEN the system SHALL provide a Programming tab containing a ProgramInspector
 2. WHEN a program is running THEN the system SHALL make the inspector read-only and highlight the currently executing block
 3. WHEN a program is running AND the player wants to edit THEN the system SHALL provide explicit messaging about the lock state and offer stop controls
 4. WHEN execution stops THEN the system SHALL unlock editing immediately
-5. WHEN making program changes THEN the system SHALL persist changes immediately to the robot's program store
+5. WHEN making program changes THEN the system SHALL persist changes immediately to the mechanism's program store
 6. WHEN chassis changes occur THEN the system SHALL update blocks that depend on missing modules to show warnings
 
 ### Requirement 5

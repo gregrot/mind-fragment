@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SimulationTelemetrySnapshot } from '../simulation/runtime/ecsBlackboard';
-import { MODULE_LIBRARY } from '../simulation/robot/modules/moduleLibrary';
+import { MODULE_LIBRARY } from '../simulation/mechanism/modules/moduleLibrary';
 import { simulationRuntime } from '../state/simulationRuntime';
 
 interface TelemetryValueMetadata {
@@ -8,7 +8,7 @@ interface TelemetryValueMetadata {
   description?: string;
 }
 
-export interface RobotTelemetrySignal {
+export interface MechanismTelemetrySignal {
   id: string;
   key: string;
   moduleId: string;
@@ -17,16 +17,16 @@ export interface RobotTelemetrySignal {
   description?: string;
 }
 
-export interface RobotTelemetryModuleGroup {
+export interface MechanismTelemetryModuleGroup {
   moduleId: string;
   label: string;
-  signals: RobotTelemetrySignal[];
+  signals: MechanismTelemetrySignal[];
 }
 
-export interface RobotTelemetryData {
-  robotId: string | null;
+export interface MechanismTelemetryData {
+  mechanismId: string | null;
   snapshot: SimulationTelemetrySnapshot;
-  modules: RobotTelemetryModuleGroup[];
+  modules: MechanismTelemetryModuleGroup[];
 }
 
 const MODULE_BLUEPRINT_MAP = MODULE_LIBRARY.reduce<Record<string, (typeof MODULE_LIBRARY)[number]>>(
@@ -69,7 +69,7 @@ const buildSignalDescription = (
   return undefined;
 };
 
-const extractModules = (snapshot: SimulationTelemetrySnapshot): RobotTelemetryModuleGroup[] => {
+const extractModules = (snapshot: SimulationTelemetrySnapshot): MechanismTelemetryModuleGroup[] => {
   const moduleIds = new Set<string>();
   for (const moduleId of Object.keys(snapshot.values ?? {})) {
     moduleIds.add(moduleId);
@@ -93,7 +93,7 @@ const extractModules = (snapshot: SimulationTelemetrySnapshot): RobotTelemetryMo
           label: buildSignalLabel(key, metadata),
           description: buildSignalDescription(metadata),
           value: entry?.value,
-        } satisfies RobotTelemetrySignal;
+        } satisfies MechanismTelemetrySignal;
       })
       .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -101,23 +101,23 @@ const extractModules = (snapshot: SimulationTelemetrySnapshot): RobotTelemetryMo
       moduleId,
       label,
       signals,
-    } satisfies RobotTelemetryModuleGroup;
+    } satisfies MechanismTelemetryModuleGroup;
   });
 };
 
 const EMPTY_TELEMETRY: SimulationTelemetrySnapshot = { values: {}, actions: {} };
 
-export const useRobotTelemetry = (): RobotTelemetryData => {
-  const [state, setState] = useState<{ robotId: string | null; snapshot: SimulationTelemetrySnapshot }>(() => {
-    const robotId = simulationRuntime.getSelectedRobot();
-    const snapshot = simulationRuntime.getTelemetrySnapshot(robotId ?? null);
-    return { robotId, snapshot };
+export const useMechanismTelemetry = (): MechanismTelemetryData => {
+  const [state, setState] = useState<{ mechanismId: string | null; snapshot: SimulationTelemetrySnapshot }>(() => {
+    const mechanismId = simulationRuntime.getSelectedMechanism();
+    const snapshot = simulationRuntime.getTelemetrySnapshot(mechanismId ?? null);
+    return { mechanismId, snapshot };
   });
 
   useEffect(
     () =>
-      simulationRuntime.subscribeTelemetry((snapshot, robotId) => {
-        setState((current) => ({ robotId: robotId ?? current.robotId ?? null, snapshot }));
+      simulationRuntime.subscribeTelemetry((snapshot, mechanismId) => {
+        setState((current) => ({ mechanismId: mechanismId ?? current.mechanismId ?? null, snapshot }));
       }),
     [],
   );
@@ -125,10 +125,10 @@ export const useRobotTelemetry = (): RobotTelemetryData => {
   const modules = useMemo(() => extractModules(state.snapshot), [state.snapshot]);
 
   return {
-    robotId: state.robotId,
+    mechanismId: state.mechanismId,
     snapshot: state.snapshot ?? EMPTY_TELEMETRY,
     modules,
   };
 };
 
-export default useRobotTelemetry;
+export default useMechanismTelemetry;

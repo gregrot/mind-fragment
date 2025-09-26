@@ -1,4 +1,4 @@
-import type { RobotModule, ResolvedRobotModuleDefinition } from './RobotModule';
+import type { MechanismModule, ResolvedMechanismModuleDefinition } from './MechanismModule';
 
 export const DEFAULT_SLOT = 'stack';
 
@@ -36,7 +36,7 @@ export interface ModuleSlotOccupant {
 
 export class ModuleStack {
   readonly capacity: number;
-  private readonly modules: RobotModule[] = [];
+  private readonly modules: MechanismModule[] = [];
   private readonly moduleMeta = new Map<string, ModuleMetadata>();
   private readonly capabilities = new Set<string>();
 
@@ -51,11 +51,11 @@ export class ModuleStack {
     }, 0);
   }
 
-  list(): RobotModule[] {
+  list(): MechanismModule[] {
     return [...this.modules];
   }
 
-  getModule(moduleId: string): RobotModule | null {
+  getModule(moduleId: string): MechanismModule | null {
     return this.modules.find((module) => module.definition.id === moduleId) ?? null;
   }
 
@@ -96,10 +96,10 @@ export class ModuleStack {
     });
   }
 
-  attach(module: RobotModule): ModuleMetadata {
+  attach(module: MechanismModule): ModuleMetadata {
     const { definition } = module;
     if (!definition?.id) {
-      throw new Error('Robot modules require a stable id.');
+      throw new Error('Mechanism modules require a stable id.');
     }
     if (this.moduleMeta.has(definition.id)) {
       throw new Error(`Module ${definition.id} is already attached.`);
@@ -122,7 +122,7 @@ export class ModuleStack {
     return meta;
   }
 
-  detach(moduleId: string): RobotModule | null {
+  detach(moduleId: string): MechanismModule | null {
     if (!this.moduleMeta.has(moduleId)) {
       return null;
     }
@@ -173,7 +173,7 @@ export class ModuleStack {
     return aId.localeCompare(bId);
   }
 
-  private createMeta(definition: ResolvedRobotModuleDefinition): ModuleMetadata {
+  private createMeta(definition: ResolvedMechanismModuleDefinition): ModuleMetadata {
     const slot = definition?.attachment?.slot ?? DEFAULT_SLOT;
     const requestedIndex = definition?.attachment?.index;
     const index = this.allocateIndex(slot, requestedIndex);
@@ -208,7 +208,7 @@ export class ModuleStack {
     }
   }
 
-  private assertDependenciesSatisfied(definition: ResolvedRobotModuleDefinition, meta: ModuleMetadata): void {
+  private assertDependenciesSatisfied(definition: ResolvedMechanismModuleDefinition, meta: ModuleMetadata): void {
     const available = new Set(this.capabilities);
     for (const capability of meta.provides) {
       available.add(capability);

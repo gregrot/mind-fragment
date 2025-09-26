@@ -40,9 +40,9 @@
 
 :root {
   color-scheme: dark;
-  --font-display: 'Orbitron', 'Rajdhani', 'Segoe UI', Roboto, sans-serif;
-  --font-sans: 'Rajdhani', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Share Tech Mono', 'Roboto Mono', monospace;
+  --font-display: 'Orbitron', 'Rajdhani', 'Segoe UI', Mechanismo, sans-serif;
+  --font-sans: 'Rajdhani', 'Segoe UI', Mechanismo, sans-serif;
+  --font-mono: 'Share Tech Mono', 'Mechanismo Mono', monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-bold: 700;

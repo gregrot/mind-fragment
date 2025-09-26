@@ -32,7 +32,7 @@ test.describe('resource scanning and gathering', () => {
       window.localStorage.setItem('mf.skipOnboarding', '1');
     });
     await page.goto('/');
-    await page.getByTestId('select-robot').last().click();
+    await page.getByTestId('select-mechanism').last().click();
     await expect(page.getByTestId('entity-overlay')).toBeVisible();
 
     const stopButton = page.getByTestId('stop-program');
@@ -51,6 +51,6 @@ test.describe('resource scanning and gathering', () => {
 
     await expect(page.getByText('Routine completed')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('tab', { name: 'Info' }).click();
-    await expect(page.getByRole('tabpanel', { name: 'Info' })).toContainText('Robot MF-01');
+    await expect(page.getByRole('tabpanel', { name: 'Info' })).toContainText('Mechanism MF-01');
   });
 });

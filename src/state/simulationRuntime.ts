@@ -1,5 +1,5 @@
 import type { RootScene } from '../simulation/rootScene';
-import type { CompiledProgram } from '../simulation/runtime/blockProgram';
+import type { CompiledProgram, Diagnostic } from '../simulation/runtime/blockProgram';
 import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
 import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
 import { DEFAULT_ROBOT_ID } from '../simulation/runtime/simulationWorld';
@@ -179,6 +179,19 @@ class SimulationRuntime {
     if (this.scene) {
       this.scene.stopProgram(targetRobotId);
     } else {
+      this.updateStatus(targetRobotId, 'idle');
+    }
+  }
+
+  reportCompileDiagnostics(robotId: string, diagnostics: Diagnostic[]): void {
+    const targetRobotId = this.normaliseRobotId(robotId);
+    const hasErrors = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
+    if (hasErrors) {
+      this.pendingPrograms.delete(targetRobotId);
+      this.updateStatus(targetRobotId, 'error');
+      return;
+    }
+    if (this.statusByRobot.get(targetRobotId) === 'error') {
       this.updateStatus(targetRobotId, 'idle');
     }
   }

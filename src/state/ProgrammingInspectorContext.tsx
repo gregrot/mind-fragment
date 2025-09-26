@@ -5,6 +5,13 @@ import type {
   DropTarget,
   WorkspaceState,
 } from '../types/blocks';
+import type { Diagnostic } from '../simulation/runtime/blockProgram';
+
+export interface RunProgramResult {
+  diagnostics: Diagnostic[];
+  stepCount: number;
+  blocked: boolean;
+}
 
 interface ProgrammingInspectorContextValue {
   workspace: WorkspaceState;
@@ -13,6 +20,8 @@ interface ProgrammingInspectorContextValue {
   onUpdateBlock: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   onRemoveBlock: (instanceId: string) => void;
   robotId: string;
+  runProgram: () => RunProgramResult;
+  diagnostics: Diagnostic[];
 }
 
 const ProgrammingInspectorContext = createContext<ProgrammingInspectorContextValue | undefined>(

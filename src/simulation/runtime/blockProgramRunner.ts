@@ -14,7 +14,7 @@ import type {
 } from './blockProgram';
 import { SimpleNavigator } from '../robot/modules/navigator';
 
-export type ProgramRunnerStatus = 'idle' | 'running' | 'completed';
+export type ProgramRunnerStatus = 'idle' | 'running' | 'completed' | 'error';
 
 const MOVEMENT_MODULE_ID = 'core.movement';
 const SCANNER_MODULE_ID = 'sensor.survey';

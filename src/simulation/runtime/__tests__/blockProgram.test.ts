@@ -12,11 +12,12 @@ const extractLiteral = (value: number | null | undefined): number => {
 };
 
 describe('compileWorkspaceProgram', () => {
-  it('warns when no start block is present', () => {
+  it('reports an error when no start block is present', () => {
     const result = compileWorkspaceProgram(buildWorkspace(createBlockInstance('move')));
 
     expect(result.program.instructions).toHaveLength(0);
-    expect(result.diagnostics.some((diag) => diag.message.includes('When Started'))).toBe(true);
+    const error = result.diagnostics.find((diag) => diag.message.includes('When Started'));
+    expect(error?.severity).toBe('error');
   });
 
   it('compiles a simple move routine with literal metadata', () => {

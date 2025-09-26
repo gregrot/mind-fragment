@@ -7,12 +7,14 @@ import type { WorkspaceState } from '../../../types/blocks';
 import type { EntityOverlayData } from '../../../types/overlay';
 import type { SlotSchema } from '../../../types/slots';
 import type { EntityId } from '../../../simulation/ecs/world';
+import type { Diagnostic } from '../../../simulation/runtime/blockProgram';
+import type { ProgramRunnerStatus } from '../../../simulation/runtime/blockProgramRunner';
 
 vi.mock('../../../hooks/useRobotTelemetry', () => ({
   default: () => ({ robotId: 'MF-01', snapshot: { values: {}, actions: {} }, modules: [] }),
 }));
 
-let mockStatus: 'idle' | 'running' | 'completed' = 'idle';
+let mockStatus: ProgramRunnerStatus = 'idle';
 const stopProgramMock = vi.fn();
 
 vi.mock('../../../hooks/useSimulationRuntime', () => ({
@@ -55,7 +57,11 @@ const createWorkspaceWithMoveBlock = (): WorkspaceState => {
   return [start];
 };
 
-const renderInspector = (entity: EntityOverlayData, workspace: WorkspaceState) => {
+const renderInspector = (
+  entity: EntityOverlayData,
+  workspace: WorkspaceState,
+  diagnostics: Diagnostic[] = [],
+) => {
   const contextValue = {
     workspace,
     onDrop: vi.fn(),
@@ -63,6 +69,8 @@ const renderInspector = (entity: EntityOverlayData, workspace: WorkspaceState) =
     onUpdateBlock: vi.fn(),
     onRemoveBlock: vi.fn(),
     robotId: entity.robotId ?? 'MF-01',
+    runProgram: vi.fn(() => ({ diagnostics: [], stepCount: 0, blocked: false })),
+    diagnostics,
   };
 
   return render(
@@ -113,5 +121,22 @@ describe('RobotProgrammingInspector', () => {
     expect(screen.getByText(/locomotion thrusters mk1/i)).toBeInTheDocument();
     const moveBlock = screen.getByTestId('block-move');
     expect(moveBlock).toHaveAttribute('data-state-warning', 'true');
+  });
+
+  it('displays compile errors inline with guidance to resolve them', () => {
+    mockStatus = 'idle';
+    const workspace = createWorkspaceWithMoveBlock();
+    const entity = createEntity();
+    const diagnostics: Diagnostic[] = [
+      { severity: 'error', message: 'Add a "When Started" block to trigger the routine.' },
+    ];
+
+    renderInspector(entity, workspace, diagnostics);
+
+    const errorPanel = screen.getByTestId('compile-error-panel');
+    expect(errorPanel).toBeInTheDocument();
+    expect(errorPanel).toHaveTextContent(/resolve compile errors/i);
+    expect(errorPanel).toHaveTextContent(/fix the issues below/i);
+    expect(errorPanel).toHaveTextContent(/When Started/i);
   });
 });

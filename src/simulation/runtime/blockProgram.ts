@@ -1016,7 +1016,7 @@ export const compileWorkspaceProgram = (workspace: WorkspaceState): CompilationR
   const startBlocks = workspace.filter((block) => block.type === 'start');
   if (startBlocks.length === 0) {
     diagnostics.push({
-      severity: 'warning',
+      severity: 'error',
       message: 'Add a "When Started" block to trigger the routine.',
     });
     return { program: { instructions: [] }, diagnostics };

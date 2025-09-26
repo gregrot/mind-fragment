@@ -1,4 +1,6 @@
 import type { EntityId } from '../simulation/ecs/world';
+import type { ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
+import type { Diagnostic } from '../simulation/runtime/blockProgram';
 import type { SlotSchema } from './slots';
 
 export type OverlayType = 'complex' | 'simple';
@@ -22,6 +24,8 @@ export interface EntityOverlayData {
   programState?: {
     isRunning: boolean;
     activeBlockId?: string | null;
+    status?: ProgramRunnerStatus;
+    diagnostics?: Diagnostic[];
   };
   properties?: Record<string, unknown>;
 }

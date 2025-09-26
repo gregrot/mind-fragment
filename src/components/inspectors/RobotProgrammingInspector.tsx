@@ -60,8 +60,16 @@ const gatherModuleRequirements = (
 };
 
 const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
-  const { workspace, onDrop, onTouchDrop, onUpdateBlock, onRemoveBlock, robotId } =
-    useProgrammingInspector();
+  const {
+    workspace,
+    onDrop,
+    onTouchDrop,
+    onUpdateBlock,
+    onRemoveBlock,
+    robotId,
+    runProgram,
+    diagnostics,
+  } = useProgrammingInspector();
   const { status, stopProgram } = useSimulationRuntime(robotId);
 
   const installedModules = useMemo(() => {
@@ -124,6 +132,8 @@ const RobotProgrammingInspector = ({ entity }: InspectorProps): JSX.Element => {
       moduleWarnings={moduleWarnings}
       activeBlockId={activeBlockId}
       warningBlockIds={warningBlockIds}
+      diagnostics={diagnostics}
+      onRunProgram={runProgram}
     />
   );
 };

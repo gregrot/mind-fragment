@@ -15,6 +15,8 @@ import type { SlotSchema } from '../../types/slots';
 import type { ModuleBlueprint } from '../../simulation/robot/modules/moduleLibrary';
 import { MODULE_LIBRARY } from '../../simulation/robot/modules/moduleLibrary';
 import styles from '../../styles/ChassisInspector.module.css';
+import useEntityPersistenceState from '../../hooks/useEntityPersistenceState';
+import describeError from '../../utils/describeError';
 
 const MODULE_BLUEPRINT_MAP = new Map<string, ModuleBlueprint>(
   MODULE_LIBRARY.map((module) => [module.id, module]),
@@ -201,6 +203,12 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
 
   const initialSlots = useMemo(() => sortSlots(entity.chassis?.slots ?? []), [entity.chassis?.slots]);
   const [slots, setSlots] = useState<SlotSchema[]>(initialSlots);
+
+  const persistenceState = useEntityPersistenceState(entity.entityId);
+  const hasError = persistenceState.status === 'error';
+  const errorMessage = hasError
+    ? describeError(persistenceState.error, 'An unexpected error occurred.')
+    : null;
 
   useEffect(() => {
     setSlots(sortSlots(entity.chassis?.slots ?? []));
@@ -414,6 +422,10 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
     [cancelDrag, createPreview, drop, entity.entityId, startDrag, updatePointer],
   );
 
+  const handleRetrySave = useCallback(() => {
+    manager.retryPersistence(entity.entityId);
+  }, [entity.entityId, manager]);
+
   if (!entity.chassis) {
     return (
       <section className={styles.inspector} aria-label="Chassis inspector">
@@ -428,6 +440,17 @@ const ChassisInspector = ({ entity }: InspectorProps): JSX.Element => {
         <h3 className={styles.title}>Chassis Configuration</h3>
         <p className={styles.summary}>Arrange installed modules and review their capabilities.</p>
       </header>
+      {hasError ? (
+        <div className={styles.persistenceError} role="alert" data-testid="chassis-persistence-error">
+          <div className={styles.persistenceErrorMessage}>
+            <p className={styles.persistenceErrorTitle}>Changes could not be saved.</p>
+            <p className={styles.persistenceErrorDetails}>{errorMessage}</p>
+          </div>
+          <button type="button" className={styles.persistenceRetry} onClick={handleRetrySave}>
+            Retry save
+          </button>
+        </div>
+      ) : null}
       <div className={styles.grid}>
         {slots.map((slot) => {
           const blueprint = resolveBlueprint(slot.occupantId);

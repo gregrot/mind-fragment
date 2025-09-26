@@ -6,6 +6,8 @@ import type { InspectorDefinition } from '../overlay/inspectorRegistry';
 import type { InspectorTabId } from '../types/overlay';
 import styles from '../styles/SimulationOverlay.module.css';
 import DragPreviewLayer from './DragPreviewLayer';
+import useEntityPersistenceState from '../hooks/useEntityPersistenceState';
+import describeError from '../utils/describeError';
 
 const TAB_LABELS: Record<InspectorTabId, string> = {
   systems: 'Systems',
@@ -22,15 +24,17 @@ interface EntityOverlayProps {
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 const EntityOverlay = ({ onClose }: EntityOverlayProps): JSX.Element | null => {
-  const {
-    isOpen,
-    selectedEntityId,
-    activeTab,
-    setActiveTab,
-    getEntityData,
-  } = useEntityOverlayManager();
+  const manager = useEntityOverlayManager();
+  const { isOpen, selectedEntityId, activeTab, setActiveTab, getEntityData, retryPersistence } = manager;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  const persistenceState = useEntityPersistenceState(selectedEntityId);
+  const isSaving = persistenceState.status === 'saving';
+  const hasError = persistenceState.status === 'error';
+  const errorMessage = hasError
+    ? describeError(persistenceState.error, 'An unexpected error occurred.')
+    : null;
 
   const entity = useMemo(() => {
     if (selectedEntityId === null) {
@@ -115,6 +119,13 @@ const EntityOverlay = ({ onClose }: EntityOverlayProps): JSX.Element | null => {
     },
     [setActiveTab],
   );
+
+  const handleRetrySave = useCallback(() => {
+    if (selectedEntityId === null) {
+      return;
+    }
+    retryPersistence(selectedEntityId);
+  }, [retryPersistence, selectedEntityId]);
 
   const handleTabKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLButtonElement>, tab: InspectorTabId) => {
@@ -263,10 +274,29 @@ const EntityOverlay = ({ onClose }: EntityOverlayProps): JSX.Element | null => {
               {entity.description ?? 'Configure chassis systems, inventory, and behaviour.'}
             </p>
           </div>
-          <button type="button" className={styles.close} onClick={onClose}>
-            Close
-          </button>
+          <div className={styles.headerActions}>
+            {isSaving ? (
+              <p className={styles.persistenceStatus} role="status" aria-live="polite">
+                <span aria-hidden="true" className={styles.persistencePulse} />
+                Saving changes…
+              </p>
+            ) : null}
+            <button type="button" className={styles.close} onClick={onClose}>
+              Close
+            </button>
+          </div>
         </header>
+        {hasError ? (
+          <div className={styles.persistenceBanner} role="alert" data-testid="entity-overlay-persistence-error">
+            <div className={styles.persistenceBannerMessage}>
+              <p className={styles.persistenceBannerTitle}>Changes could not be saved.</p>
+              <p className={styles.persistenceBannerDetails}>{errorMessage}</p>
+            </div>
+            <button type="button" className={styles.persistenceRetry} onClick={handleRetrySave}>
+              Retry save
+            </button>
+          </div>
+        ) : null}
         <nav className={styles.tabList} role="tablist" aria-label="Entity inspectors">
           {TAB_ORDER.filter((tab) => availableTabs.includes(tab)).map((tab) => (
             <button

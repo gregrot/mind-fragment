@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ChassisInspector from '../ChassisInspector';
 import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
 import { DragProvider, useDragContext } from '../../../state/DragContext';
@@ -8,6 +8,7 @@ import type { SlotSchema } from '../../../types/slots';
 import type { DragSession, DropTarget } from '../../../types/drag';
 import type { EntityId } from '../../../simulation/ecs/world';
 import { useEffect } from 'react';
+import type { OverlayPersistenceAdapter } from '../../../state/overlayPersistence';
 
 const createSlot = (id: string, index: number, occupantId: string | null): SlotSchema => ({
   id,
@@ -87,9 +88,9 @@ const ManagerCapture = (): null => {
   return null;
 };
 
-const renderInspector = (entity: EntityOverlayData) =>
+const renderInspector = (entity: EntityOverlayData, adapter?: OverlayPersistenceAdapter) =>
   render(
-    <EntityOverlayManagerProvider>
+    <EntityOverlayManagerProvider persistenceAdapter={adapter}>
       <DragProvider>
         <ManagerCapture />
         <DragController />
@@ -282,5 +283,86 @@ describe('ChassisInspector', () => {
     const validation = target.accepts(session);
     expect(validation.canDrop).toBe(false);
     expect(validation.reason).toBe('module-required');
+  });
+
+  it('displays inline retry controls when persistence fails and reapplies edits on retry', async () => {
+    const slots = [
+      createSlot('core-0', 0, 'core.movement'),
+      createSlot('extension-0', 1, 'arm.manipulator'),
+      createSlot('utility-0', 2, null),
+    ];
+    const entity = createEntity(slots);
+
+    const attempts: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+    const adapter: OverlayPersistenceAdapter = {
+      saveEntity: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            attempts.push({ resolve, reject });
+          }),
+      ),
+      removeEntity: vi.fn(async () => {}),
+    };
+
+    renderInspector(entity, adapter);
+
+    const targetId = `chassis-slot-${entity.entityId}-extension-0`;
+    const target = await waitForDropTarget(targetId);
+    const session = createModuleSession(entity, 'core-0', 'core.movement');
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(true);
+
+    act(() => {
+      target.onDrop(session, {
+        target,
+        snapPosition: null,
+        pointerPosition: null,
+        validation,
+      });
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(1);
+    });
+
+    const failure = new Error('save failed');
+    await act(async () => {
+      const attempt = attempts.shift();
+      expect(attempt).toBeDefined();
+      attempt?.reject(failure);
+      await Promise.resolve();
+    });
+
+    const errorBanner = await screen.findByTestId('chassis-persistence-error');
+    expect(errorBanner).toHaveTextContent('Changes could not be saved.');
+    expect(errorBanner).toHaveTextContent('save failed');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chassis-slot-core-0')).toHaveTextContent('Precision Manipulator Rig');
+      expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Locomotion Thrusters Mk1');
+    });
+
+    const retryButton = screen.getByRole('button', { name: 'Retry save' });
+    await act(async () => {
+      fireEvent.click(retryButton);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      const retryAttempt = attempts.shift();
+      expect(retryAttempt).toBeDefined();
+      retryAttempt?.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('chassis-persistence-error')).toBeNull();
+      expect(screen.getByTestId('chassis-slot-core-0')).toHaveTextContent('Precision Manipulator Rig');
+      expect(screen.getByTestId('chassis-slot-extension-0')).toHaveTextContent('Locomotion Thrusters Mk1');
+    });
   });
 });

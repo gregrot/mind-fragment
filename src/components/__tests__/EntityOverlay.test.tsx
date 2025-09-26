@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import EntityOverlay from '../EntityOverlay';
 import {
@@ -11,6 +11,7 @@ import type { EntityId } from '../../simulation/ecs/world';
 import { registerInspector } from '../../overlay/inspectorRegistry';
 import EntityInfoInspector from '../inspectors/EntityInfoInspector';
 import { DragProvider } from '../../state/DragContext';
+import type { OverlayPersistenceAdapter } from '../../state/overlayPersistence';
 
 const createOverlayData = (): EntityOverlayData => ({
   entityId: 5 as EntityId,
@@ -42,10 +43,18 @@ const OverlayHarness = ({ onClose }: { onClose: () => void }): JSX.Element => {
   return <EntityOverlay onClose={onClose} />;
 };
 
-const renderOverlay = (onClose: () => void) =>
+let managerApi: ReturnType<typeof useEntityOverlayManager> | null = null;
+
+const ManagerCapture = (): null => {
+  managerApi = useEntityOverlayManager();
+  return null;
+};
+
+const renderOverlay = (onClose: () => void, adapter?: OverlayPersistenceAdapter) =>
   render(
-    <EntityOverlayManagerProvider>
+    <EntityOverlayManagerProvider persistenceAdapter={adapter}>
       <DragProvider>
+        <ManagerCapture />
         <OverlayHarness onClose={onClose} />
       </DragProvider>
     </EntityOverlayManagerProvider>,
@@ -53,6 +62,7 @@ const renderOverlay = (onClose: () => void) =>
 
 afterEach(() => {
   cleanup();
+  managerApi = null;
 });
 
 describe('EntityOverlay', () => {
@@ -128,5 +138,70 @@ describe('EntityOverlay', () => {
     expect(screen.getByText('320')).toBeInTheDocument();
     expect(screen.getByText('Composition')).toBeInTheDocument();
     expect(screen.getByText('Iron, Nickel')).toBeInTheDocument();
+  });
+
+  it('surfaces persistence failures with retry controls scoped to the active entity', async () => {
+    const attempts: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+    const adapter: OverlayPersistenceAdapter = {
+      saveEntity: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            attempts.push({ resolve, reject });
+          }),
+      ),
+      removeEntity: vi.fn(async () => {}),
+    };
+
+    renderOverlay(vi.fn(), adapter);
+
+    await screen.findByTestId('entity-overlay');
+    expect(managerApi).not.toBeNull();
+
+    await act(async () => {
+      managerApi?.upsertEntityData({ ...createOverlayData(), description: 'Updated description' });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(1);
+    });
+
+    await screen.findByText('Saving changes…');
+
+    const failure = new Error('save failed');
+    await act(async () => {
+      const attempt = attempts.shift();
+      expect(attempt).toBeDefined();
+      attempt?.reject(failure);
+      await Promise.resolve();
+    });
+
+    const banner = await screen.findByTestId('entity-overlay-persistence-error');
+    expect(banner).toHaveTextContent('Changes could not be saved.');
+    expect(banner).toHaveTextContent('save failed');
+
+    const retryButton = screen.getByRole('button', { name: 'Retry save' });
+    await act(async () => {
+      fireEvent.click(retryButton);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(2);
+    });
+
+    await screen.findByText('Saving changes…');
+
+    await act(async () => {
+      const retryAttempt = attempts.shift();
+      expect(retryAttempt).toBeDefined();
+      retryAttempt?.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('entity-overlay-persistence-error')).toBeNull();
+      expect(screen.queryByText('Saving changes…')).toBeNull();
+    });
   });
 });

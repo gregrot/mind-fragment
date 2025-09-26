@@ -1,6 +1,6 @@
 import type { EntityId } from '../simulation/ecs/world';
-import { simulationRuntime } from './simulationRuntime';
 import type { EntityOverlayData } from '../types/overlay';
+import { chassisState, inventoryState } from './runtime';
 
 export interface OverlayPersistenceAdapter {
   saveEntity: (next: EntityOverlayData, previous: EntityOverlayData | undefined) => Promise<void>;
@@ -13,10 +13,10 @@ const defaultAdapter: OverlayPersistenceAdapter = {
       return;
     }
     if (next.chassis) {
-      simulationRuntime.applyChassisOverlayUpdate(next.chassis);
+      chassisState.applyOverlayUpdate(next.chassis);
     }
     if (next.inventory) {
-      simulationRuntime.applyInventoryOverlayUpdate(next.inventory);
+      inventoryState.applyOverlayUpdate(next.inventory);
     }
   },
   async removeEntity() {

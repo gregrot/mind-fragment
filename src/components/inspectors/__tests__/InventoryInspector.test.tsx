@@ -1,5 +1,5 @@
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
 import InventoryInspector from '../InventoryInspector';
 import { EntityOverlayManagerProvider, useEntityOverlayManager } from '../../../state/EntityOverlayManager';
@@ -8,6 +8,7 @@ import type { EntityOverlayData } from '../../../types/overlay';
 import type { SlotSchema } from '../../../types/slots';
 import type { DragSession, DropTarget } from '../../../types/drag';
 import type { EntityId } from '../../../simulation/ecs/world';
+import type { OverlayPersistenceAdapter } from '../../../state/overlayPersistence';
 
 const createSlot = (
   id: string,
@@ -97,9 +98,9 @@ const ManagerCapture = (): null => {
   return null;
 };
 
-const renderInspector = (entity: EntityOverlayData) =>
+const renderInspector = (entity: EntityOverlayData, adapter?: OverlayPersistenceAdapter) =>
   render(
-    <EntityOverlayManagerProvider>
+    <EntityOverlayManagerProvider persistenceAdapter={adapter}>
       <DragProvider>
         <ManagerCapture />
         <DragController />
@@ -319,5 +320,85 @@ describe('InventoryInspector', () => {
     const validation = target.accepts(session);
     expect(validation.canDrop).toBe(false);
     expect(validation.reason).toBe('incompatible-item');
+  });
+
+  it('surfaces inline retry actions when inventory persistence fails', async () => {
+    const slots = [
+      createSlot('cargo-0', 0, 'resource.scrap', 5),
+      createSlot('cargo-1', 1, null),
+    ];
+    const entity = createEntity(slots);
+
+    const attempts: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+    const adapter: OverlayPersistenceAdapter = {
+      saveEntity: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            attempts.push({ resolve, reject });
+          }),
+      ),
+      removeEntity: vi.fn(async () => {}),
+    };
+
+    renderInspector(entity, adapter);
+
+    const targetId = `inventory-slot-${entity.entityId}-cargo-1`;
+    const target = await waitForDropTarget(targetId);
+    const session = createInventorySession(entity, 'cargo-0', 'resource.scrap', 5);
+    const validation = target.accepts(session);
+    expect(validation.canDrop).toBe(true);
+
+    act(() => {
+      target.onDrop(session, {
+        target,
+        snapPosition: null,
+        pointerPosition: null,
+        validation,
+      });
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(1);
+    });
+
+    const failure = new Error('save failed');
+    await act(async () => {
+      const attempt = attempts.shift();
+      expect(attempt).toBeDefined();
+      attempt?.reject(failure);
+      await Promise.resolve();
+    });
+
+    const errorBanner = await screen.findByTestId('inventory-persistence-error');
+    expect(errorBanner).toHaveTextContent('Changes could not be saved.');
+    expect(errorBanner).toHaveTextContent('save failed');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inventory-slot-cargo-0')).toHaveTextContent('Empty slot');
+      expect(screen.getByTestId('inventory-slot-cargo-1')).toHaveTextContent('Scrap');
+    });
+
+    const retryButton = screen.getByRole('button', { name: 'Retry save' });
+    await act(async () => {
+      retryButton.click();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(adapter.saveEntity).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      const retryAttempt = attempts.shift();
+      expect(retryAttempt).toBeDefined();
+      retryAttempt?.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('inventory-persistence-error')).toBeNull();
+      expect(screen.getByTestId('inventory-slot-cargo-0')).toHaveTextContent('Empty slot');
+      expect(screen.getByTestId('inventory-slot-cargo-1')).toHaveTextContent('Scrap');
+    });
   });
 });

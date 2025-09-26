@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
-import type { WorkspaceState } from '../types/blocks';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Diagnostic } from '../simulation/runtime/blockProgram';
-import { compileWorkspaceProgram } from '../simulation/runtime/blockProgram';
 import { useSimulationRuntime } from '../hooks/useSimulationRuntime';
 import styles from '../styles/RuntimeControls.module.css';
+import type { RunProgramResult } from '../state/ProgrammingInspectorContext';
 
 interface RuntimeControlsProps {
-  workspace: WorkspaceState;
   robotId: string;
+  onRun: () => RunProgramResult;
+  diagnostics: Diagnostic[];
 }
 
 const formatStatus = (status: string): string => {
@@ -16,33 +16,50 @@ const formatStatus = (status: string): string => {
       return 'Executing routine';
     case 'completed':
       return 'Routine completed';
+    case 'error':
+      return 'Compile failed';
     default:
       return 'Idle';
   }
 };
 
-const RuntimeControls = ({ workspace, robotId }: RuntimeControlsProps): JSX.Element => {
-  const { status, runProgram, stopProgram } = useSimulationRuntime(robotId);
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+const RuntimeControls = ({ robotId, onRun, diagnostics }: RuntimeControlsProps): JSX.Element => {
+  const { status, stopProgram } = useSimulationRuntime(robotId);
+  const [footerDiagnostics, setFooterDiagnostics] = useState<Diagnostic[]>(() =>
+    diagnostics.filter((diagnostic) => diagnostic.severity !== 'error'),
+  );
 
   const handleRun = useCallback(() => {
-    const result = compileWorkspaceProgram(workspace);
-    const stepCount = result.program.instructions.length;
-    const infoMessage = stepCount
-      ? [{
-          severity: 'info' as const,
-          message: `Queued ${stepCount} ${stepCount === 1 ? 'step' : 'steps'} for execution.`,
-        }]
-      : [];
-    setDiagnostics(result.diagnostics.length > 0 ? result.diagnostics : infoMessage);
-    runProgram(result.program);
-  }, [runProgram, workspace]);
+    const result = onRun();
+    const nonBlockingDiagnostics = result.diagnostics.filter((diagnostic) => diagnostic.severity !== 'error');
+    if (nonBlockingDiagnostics.length > 0) {
+      setFooterDiagnostics(nonBlockingDiagnostics);
+      return;
+    }
+    if (!result.blocked) {
+      const stepCount = result.stepCount;
+      if (stepCount > 0) {
+        setFooterDiagnostics([
+          {
+            severity: 'info',
+            message: `Queued ${stepCount} ${stepCount === 1 ? 'step' : 'steps'} for execution.`,
+          },
+        ]);
+        return;
+      }
+    }
+    setFooterDiagnostics([]);
+  }, [onRun]);
 
   const handleStop = useCallback(() => {
     stopProgram();
   }, [stopProgram]);
 
   const statusLabel = useMemo(() => formatStatus(status), [status]);
+
+  useEffect(() => {
+    setFooterDiagnostics(diagnostics.filter((diagnostic) => diagnostic.severity !== 'error'));
+  }, [diagnostics]);
 
   return (
     <div className={styles.controls} data-testid="runtime-controls">
@@ -69,16 +86,20 @@ const RuntimeControls = ({ workspace, robotId }: RuntimeControlsProps): JSX.Elem
       <p className={styles.status}>
         <strong>Status:</strong> {statusLabel}
       </p>
-      {diagnostics.length > 0 ? (
+      {footerDiagnostics.length > 0 ? (
         <ul className={styles.diagnostics}>
-          {diagnostics.map((diagnostic, index) => (
+          {footerDiagnostics.map((diagnostic, index) => (
             <li
               key={`${diagnostic.message}-${index}`}
               className={styles.diagnosticItem}
               data-severity={diagnostic.severity}
             >
               <span className={styles.diagnosticIcon} aria-hidden="true">
-                {diagnostic.severity === 'warning' ? '⚠️' : 'ℹ️'}
+                {diagnostic.severity === 'warning'
+                  ? '⚠️'
+                  : diagnostic.severity === 'error'
+                    ? '⛔️'
+                    : 'ℹ️'}
               </span>
               <span>{diagnostic.message}</span>
             </li>

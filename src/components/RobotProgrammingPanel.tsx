@@ -6,6 +6,8 @@ import { BLOCK_LIBRARY } from '../blocks/library';
 import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
 import styles from '../styles/RobotProgrammingPanel.module.css';
 import useRobotTelemetry from '../hooks/useRobotTelemetry';
+import type { Diagnostic } from '../simulation/runtime/blockProgram';
+import type { RunProgramResult } from '../state/ProgrammingInspectorContext';
 
 interface RobotProgrammingPanelProps {
   workspace: WorkspaceState;
@@ -20,6 +22,8 @@ interface RobotProgrammingPanelProps {
   moduleWarnings?: string[];
   activeBlockId?: string | null;
   warningBlockIds?: Set<string>;
+  diagnostics: Diagnostic[];
+  onRunProgram: () => RunProgramResult;
 }
 
 const RobotProgrammingPanel = ({
@@ -35,6 +39,8 @@ const RobotProgrammingPanel = ({
   moduleWarnings,
   activeBlockId,
   warningBlockIds,
+  diagnostics,
+  onRunProgram,
 }: RobotProgrammingPanelProps): JSX.Element => {
   const paletteRef = useRef<HTMLDivElement | null>(null);
   const telemetry = useRobotTelemetry();
@@ -42,6 +48,7 @@ const RobotProgrammingPanel = ({
     ?? 'The routine is executing. Stop the program to edit blocks.';
   const hasWarnings = Array.isArray(moduleWarnings) && moduleWarnings.length > 0;
   const warningItems = moduleWarnings ?? [];
+  const blockingDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
 
   useLayoutEffect(() => {
     const paletteList = paletteRef.current?.querySelector('[data-testid=\"block-palette-list\"]') as HTMLElement | null;
@@ -98,6 +105,19 @@ const RobotProgrammingPanel = ({
               </ul>
             </div>
           ) : null}
+          {blockingDiagnostics.length > 0 ? (
+            <div className={styles.errorPanel} role="alert" data-testid="compile-error-panel">
+              <h5 className={styles.errorTitle}>Resolve compile errors</h5>
+              <p className={styles.errorDescription}>
+                Fix the issues below before running the routine again. Adjust the affected blocks and retry.
+              </p>
+              <ul className={styles.errorList}>
+                {blockingDiagnostics.map((diagnostic, index) => (
+                  <li key={`${diagnostic.message}-${index}`}>{diagnostic.message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className={styles.workspaceSurface}>
             {isReadOnly ? <div className={styles.readOnlyOverlay} aria-hidden="true" /> : null}
             <Workspace
@@ -114,7 +134,7 @@ const RobotProgrammingPanel = ({
         </section>
       </div>
       <footer className={styles.footer}>
-        <RuntimeControls workspace={workspace} robotId={robotId} />
+        <RuntimeControls robotId={robotId} onRun={onRunProgram} diagnostics={diagnostics} />
         <p className={styles.autosaveHint}>Changes save automatically while you edit.</p>
       </footer>
     </div>

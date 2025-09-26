@@ -531,4 +531,41 @@ describe('block workspace drag and drop', () => {
 
     runSpy.mockRestore();
   });
+
+  it('persists compile errors when navigating away from the programming tab', async () => {
+    await renderAppWithOverlay();
+
+    const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
+    const runButtons = screen.getAllByTestId('run-program');
+    const targetRun = runButtons[runButtons.length - 1];
+    fireEvent.click(targetRun);
+
+    const errorPanel = await screen.findByTestId('compile-error-panel');
+    expect(errorPanel).toHaveTextContent(/resolve compile errors/i);
+    expect(simulationRuntime.getStatus('MF-01')).toBe('error');
+    expect(runSpy).not.toHaveBeenCalled();
+
+    const systemsTab = screen.getAllByRole('tab', { name: 'Systems' }).pop();
+    if (!systemsTab) {
+      throw new Error('Expected Systems tab to be present.');
+    }
+    fireEvent.click(systemsTab);
+    await waitFor(() => {
+      expect(systemsTab).toHaveAttribute('aria-selected', 'true');
+    });
+
+    const programmingTab = screen.getAllByRole('tab', { name: 'Programming' }).pop();
+    if (!programmingTab) {
+      throw new Error('Expected Programming tab to be present.');
+    }
+    fireEvent.click(programmingTab);
+    await waitFor(() => {
+      expect(programmingTab).toHaveAttribute('aria-selected', 'true');
+    });
+
+    const restoredPanel = await screen.findByTestId('compile-error-panel');
+    expect(restoredPanel).toBeInTheDocument();
+    expect(restoredPanel).toHaveTextContent(/When Started/i);
+    runSpy.mockRestore();
+  });
 });

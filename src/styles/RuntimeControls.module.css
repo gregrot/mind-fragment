@@ -84,6 +84,12 @@
   color: var(--color-text-warning);
 }
 
+.diagnosticItem[data-severity='error'] {
+  border-left-color: var(--color-accent-pink);
+  background: rgba(255, 108, 249, 0.12);
+  color: var(--color-text-primary);
+}
+
 .diagnosticIcon {
   font-size: 1rem;
 }

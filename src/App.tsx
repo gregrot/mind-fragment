@@ -10,6 +10,7 @@ import {
 } from './state/EntityOverlayManager';
 import { DragProvider } from './state/DragContext';
 import { ProgrammingInspectorProvider } from './state/ProgrammingInspectorContext';
+import type { RunProgramResult } from './state/ProgrammingInspectorContext';
 import EntityOverlay from './components/EntityOverlay';
 import { ensureDefaultInspectorsRegistered } from './overlay/defaultInspectors';
 import type { WorkspaceState } from './types/blocks';
@@ -20,6 +21,7 @@ import type { InventorySnapshot } from './simulation/robot/inventory';
 import styles from './styles/App.module.css';
 import type { SlotSchema } from './types/slots';
 import type { ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
+import { compileWorkspaceProgram, type Diagnostic } from './simulation/runtime/blockProgram';
 
 const DEFAULT_ROBOT_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
@@ -32,6 +34,28 @@ interface InventoryOverlayView {
   capacity: number;
   slots: SlotSchema[];
 }
+
+const areDiagnosticsEqual = (
+  a: Diagnostic[] | undefined,
+  b: Diagnostic[] | undefined,
+): boolean => {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((diagnostic, index) => {
+    const counterpart = b[index];
+    return (
+      counterpart?.severity === diagnostic.severity
+      && counterpart?.message === diagnostic.message
+    );
+  });
+};
 
 const resolveActiveBlockId = (workspace: WorkspaceState): string | null => {
   if (workspace.length === 0) {
@@ -133,6 +157,7 @@ const AppContent = (): JSX.Element => {
     upsertEntityData,
   } = useEntityOverlayManager();
   const [robotPrograms, setRobotPrograms] = useState<Record<string, WorkspaceState>>({});
+  const [compileDiagnosticsByRobot, setCompileDiagnosticsByRobot] = useState<Record<string, Diagnostic[]>>({});
   const [workspaceRobotId, setWorkspaceRobotId] = useState<string>(
     () => selectedRobotId ?? DEFAULT_ROBOT_ID,
   );
@@ -184,9 +209,10 @@ const AppContent = (): JSX.Element => {
       const status = statusOverride ?? simulationRuntime.getStatus(robotId);
       const isRunning = status === 'running';
       const activeBlockId = isRunning ? resolveActiveBlockId(workspaceForRobot) : null;
-      return { isRunning, activeBlockId };
+      const diagnostics = compileDiagnosticsByRobot[robotId] ?? [];
+      return { isRunning, activeBlockId, status, diagnostics };
     },
-    [getWorkspaceForRobot],
+    [compileDiagnosticsByRobot, getWorkspaceForRobot],
   );
 
   const resolveEntityId = useCallback(
@@ -246,6 +272,34 @@ const AppContent = (): JSX.Element => {
     closeOverlay();
     clearSelection();
   }, [clearSelection, closeOverlay]);
+
+  const runProgramForActiveRobot = useCallback<() => RunProgramResult>(() => {
+    const result = compileWorkspaceProgram(workspace);
+    const diagnostics = result.diagnostics;
+    setCompileDiagnosticsByRobot((current) => {
+      const existing = current[activeRobotId];
+      const next = { ...current };
+      if (diagnostics.length === 0) {
+        if (existing) {
+          delete next[activeRobotId];
+          return next;
+        }
+        return current;
+      }
+      next[activeRobotId] = diagnostics;
+      return next;
+    });
+    simulationRuntime.reportCompileDiagnostics(activeRobotId, diagnostics);
+    const blocked = diagnostics.some((diagnostic) => diagnostic.severity === 'error');
+    if (!blocked) {
+      simulationRuntime.runProgram(activeRobotId, result.program);
+    }
+    return {
+      diagnostics,
+      stepCount: result.program.instructions.length,
+      blocked,
+    };
+  }, [activeRobotId, setCompileDiagnosticsByRobot, workspace]);
 
   useEffect(() => {
     if (workspaceRobotId === activeRobotId) {
@@ -385,10 +439,17 @@ const AppContent = (): JSX.Element => {
       return;
     }
     const nextProgramState = buildProgramStateForRobot(entity.robotId);
-    const previousProgramState = entity.programState ?? { isRunning: false, activeBlockId: null };
+    const previousProgramState = entity.programState ?? {
+      isRunning: false,
+      activeBlockId: null,
+      status: 'idle' as ProgramRunnerStatus,
+      diagnostics: [],
+    };
     if (
       previousProgramState.isRunning !== nextProgramState?.isRunning
       || previousProgramState.activeBlockId !== nextProgramState?.activeBlockId
+      || previousProgramState.status !== nextProgramState?.status
+      || !areDiagnosticsEqual(previousProgramState.diagnostics, nextProgramState?.diagnostics)
     ) {
       upsertEntityData({ ...entity, programState: nextProgramState }, { silent: true });
     }
@@ -411,10 +472,17 @@ const AppContent = (): JSX.Element => {
         return;
       }
       const nextProgramState = buildProgramStateForRobot(activeRobotId, status);
-      const previousProgramState = entity.programState ?? { isRunning: false, activeBlockId: null };
+      const previousProgramState = entity.programState ?? {
+        isRunning: false,
+        activeBlockId: null,
+        status: 'idle' as ProgramRunnerStatus,
+        diagnostics: [],
+      };
       if (
         previousProgramState.isRunning !== nextProgramState?.isRunning
         || previousProgramState.activeBlockId !== nextProgramState?.activeBlockId
+        || previousProgramState.status !== nextProgramState?.status
+        || !areDiagnosticsEqual(previousProgramState.diagnostics, nextProgramState?.diagnostics)
       ) {
         upsertEntityData({ ...entity, programState: nextProgramState }, { silent: true });
       }
@@ -436,8 +504,19 @@ const AppContent = (): JSX.Element => {
       onUpdateBlock: updateBlockInstance,
       onRemoveBlock: removeBlockInstance,
       robotId: activeRobotId,
+      runProgram: runProgramForActiveRobot,
+      diagnostics: compileDiagnosticsByRobot[activeRobotId] ?? [],
     }),
-    [activeRobotId, handleDrop, handleTouchDrop, removeBlockInstance, updateBlockInstance, workspace],
+    [
+      activeRobotId,
+      compileDiagnosticsByRobot,
+      handleDrop,
+      handleTouchDrop,
+      removeBlockInstance,
+      runProgramForActiveRobot,
+      updateBlockInstance,
+      workspace,
+    ],
   );
 
   return (

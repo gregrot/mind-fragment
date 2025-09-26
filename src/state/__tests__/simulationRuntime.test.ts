@@ -150,6 +150,25 @@ describe('simulationRuntime', () => {
     simulationRuntime.unregisterScene(scene);
   });
 
+  it('updates status to error when compile diagnostics include blocking failures', () => {
+    const statuses: ProgramRunnerStatus[] = [];
+    simulationRuntime.subscribeStatus(DEFAULT_ROBOT_ID, (status) => {
+      statuses.push(status);
+    });
+
+    simulationRuntime.reportCompileDiagnostics(DEFAULT_ROBOT_ID, [
+      { severity: 'error', message: 'Add a "When Started" block to trigger the routine.' },
+    ]);
+
+    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('error');
+    expect(statuses).toContain('error');
+
+    simulationRuntime.reportCompileDiagnostics(DEFAULT_ROBOT_ID, []);
+
+    expect(simulationRuntime.getStatus(DEFAULT_ROBOT_ID)).toBe('idle');
+    expect(statuses[statuses.length - 1]).toBe('idle');
+  });
+
   it('tracks program status per robot independently', () => {
     const scene = createSceneStub();
     simulationRuntime.registerScene(scene);

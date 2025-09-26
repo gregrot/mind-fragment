@@ -77,6 +77,12 @@ const EntityOverlayManagerContext = createContext<EntityOverlayManagerContextVal
   undefined,
 );
 
+declare global {
+  interface Window {
+    __mfEntityOverlayManager?: EntityOverlayManagerContextValue;
+  }
+}
+
 const getDefaultTabForOverlay = (data: EntityOverlayData): InspectorTabId => {
   if (data.overlayType === 'simple') {
     return 'info';
@@ -381,6 +387,13 @@ export const EntityOverlayManagerProvider = ({
       upsertEntityData,
     ],
   );
+
+  useEffect(() => {
+    window.__mfEntityOverlayManager = value;
+    return () => {
+      delete window.__mfEntityOverlayManager;
+    };
+  }, [value]);
 
   return (
     <EntityOverlayManagerContext.Provider value={value}>

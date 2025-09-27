@@ -33,6 +33,18 @@ export interface ResourceNode {
   metadata?: Record<string, unknown>;
 }
 
+interface HitDropMetadata {
+  type: string;
+  quantity: number;
+}
+
+interface HitResourceMetadata {
+  hitPoints: number;
+  hitsRemaining: number;
+  requiredTool?: string;
+  drop?: HitDropMetadata;
+}
+
 export interface UpsertNodeOptions {
   id?: string;
   type: string;
@@ -81,6 +93,18 @@ export interface HarvestResult {
   distance: number;
 }
 
+export interface RegisterHitOptions {
+  nodeId: string;
+  toolType?: string;
+}
+
+export interface RegisterHitResult {
+  status: 'ok' | 'invalid-tool' | 'depleted' | 'not-found';
+  nodeId: string;
+  type: string | null;
+  remaining: number;
+}
+
 export type ResourceFieldEvent =
   | { type: 'added'; node: ResourceNode }
   | { type: 'updated'; node: ResourceNode }
@@ -94,6 +118,70 @@ const DEFAULT_FIELD_OF_VIEW = Math.PI / 2;
 const DEFAULT_MAX_RESULTS = 6;
 const DEFAULT_MAX_DISTANCE = 200;
 const DEFAULT_MERGE_DISTANCE = 32;
+
+const normaliseToolType = (toolType: string | undefined): string | null => {
+  const trimmed = toolType?.trim();
+  return trimmed ? trimmed.toLowerCase() : null;
+};
+
+const extractHitMetadata = (metadata: Record<string, unknown> | undefined): HitResourceMetadata | null => {
+  if (!metadata) {
+    return null;
+  }
+
+  const rawHitPoints = (metadata as { hitPoints?: unknown }).hitPoints;
+  if (typeof rawHitPoints !== 'number' || !Number.isFinite(rawHitPoints) || rawHitPoints <= 0) {
+    return null;
+  }
+
+  const rawHitsRemaining = (metadata as { hitsRemaining?: unknown }).hitsRemaining;
+  const hitsRemaining =
+    typeof rawHitsRemaining === 'number' && Number.isFinite(rawHitsRemaining) && rawHitsRemaining >= 0
+      ? clamp(rawHitsRemaining, 0, rawHitPoints)
+      : rawHitPoints;
+
+  const rawRequiredTool = (metadata as { requiredTool?: unknown }).requiredTool;
+  const requiredTool = typeof rawRequiredTool === 'string' && rawRequiredTool.trim() ? rawRequiredTool.trim() : undefined;
+
+  const rawDrop = (metadata as { drop?: unknown }).drop;
+  let drop: HitDropMetadata | undefined;
+  if (rawDrop && typeof rawDrop === 'object') {
+    const dropType = (rawDrop as { type?: unknown }).type;
+    const dropQuantity = (rawDrop as { quantity?: unknown }).quantity;
+    if (typeof dropType === 'string' && dropType.trim() && typeof dropQuantity === 'number' && Number.isFinite(dropQuantity)) {
+      if (dropQuantity > 0) {
+        drop = { type: dropType.trim(), quantity: dropQuantity };
+      }
+    }
+  }
+
+  return {
+    hitPoints: rawHitPoints,
+    hitsRemaining,
+    requiredTool,
+    drop,
+  };
+};
+
+const storeHitMetadata = (
+  base: Record<string, unknown> | undefined,
+  metadata: HitResourceMetadata,
+): Record<string, unknown> => {
+  const next: Record<string, unknown> = { ...(base ?? {}) };
+  next.hitPoints = metadata.hitPoints;
+  next.hitsRemaining = metadata.hitsRemaining;
+  if (metadata.requiredTool) {
+    next.requiredTool = metadata.requiredTool;
+  } else {
+    delete next.requiredTool;
+  }
+  if (metadata.drop) {
+    next.drop = { ...metadata.drop };
+  } else {
+    delete next.drop;
+  }
+  return next;
+};
 
 export class ResourceField {
   private readonly nodes = new Map<string, ResourceNode>();
@@ -250,6 +338,75 @@ export class ResourceField {
     };
   }
 
+  registerHit({ nodeId, toolType }: RegisterHitOptions): RegisterHitResult {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      return { status: 'not-found', nodeId, type: null, remaining: 0 };
+    }
+
+    const metadata = extractHitMetadata(node.metadata);
+    const normalisedTool = normaliseToolType(toolType);
+
+    if (!metadata) {
+      if (node.quantity <= 0) {
+        return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+      }
+      const nextQuantity = Math.max(node.quantity - 1, 0);
+      node.quantity = nextQuantity;
+      if (nextQuantity > 0) {
+        this.notifyListeners({ type: 'updated', node: this.cloneNode(node) });
+        return { status: 'ok', nodeId, type: node.type, remaining: nextQuantity };
+      }
+      this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
+      return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+    }
+
+    if (metadata.requiredTool) {
+      const expected = normaliseToolType(metadata.requiredTool);
+      if (expected && expected !== normalisedTool) {
+        return { status: 'invalid-tool', nodeId, type: node.type, remaining: metadata.hitsRemaining };
+      }
+    }
+
+    const hitsRemaining = clamp(metadata.hitsRemaining, 0, metadata.hitPoints);
+    node.quantity = hitsRemaining;
+    if (hitsRemaining <= 0) {
+      return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+    }
+
+    const nextHits = hitsRemaining - 1;
+    const nextMetadata: HitResourceMetadata = {
+      hitPoints: metadata.hitPoints,
+      hitsRemaining: Math.max(nextHits, 0),
+      requiredTool: metadata.requiredTool,
+      drop: metadata.drop,
+    };
+    node.quantity = nextMetadata.hitsRemaining;
+    node.metadata = storeHitMetadata(node.metadata, nextMetadata);
+
+    if (nextMetadata.hitsRemaining > 0) {
+      this.notifyListeners({ type: 'updated', node: this.cloneNode(node) });
+      return { status: 'ok', nodeId, type: node.type, remaining: nextMetadata.hitsRemaining };
+    }
+
+    this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
+
+    const drop = metadata.drop;
+    if (drop) {
+      const dropType = drop.type.trim();
+      const dropQuantity = drop.quantity;
+      if (dropType && Number.isFinite(dropQuantity) && dropQuantity > 0) {
+        this.upsertNode({
+          type: dropType,
+          position: { ...node.position },
+          quantity: dropQuantity,
+        });
+      }
+    }
+
+    return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+  }
+
   harvest({ nodeId, origin, amount, maxDistance = DEFAULT_MAX_DISTANCE }: HarvestOptions): HarvestResult {
     const node = this.nodes.get(nodeId);
     if (!node) {
@@ -391,5 +548,29 @@ export const createDefaultResourceNodes = (): ResourceNode[] => [
     position: { x: 260, y: -140 },
     quantity: 20,
     metadata: { volatile: true },
+  },
+  {
+    id: 'node-tree-1',
+    type: 'tree',
+    position: { x: -340, y: -220 },
+    quantity: 3,
+    metadata: {
+      hitPoints: 3,
+      hitsRemaining: 3,
+      requiredTool: 'axe',
+      drop: { type: 'log', quantity: 2 },
+    },
+  },
+  {
+    id: 'node-tree-2',
+    type: 'tree',
+    position: { x: 360, y: 260 },
+    quantity: 3,
+    metadata: {
+      hitPoints: 3,
+      hitsRemaining: 3,
+      requiredTool: 'axe',
+      drop: { type: 'log', quantity: 2 },
+    },
   },
 ];

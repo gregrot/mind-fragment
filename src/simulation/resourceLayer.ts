@@ -113,7 +113,11 @@ export class ResourceLayer {
     }
 
     const sprite = new Sprite(texture);
-    sprite.anchor.set(0.5);
+    if (node.type === 'tree') {
+      sprite.anchor.set(0.5, 1);
+    } else {
+      sprite.anchor.set(0.5);
+    }
     sprite.position.set(node.position.x, node.position.y);
 
     this.container.addChild(sprite);
@@ -133,12 +137,19 @@ export class ResourceLayer {
     }
 
     entry.sprite.position.set(node.position.x, node.position.y);
-    entry.maxQuantity = Math.max(entry.maxQuantity, Math.max(node.quantity, 1));
+    const metadata = node.metadata as { hitPoints?: unknown } | undefined;
+    const maxReference =
+      metadata && typeof metadata.hitPoints === 'number' && Number.isFinite(metadata.hitPoints) && metadata.hitPoints > 0
+        ? Math.max(metadata.hitPoints, 1)
+        : Math.max(node.quantity, 1);
+    entry.maxQuantity = Math.max(entry.maxQuantity, maxReference);
     const ratio = entry.maxQuantity > 0 ? clamp(node.quantity / entry.maxQuantity, 0, 1) : 0;
     const alpha = node.quantity > 0 ? 0.35 + ratio * 0.65 : 0;
     entry.sprite.alpha = alpha;
-    const scale = 0.8 + ratio * 0.4;
-    entry.sprite.scale.set(scale);
+    const baseScale = node.type === 'tree' ? 1.15 : node.type === 'log' ? 0.95 : 1;
+    const scale = baseScale * (0.75 + ratio * 0.45);
+    const yScale = node.type === 'tree' ? scale * 1.35 : scale;
+    entry.sprite.scale.set(scale, yScale);
   }
 
   private removeSprite(nodeId: string): void {

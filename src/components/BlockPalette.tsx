@@ -36,15 +36,21 @@ const getBadgeLabel = (definition: BlockDefinition): string | null => {
   }
 };
 
+export interface PaletteBlockEntry {
+  definition: BlockDefinition;
+  isLocked?: boolean;
+  lockMessage?: string;
+}
+
 interface BlockPaletteProps {
-  blocks: BlockDefinition[];
+  blocks: PaletteBlockEntry[];
   onTouchDrop?: (payload: DragPayload, target: DropTarget) => void;
 }
 
 interface PaletteGroup {
   key: string;
   label: string;
-  blocks: BlockDefinition[];
+  blocks: PaletteBlockEntry[];
 }
 
 const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element => {
@@ -59,7 +65,8 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
     const groupMap = new Map<string, PaletteGroup>();
     const blockIds = new Set<string>();
 
-    blocks.forEach((definition) => {
+    blocks.forEach((entry) => {
+      const { definition } = entry;
       const searchableParts = [
         definition.label,
         definition.summary ?? '',
@@ -82,7 +89,7 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
         groupsList.push(group);
       }
 
-      group.blocks.push(definition);
+      group.blocks.push(entry);
       blockIds.add(definition.id);
     });
 
@@ -212,7 +219,8 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
           groups.map((group) => (
             <div key={group.key} className={styles.paletteGroup} role="group" aria-label={group.label}>
               <header className={styles.paletteGroupHeader}>{group.label}</header>
-              {group.blocks.map((definition) => {
+              {group.blocks.map((entry) => {
+                const { definition, isLocked = false, lockMessage } = entry;
                 const paletteItemClasses = [styles.paletteItem];
                 switch (definition.category) {
                   case 'action':
@@ -237,28 +245,38 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
                 if (definition.summary && activeSummaryId === definition.id) {
                   paletteItemClasses.push(styles.paletteItemActive);
                 }
+                if (isLocked) {
+                  paletteItemClasses.push(styles.paletteItemLocked);
+                }
 
                 const paletteItemClass = paletteItemClasses.join(' ');
                 const isSummaryActive = Boolean(definition.summary && activeSummaryId === definition.id);
                 const badgeLabel = getBadgeLabel(definition);
+                const lockMessageId = isLocked && lockMessage ? `palette-lock-${definition.id}` : undefined;
+                const ariaLabel = isLocked && lockMessage ? `${definition.label}. ${lockMessage}` : undefined;
 
                 return (
                   <div
                     key={definition.id}
                     role="listitem"
                     className={paletteItemClass}
-                    draggable
-                    onDragStart={handleDragStart(definition)}
-                    onTouchStart={handleTouchStart(definition)}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
-                    onTouchCancel={handleTouchCancel}
+                    draggable={!isLocked}
+                    aria-disabled={isLocked ? 'true' : undefined}
+                    aria-label={ariaLabel}
+                    aria-describedby={lockMessageId}
+                    data-locked={isLocked ? 'true' : undefined}
+                    onDragStart={!isLocked ? handleDragStart(definition) : undefined}
+                    onTouchStart={!isLocked ? handleTouchStart(definition) : undefined}
+                    onTouchMove={!isLocked ? handleTouchMove : undefined}
+                    onTouchEnd={!isLocked ? handleTouchEnd : undefined}
+                    onTouchCancel={!isLocked ? handleTouchCancel : undefined}
                     onClick={handlePaletteItemClick(definition.id)}
                     onFocus={handlePaletteItemClick(definition.id)}
                     onMouseLeave={handlePaletteItemMouseLeave(definition.id)}
                     onBlur={handlePaletteItemBlur(definition.id)}
                     tabIndex={0}
                     data-testid={`palette-${definition.id}`}
+                    title={isLocked && lockMessage ? lockMessage : undefined}
                   >
                     <div className={styles.paletteHeaderRow}>
                       <span className={styles.paletteLabel}>{definition.label}</span>
@@ -272,6 +290,11 @@ const BlockPalette = ({ blocks, onTouchDrop }: BlockPaletteProps): JSX.Element =
                         aria-hidden={isSummaryActive ? false : true}
                       >
                         {definition.summary}
+                      </small>
+                    ) : null}
+                    {isLocked && lockMessage ? (
+                      <small id={lockMessageId} className={styles.paletteLockMessage}>
+                        {lockMessage}
                       </small>
                     ) : null}
                   </div>

@@ -1,8 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type DragEvent } from 'react';
-import BlockPalette from './BlockPalette';
+import BlockPalette, { type PaletteBlockEntry } from './BlockPalette';
 import Workspace from './Workspace';
 import RuntimeControls from './RuntimeControls';
-import { BLOCK_LIBRARY } from '../blocks/library';
 import type { WorkspaceState, DropTarget, BlockInstance, DragPayload } from '../types/blocks';
 import styles from '../styles/MechanismProgrammingPanel.module.css';
 import useMechanismTelemetry from '../hooks/useMechanismTelemetry';
@@ -10,6 +9,7 @@ import type { Diagnostic } from '../simulation/runtime/blockProgram';
 import type { RunProgramResult } from '../state/ProgrammingInspectorContext';
 
 interface MechanismProgrammingPanelProps {
+  paletteBlocks: PaletteBlockEntry[];
   workspace: WorkspaceState;
   onDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   onTouchDrop: (payload: DragPayload, target: DropTarget) => void;
@@ -27,6 +27,7 @@ interface MechanismProgrammingPanelProps {
 }
 
 const MechanismProgrammingPanel = ({
+  paletteBlocks,
   workspace,
   onDrop,
   onTouchDrop,
@@ -74,7 +75,7 @@ const MechanismProgrammingPanel = ({
           data-read-only={isReadOnly ? 'true' : undefined}
         >
           <h4>Block palette</h4>
-          <BlockPalette blocks={BLOCK_LIBRARY} onTouchDrop={onTouchDrop} />
+          <BlockPalette blocks={paletteBlocks} onTouchDrop={onTouchDrop} />
         </aside>
         <section className={styles.workspace} data-read-only={isReadOnly ? 'true' : undefined}>
           <h4>Workspace</h4>

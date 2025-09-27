@@ -1,8 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import BlockPalette from '../BlockPalette';
+import BlockPalette, { type PaletteBlockEntry } from '../BlockPalette';
 import BlockView from '../BlockView';
 import { BLOCK_LIBRARY, createBlockInstance } from '../../blocks/library';
+
+const paletteBlocks: PaletteBlockEntry[] = BLOCK_LIBRARY.map((definition) => ({
+  definition,
+  isLocked: false,
+}));
 
 const createMockDataTransfer = (): DataTransfer => {
   const store = new Map<string, string>();
@@ -32,7 +37,7 @@ const createMockDataTransfer = (): DataTransfer => {
 
 describe('BlockPalette value and operator blocks', () => {
   it('renders grouped value and operator sections with badges', () => {
-    render(<BlockPalette blocks={BLOCK_LIBRARY} />);
+    render(<BlockPalette blocks={paletteBlocks} />);
 
     expect(screen.getByText('Values & Signals')).toBeInTheDocument();
     expect(screen.getByText('Operators')).toBeInTheDocument();
@@ -54,7 +59,7 @@ describe('BlockPalette value and operator blocks', () => {
 
     render(
       <div>
-        <BlockPalette blocks={BLOCK_LIBRARY} />
+        <BlockPalette blocks={paletteBlocks} />
         <BlockView block={conditional} path={[]} onDrop={handleDrop} />
       </div>,
     );
@@ -87,7 +92,7 @@ describe('BlockPalette value and operator blocks', () => {
 
     render(
       <div>
-        <BlockPalette blocks={BLOCK_LIBRARY} />
+        <BlockPalette blocks={paletteBlocks} />
         <BlockView block={repeat} path={[]} onDrop={handleDrop} />
       </div>,
     );
@@ -112,7 +117,7 @@ describe('BlockPalette value and operator blocks', () => {
   });
 
   it('filters palette items using the search input', () => {
-    render(<BlockPalette blocks={BLOCK_LIBRARY} />);
+    render(<BlockPalette blocks={paletteBlocks} />);
 
     const filters = screen.getAllByLabelText('Filter blocks');
     filters.forEach((input) => {

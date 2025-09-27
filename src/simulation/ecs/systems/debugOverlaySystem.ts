@@ -24,8 +24,9 @@ import type {
 } from '../../runtime/blockProgramRunner';
 import type { BlockProgramRunner } from '../../runtime/blockProgramRunner';
 import type { MechanismChassis } from '../../mechanism';
-import type { ComponentHandle, System } from '../world';
+import type { ComponentHandle, QueryResult, ECSWorld } from '../world';
 import type { Entity } from '../entity';
+import { System } from '../system';
 
 interface DebugOverlaySystemDependencies
   extends Pick<
@@ -40,49 +41,80 @@ interface DebugOverlaySystemOptions {
 
 type TelemetrySnapshot = ReturnType<MechanismChassis['getTelemetrySnapshot']>;
 
-export function createDebugOverlaySystem(
-  { MechanismCore, ProgramRunner, SpriteRef, DebugOverlay }: DebugOverlaySystemDependencies,
-  { overlayLayer, viewport }: DebugOverlaySystemOptions,
-): System<[
+class DebugOverlaySystem extends System<[
   ComponentHandle<MechanismChassis>,
   ComponentHandle<BlockProgramRunner>,
   ComponentHandle<Sprite>,
   ComponentHandle<DebugOverlayComponent>,
 ]> {
-  return {
-    name: 'DebugOverlaySystem',
-    createQuery: (world) => world.query.withAll(MechanismCore, ProgramRunner, SpriteRef, DebugOverlay),
-    update: (_world, entities) => {
-      const processed = new Set<Entity>();
+  constructor(
+    private readonly MechanismCore: ComponentHandle<MechanismChassis>,
+    private readonly ProgramRunner: ComponentHandle<BlockProgramRunner>,
+    private readonly SpriteRef: ComponentHandle<Sprite>,
+    private readonly DebugOverlay: ComponentHandle<DebugOverlayComponent>,
+    private readonly overlayLayer: Container,
+    private readonly viewport: Viewport,
+  ) {
+    super({ name: 'DebugOverlaySystem', processEmpty: true });
+  }
 
-      for (const [entity, overlay] of DebugOverlay.entries()) {
-        overlay.container.visible = false;
-        if (!overlay.container.destroyed && overlay.container.parent !== overlayLayer) {
-          overlayLayer.addChild(overlay.container);
-        }
-        processed.add(entity);
-      }
+  protected override query(world: ECSWorld) {
+    return world
+      .query.withAll(this.MechanismCore, this.ProgramRunner, this.SpriteRef, this.DebugOverlay);
+  }
 
-      for (const [entity, mechanismCore, programRunner, sprite, overlay] of entities) {
-        processed.delete(entity);
-        updateDebugOverlay({
-          overlay,
-          mechanismCore,
-          programRunner,
-          sprite,
-          viewport,
-        });
-      }
+  override processAll(
+    _world: ECSWorld,
+    entities: QueryResult<[
+      ComponentHandle<MechanismChassis>,
+      ComponentHandle<BlockProgramRunner>,
+      ComponentHandle<Sprite>,
+      ComponentHandle<DebugOverlayComponent>,
+    ]>[],
+  ): void {
+    const processed = new Set<Entity>();
 
-      for (const entity of processed) {
-        const overlay = DebugOverlay.get(entity);
-        if (!overlay) {
-          continue;
-        }
-        overlay.lastRenderedText = '';
+    for (const [entity, overlay] of this.DebugOverlay.entries()) {
+      overlay.container.visible = false;
+      if (!overlay.container.destroyed && overlay.container.parent !== this.overlayLayer) {
+        this.overlayLayer.addChild(overlay.container);
       }
-    },
-  };
+      processed.add(entity);
+    }
+
+    for (const [entity, mechanismCore, programRunner, sprite, overlay] of entities) {
+      processed.delete(entity);
+      updateDebugOverlay({
+        overlay,
+        mechanismCore,
+        programRunner,
+        sprite,
+        viewport: this.viewport,
+      });
+    }
+
+    for (const entity of processed) {
+      const overlay = this.DebugOverlay.get(entity);
+      if (!overlay) {
+        continue;
+      }
+      overlay.lastRenderedText = '';
+    }
+  }
+}
+
+export function createDebugOverlaySystem(
+  { MechanismCore, ProgramRunner, SpriteRef, DebugOverlay }: DebugOverlaySystemDependencies,
+  { overlayLayer, viewport }: DebugOverlaySystemOptions,
+): DebugOverlaySystem {
+  return new DebugOverlaySystem(
+    MechanismCore,
+    ProgramRunner,
+    SpriteRef,
+    DebugOverlay,
+    overlayLayer,
+    viewport,
+  );
 }
 
 interface UpdateDebugOverlayOptions {

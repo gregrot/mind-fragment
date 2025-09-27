@@ -1,5 +1,6 @@
 import { Entity, type EntityHost } from './entity';
 import { QueryBuilder, type QueryableWorld } from './queryBuilder';
+import { System } from './system';
 
 export type EntityId = number;
 
@@ -27,14 +28,6 @@ type ComponentValueTuple<TComponents extends ComponentTuple> = {
 
 export type QueryResult<TComponents extends ComponentTuple> = [Entity, ...ComponentValueTuple<TComponents>];
 
-export interface System<TComponents extends ComponentTuple = ComponentTuple> {
-  readonly name?: string;
-  readonly group?: string;
-  readonly components?: TComponents;
-  readonly createQuery?: (world: ECSWorld) => QueryBuilder<TComponents>;
-  update(world: ECSWorld, entities: Iterable<QueryResult<TComponents>>, delta: number): void;
-}
-
 interface ComponentStore<TValue> extends ComponentHandle<TValue> {
   readonly store: Map<Entity, TValue>;
 }
@@ -45,14 +38,17 @@ export class ECSWorld implements EntityHost, QueryableWorld {
   private nextEntityId = 1 as EntityId;
   readonly entities = new Set<Entity>();
   readonly systemsByGroup = new Map<string, System[]>();
+  private readonly groupOrder: string[] = [];
+  private readonly sortedSystemsByGroup = new Map<string, System[]>();
+  private readonly dirtyGroups = new Set<string>();
+  private readonly systemsByName = new Map<string, System>();
+  private readonly systemParents = new Map<System, System>();
 
   private readonly entityLookup = new Map<EntityId, Entity>();
   private readonly components = new Map<symbol, ComponentStore<unknown>>();
   private readonly componentIndex = new Map<ComponentHandle<unknown>, Set<Entity>>();
   private readonly componentVersions = new Map<ComponentHandle<unknown>, number>();
-  private readonly systems: System[] = [];
   private readonly entitySubscriptions = new Map<Entity, Array<() => void>>();
-  private readonly systemQueryBuilders = new Map<System, QueryBuilder<ComponentTuple>>();
   private readonly queryPool: QueryBuilder<ComponentTuple>[] = [];
   private worldVersion = 0;
 
@@ -150,38 +146,177 @@ export class ECSWorld implements EntityHost, QueryableWorld {
     return component;
   }
 
-  addSystem<TComponents extends ComponentTuple>(system: System<TComponents>): void {
-    this.systems.push(system);
+  addSystem(system: System): void {
+    this.registerSystem(system);
+  }
+
+  runSystems(delta: number): void {
+    for (const group of this.groupOrder) {
+      const systems = this.getSystemsForGroup(group);
+      for (const system of systems) {
+        this.runSystem(system, delta);
+      }
+    }
+  }
+
+  private registerSystem(system: System, parent?: System): void {
+    if (this.systemsByName.has(system.name)) {
+      throw new Error(`System with name ${system.name} already registered.`);
+    }
+
+    this.systemsByName.set(system.name, system);
+
     const group = system.group ?? 'default';
     let bucket = this.systemsByGroup.get(group);
     if (!bucket) {
       bucket = [];
       this.systemsByGroup.set(group, bucket);
+      this.groupOrder.push(group);
     }
     bucket.push(system);
-  }
+    this.dirtyGroups.add(group);
 
-  runSystems(delta: number): void {
-    for (const system of this.systems) {
-      this.runSystem(system, delta);
+    if (parent) {
+      this.systemParents.set(system, parent);
+    }
+
+    for (const subSystem of system.subSystems) {
+      this.registerSystem(subSystem, system);
     }
   }
 
-  private runSystem<TComponents extends ComponentTuple>(system: System<TComponents>, delta: number): void {
-    let builder = this.systemQueryBuilders.get(system) as QueryBuilder<TComponents> | undefined;
-    if (!builder) {
-      if (system.createQuery) {
-        builder = system.createQuery(this);
-      } else if (system.components) {
-        builder = this.query.withAll(...system.components);
-      } else {
-        builder = this.query as unknown as QueryBuilder<TComponents>;
+  private getSystemsForGroup(group: string): readonly System[] {
+    if (!this.systemsByGroup.has(group)) {
+      return [];
+    }
+
+    if (!this.dirtyGroups.has(group)) {
+      return this.sortedSystemsByGroup.get(group) ?? [];
+    }
+
+    const systems = this.systemsByGroup.get(group) ?? [];
+    const sorted = this.sortSystems(group, systems);
+    this.sortedSystemsByGroup.set(group, sorted);
+    this.dirtyGroups.delete(group);
+    return sorted;
+  }
+
+  private sortSystems(group: string, systems: System[]): System[] {
+    const nodes = [...systems];
+    const nodeSet = new Set(nodes);
+    const adjacency = new Map<System, Set<System>>();
+    const inDegree = new Map<System, number>();
+
+    for (const system of nodes) {
+      adjacency.set(system, new Set());
+      inDegree.set(system, 0);
+    }
+
+    const addEdge = (from: System | undefined, to: System | undefined) => {
+      if (!from || !to) {
+        return;
       }
-      this.systemQueryBuilders.set(system, builder as QueryBuilder<ComponentTuple>);
+      if (!nodeSet.has(from) || !nodeSet.has(to)) {
+        return;
+      }
+      const neighbours = adjacency.get(from)!;
+      if (neighbours.has(to)) {
+        return;
+      }
+      neighbours.add(to);
+      inDegree.set(to, (inDegree.get(to) ?? 0) + 1);
+    };
+
+    for (const system of nodes) {
+      for (const dependency of system.dependencies) {
+        const dependencySystem = this.systemsByName.get(dependency);
+        if (!dependencySystem) {
+          throw new Error(`Unknown dependency ${dependency} for system ${system.name}.`);
+        }
+        addEdge(dependencySystem, system);
+      }
+
+      for (const after of system.after) {
+        const dependencySystem = this.systemsByName.get(after);
+        if (!dependencySystem) {
+          throw new Error(`Unknown dependency ${after} for system ${system.name}.`);
+        }
+        addEdge(dependencySystem, system);
+      }
+
+      for (const before of system.before) {
+        const dependentSystem = this.systemsByName.get(before);
+        if (!dependentSystem) {
+          throw new Error(`Unknown dependency ${before} for system ${system.name}.`);
+        }
+        addEdge(system, dependentSystem);
+      }
+
+      const parent = this.systemParents.get(system);
+      if (parent) {
+        addEdge(parent, system);
+      }
     }
 
-    const entities = builder.iterate();
-    system.update(this, entities, delta);
+    const queue: System[] = [];
+    for (const system of nodes) {
+      if ((inDegree.get(system) ?? 0) === 0) {
+        queue.push(system);
+      }
+    }
+
+    const result: System[] = [];
+    while (queue.length > 0) {
+      const system = queue.shift()!;
+      result.push(system);
+      for (const neighbour of adjacency.get(system) ?? []) {
+        const updated = (inDegree.get(neighbour) ?? 0) - 1;
+        inDegree.set(neighbour, updated);
+        if (updated === 0) {
+          queue.push(neighbour);
+        }
+      }
+    }
+
+    if (result.length !== nodes.length) {
+      throw new Error(`Cyclic dependency detected in system group ${group}.`);
+    }
+
+    return result;
+  }
+
+  private runSystem(system: System, delta: number): void {
+    if (!this.isSystemChainActive(system)) {
+      return;
+    }
+
+    const builder = system.getQuery(this);
+    const results = builder.collect();
+
+    if (results.length === 0 && !system.processEmpty) {
+      return;
+    }
+
+    if (typeof system.processAll === 'function') {
+      system.processAll(this, results, delta);
+    } else {
+      for (const result of results) {
+        system.process(result, delta, this);
+      }
+    }
+  }
+
+  private isSystemChainActive(system: System): boolean {
+    if (!system.active || system.paused) {
+      return false;
+    }
+
+    const parent = this.systemParents.get(system);
+    if (!parent) {
+      return true;
+    }
+
+    return this.isSystemChainActive(parent);
   }
 
   queryAll<TComponents extends ComponentTuple>(...components: TComponents): QueryResult<TComponents>[] {

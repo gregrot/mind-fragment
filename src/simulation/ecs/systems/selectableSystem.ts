@@ -3,8 +3,9 @@ import type {
   SelectableComponent,
   SimulationWorldComponents,
 } from '../../runtime/simulationWorld';
-import type { ComponentHandle, System } from '../world';
+import type { ComponentHandle, QueryResult, ECSWorld } from '../world';
 import type { Entity } from '../entity';
+import { System } from '../system';
 
 interface SelectableSystemDependencies
   extends Pick<SimulationWorldComponents, 'Selectable' | 'SpriteRef'> {}
@@ -30,64 +31,81 @@ const detachListeners = (sprite: Sprite, handler: () => void): void => {
   }
 };
 
-export function createSelectableSystem({
-  Selectable,
-  SpriteRef,
-}: SelectableSystemDependencies): System<[
+class SelectableSystem extends System<[
   ComponentHandle<SelectableComponent>,
   ComponentHandle<Sprite>,
 ]> {
-  const listeners = new Map<Entity, ListenerEntry>();
+  private readonly listeners = new Map<Entity, ListenerEntry>();
 
-  return {
-    name: 'SelectableSystem',
-    createQuery: (world) => world.query.withAll(Selectable, SpriteRef),
-    update: (world, entities) => {
-      const active = new Set<Entity>();
+  constructor(
+    private readonly Selectable: ComponentHandle<SelectableComponent>,
+    private readonly SpriteRef: ComponentHandle<Sprite>,
+  ) {
+    super({ name: 'SelectableSystem', processEmpty: true });
+  }
 
-      for (const [entity, _selectable, sprite] of entities) {
-        active.add(entity);
+  protected override query(world: ECSWorld) {
+    return world.query.withAll(this.Selectable, this.SpriteRef);
+  }
 
-        const existing = listeners.get(entity);
+  override processAll(
+    world: ECSWorld,
+    entities: QueryResult<[
+      ComponentHandle<SelectableComponent>,
+      ComponentHandle<Sprite>,
+    ]>[],
+  ): void {
+    const active = new Set<Entity>();
 
-        if (existing && existing.sprite !== sprite) {
-          detachListeners(existing.sprite, existing.handler);
-          listeners.delete(entity);
-        }
+    for (const [entity, _selectable, sprite] of entities) {
+      active.add(entity);
 
-        let entry = listeners.get(entity);
+      const existing = this.listeners.get(entity);
 
-        if (!entry) {
-          const handler = () => {
-            const current = Selectable.get(entity);
-            if (!current?.onSelected) {
-              return;
-            }
-            current.onSelected(current.id);
-          };
-
-          sprite.eventMode = 'static';
-          (sprite as { interactive?: boolean }).interactive = true;
-          sprite.cursor = 'pointer';
-
-          attachListeners(sprite, handler);
-          listeners.set(entity, { sprite, handler });
-          entry = listeners.get(entity);
-        } else {
-          entry.sprite.eventMode = 'static';
-          (entry.sprite as { interactive?: boolean }).interactive = true;
-          entry.sprite.cursor = 'pointer';
-        }
+      if (existing && existing.sprite !== sprite) {
+        detachListeners(existing.sprite, existing.handler);
+        this.listeners.delete(entity);
       }
 
-      for (const [entity, entry] of listeners.entries()) {
-        if (active.has(entity) && world.hasEntity(entity) && Selectable.has(entity) && SpriteRef.has(entity)) {
-          continue;
-        }
+      let entry = this.listeners.get(entity);
 
-        detachListeners(entry.sprite, entry.handler);
-        listeners.delete(entity);
+      if (!entry) {
+        const handler = () => {
+          const current = this.Selectable.get(entity);
+          if (!current?.onSelected) {
+            return;
+          }
+          current.onSelected(current.id);
+        };
+
+        sprite.eventMode = 'static';
+        (sprite as { interactive?: boolean }).interactive = true;
+        sprite.cursor = 'pointer';
+
+        attachListeners(sprite, handler);
+        this.listeners.set(entity, { sprite, handler });
+        entry = this.listeners.get(entity);
+      } else {
+        entry.sprite.eventMode = 'static';
+        (entry.sprite as { interactive?: boolean }).interactive = true;
+        entry.sprite.cursor = 'pointer';
       }
-    },
-  };
+    }
+
+    for (const [entity, entry] of this.listeners.entries()) {
+      if (active.has(entity) && world.hasEntity(entity) && this.Selectable.has(entity) && this.SpriteRef.has(entity)) {
+        continue;
+      }
+
+      detachListeners(entry.sprite, entry.handler);
+      this.listeners.delete(entity);
+    }
+  }
+}
+
+export function createSelectableSystem({
+  Selectable,
+  SpriteRef,
+}: SelectableSystemDependencies): SelectableSystem {
+  return new SelectableSystem(Selectable, SpriteRef);
 }

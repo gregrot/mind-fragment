@@ -111,6 +111,7 @@ const createSceneStub = () => {
         listener(snapshot);
       }
     },
+    reconcileMechanismOverlay: vi.fn(),
   } as unknown as RootScene & {
     triggerStatus: (mechanismId: string, status: ProgramRunnerStatus) => void;
     triggerTelemetry: (mechanismId: string, snapshot: SimulationTelemetrySnapshot) => void;

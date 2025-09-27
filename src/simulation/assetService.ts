@@ -146,9 +146,66 @@ assetService.defineVectorAsset('resource/biotic-spore', () => {
   return graphic;
 });
 
+assetService.defineVectorAsset(
+  'resource/tree',
+  ({ foliage = 0x2e7d32, accent = 0x63c132, trunk = 0x8d6e63 }: Record<string, unknown> = {}) => {
+    const graphic = new Graphics();
+
+    graphic.beginPath();
+    graphic.roundRect(-8, -48, 16, 48, 4);
+    graphic.fill({ color: typeof trunk === 'number' ? trunk : 0x8d6e63, alpha: 0.95 });
+
+    const foliageColor = typeof foliage === 'number' ? foliage : 0x2e7d32;
+    const accentColor = typeof accent === 'number' ? accent : 0x63c132;
+
+    graphic.beginPath();
+    graphic.circle(0, -60, 26);
+    graphic.fill({ color: foliageColor, alpha: 0.9 });
+
+    graphic.beginPath();
+    graphic.ellipse(-12, -72, 18, 20);
+    graphic.fill({ color: accentColor, alpha: 0.78 });
+
+    graphic.beginPath();
+    graphic.ellipse(14, -68, 16, 18);
+    graphic.fill({ color: accentColor, alpha: 0.72 });
+
+    return graphic;
+  },
+);
+
+assetService.defineVectorAsset('resource/log', ({ bark = 0x8d6e63, ring = 0xc8a97e }: Record<string, unknown> = {}) => {
+  const graphic = new Graphics();
+
+  const barkColor = typeof bark === 'number' ? bark : 0x8d6e63;
+  const ringColor = typeof ring === 'number' ? ring : 0xc8a97e;
+
+  graphic.beginPath();
+  graphic.roundRect(-22, -8, 44, 16, 6);
+  graphic.fill({ color: barkColor, alpha: 0.92 });
+  graphic.setStrokeStyle({ width: 3, color: 0x5d4037, alpha: 0.9 });
+  graphic.stroke();
+
+  graphic.beginPath();
+  graphic.circle(-16, 0, 7);
+  graphic.fill({ color: ringColor, alpha: 0.9 });
+  graphic.setStrokeStyle({ width: 2, color: 0x5d4037, alpha: 0.85 });
+  graphic.stroke();
+
+  graphic.beginPath();
+  graphic.circle(16, 0, 7);
+  graphic.fill({ color: ringColor, alpha: 0.9 });
+  graphic.setStrokeStyle({ width: 2, color: 0x5d4037, alpha: 0.85 });
+  graphic.stroke();
+
+  return graphic;
+});
+
 export const RESOURCE_TEXTURE_IDS: Record<string, string> = {
   default: 'resource/default',
   'ferrous-ore': 'resource/ferrous-ore',
   'silicate-crystal': 'resource/silicate-crystal',
   'biotic-spore': 'resource/biotic-spore',
+  tree: 'resource/tree',
+  log: 'resource/log',
 };

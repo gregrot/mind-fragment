@@ -67,3 +67,52 @@ describe('ResourceField subscriptions', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ResourceField registerHit', () => {
+  const treeNode: ResourceNode = {
+    id: 'tree-1',
+    type: 'tree',
+    position: { x: 12, y: -8 },
+    quantity: 3,
+    metadata: {
+      hitPoints: 3,
+      hitsRemaining: 3,
+      requiredTool: 'axe',
+      drop: { type: 'log', quantity: 2 },
+    },
+  };
+
+  it('requires the correct tool and drops logs once depleted', () => {
+    const field = createField([treeNode]);
+    const events: ResourceFieldEvent[] = [];
+    field.subscribe((event) => events.push(event));
+
+    const invalidTool = field.registerHit({ nodeId: treeNode.id, toolType: 'pickaxe' });
+    expect(invalidTool).toMatchObject({ status: 'invalid-tool', remaining: 3 });
+    expect(events).toHaveLength(0);
+
+    const firstHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(firstHit).toMatchObject({ status: 'ok', remaining: 2 });
+    const secondHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(secondHit).toMatchObject({ status: 'ok', remaining: 1 });
+    const finalHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(finalHit).toMatchObject({ status: 'depleted', remaining: 0 });
+
+    expect(events.map((event) => event.type)).toEqual([
+      'updated',
+      'updated',
+      'depleted',
+      'added',
+    ]);
+
+    const nodes = field.list();
+    const tree = nodes.find((node) => node.id === treeNode.id);
+    expect(tree).toBeDefined();
+    expect(tree?.quantity).toBe(0);
+
+    const log = nodes.find((node) => node.type === 'log');
+    expect(log).toBeDefined();
+    expect(log?.quantity).toBe(2);
+    expect(log?.position).toEqual(treeNode.position);
+  });
+});

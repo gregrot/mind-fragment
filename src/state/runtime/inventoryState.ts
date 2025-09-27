@@ -20,6 +20,7 @@ const EMPTY_INVENTORY_SNAPSHOT_INTERNAL: InventorySnapshot = {
   entries: [],
   slots: [],
   slotCapacity: 0,
+  equipment: [],
 };
 
 export const EMPTY_INVENTORY_SNAPSHOT: InventorySnapshot = EMPTY_INVENTORY_SNAPSHOT_INTERNAL;
@@ -40,10 +41,20 @@ const resolveStackCount = (slot: SlotSchema): number => {
   return stackCount;
 };
 
+const computeUsedCapacity = (slots: SlotSchema[]): number => {
+  return slots.reduce((total, slot) => {
+    if (!slot.occupantId) {
+      return total;
+    }
+    const count = resolveStackCount(slot);
+    return total + (count > 0 ? count : 1);
+  }, 0);
+};
+
 const buildInventoryEntries = (slots: SlotSchema[]): InventoryEntry[] => {
   const totals = new Map<string, number>();
   for (const slot of slots) {
-    if (!slot.occupantId) {
+    if (!slot.occupantId || !slot.metadata.stackable) {
       continue;
     }
     const quantity = resolveStackCount(slot);
@@ -54,6 +65,17 @@ const buildInventoryEntries = (slots: SlotSchema[]): InventoryEntry[] => {
     totals.set(slot.occupantId, current + quantity);
   }
   return Array.from(totals.entries()).map(([resource, quantity]) => ({ resource, quantity }));
+};
+
+const buildEquipmentEntries = (slots: SlotSchema[]): InventorySnapshot['equipment'] => {
+  return slots
+    .filter((slot) => slot.occupantId && !slot.metadata.stackable)
+    .map((slot) => ({
+      slotId: slot.id,
+      index: slot.index,
+      itemId: slot.occupantId as string,
+      metadata: { ...slot.metadata },
+    }));
 };
 
 export class InventoryState {
@@ -102,7 +124,7 @@ export class InventoryState {
   applyOverlayUpdate(update: InventoryOverlayUpdate): void {
     const normalisedSlots = update.slots.map((slot) => normaliseSlot(slot)).sort((a, b) => a.index - b.index);
     const entries = buildInventoryEntries(normalisedSlots);
-    const used = entries.reduce((total, entry) => total + Math.max(entry.quantity, 0), 0);
+    const used = computeUsedCapacity(normalisedSlots);
     const capacity = Math.max(update.capacity, used, 0);
     const snapshot: InventorySnapshot = {
       capacity,
@@ -111,6 +133,7 @@ export class InventoryState {
       entries,
       slots: normalisedSlots,
       slotCapacity: Math.max(update.capacity, 0),
+      equipment: buildEquipmentEntries(normalisedSlots),
     };
     this.setSnapshot(snapshot);
   }

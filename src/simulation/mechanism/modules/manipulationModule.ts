@@ -22,6 +22,12 @@ interface DropResourcePayload {
   mergeDistance?: number;
 }
 
+interface UseInventoryItemPayload {
+  slot?: number;
+  nodeId?: string;
+  target?: { x?: number; y?: number };
+}
+
 export interface ManipulationModuleOptions {
   gripStrength?: number;
 }
@@ -86,6 +92,9 @@ export class ManipulationModule extends MechanismModule {
     port.publishValue('lastDrop', null, {
       label: 'Last drop result',
     });
+    port.publishValue('lastToolUse', null, {
+      label: 'Last tool use',
+    });
 
     port.registerAction(
       'configureGrip',
@@ -143,6 +152,21 @@ export class ManipulationModule extends MechanismModule {
         ],
       },
     );
+
+    port.registerAction(
+      'useInventoryItem',
+      (payload, context) => this.useInventoryItem(payload, context),
+      {
+        label: 'Use inventory item',
+        summary: 'Activate a tool stored in a specified inventory slot.',
+        parameters: [
+          { key: 'slot', label: 'Slot index' },
+          { key: 'nodeId', label: 'Target node id' },
+          { key: 'target.x', label: 'Target X', unit: 'units' },
+          { key: 'target.y', label: 'Target Y', unit: 'units' },
+        ],
+      },
+    );
   }
 
   override onDetach(): void {
@@ -151,6 +175,7 @@ export class ManipulationModule extends MechanismModule {
     this.port?.unregisterAction('release');
     this.port?.unregisterAction('gatherResource');
     this.port?.unregisterAction('dropResource');
+    this.port?.unregisterAction('useInventoryItem');
     this.port = null;
   }
 
@@ -391,5 +416,83 @@ export class ManipulationModule extends MechanismModule {
 
     this.port.updateValue('lastDrop', summary);
     return summary;
+  }
+
+  private useInventoryItem(payload: unknown, context: unknown): Record<string, unknown> {
+    if (!this.port) {
+      return { status: 'inactive' };
+    }
+
+    const typedContext = context as ModuleActionContext;
+    const inventory = typedContext?.utilities?.inventory;
+    const resourceField = typedContext?.utilities?.resourceField;
+    if (!inventory || !resourceField) {
+      return { status: 'missing-systems' };
+    }
+
+    const typedPayload = (payload ?? {}) as UseInventoryItemPayload;
+    const rawSlot = typedPayload.slot;
+    const slotIndex = Number.isFinite(rawSlot) ? Math.max(Math.floor(rawSlot as number), 0) : null;
+    if (slotIndex === null) {
+      return { status: 'invalid-slot' };
+    }
+
+    const slot = inventory.getSlotSchemaByIndex(slotIndex);
+    if (!slot || !slot.occupantId) {
+      return { status: 'empty-slot', slotIndex };
+    }
+
+    const itemId = slot.occupantId.trim().toLowerCase();
+    if (itemId !== 'axe') {
+      return { status: 'invalid-item', slotIndex, item: slot.occupantId };
+    }
+
+    const nodeId = typedPayload.nodeId?.trim();
+    if (!nodeId) {
+      return { status: 'invalid-target', slotIndex, item: itemId };
+    }
+
+    const rawTarget = typedPayload.target ?? {};
+    const target = {
+      x: Number.isFinite(rawTarget.x) ? (rawTarget.x as number) : typedContext.state.position.x,
+      y: Number.isFinite(rawTarget.y) ? (rawTarget.y as number) : typedContext.state.position.y,
+    } as const;
+
+    const hitResult = resourceField.registerHit({ nodeId, toolType: itemId });
+
+    this.port.updateValue('lastToolUse', {
+      slotIndex,
+      item: itemId,
+      nodeId,
+      status: hitResult.status,
+      remaining: hitResult.remaining,
+      target,
+    });
+
+    if (hitResult.status === 'ok' || hitResult.status === 'depleted') {
+      this.operationsCompleted += 1;
+      this.port.updateValue('operationsCompleted', this.operationsCompleted);
+    }
+
+    typedContext.requestActuator(
+      'manipulation.tool',
+      {
+        slotIndex,
+        item: itemId,
+        nodeId,
+        target,
+        status: hitResult.status,
+      },
+      4,
+    );
+
+    return {
+      status: hitResult.status,
+      nodeId,
+      remaining: hitResult.remaining,
+      slotIndex,
+      item: itemId,
+      target,
+    };
   }
 }

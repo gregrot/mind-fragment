@@ -113,5 +113,21 @@ describe('InventoryStore slot schema integration', () => {
     expect(nextSnapshot?.metadata.locked).toBe(true);
     expect(nextSnapshot?.metadata.stackable).toBe(false);
   });
+
+  it('tracks fixed equipment separately from bulk resources', () => {
+    const store = new InventoryStore();
+    store.setSlotConfiguration(0, {
+      metadata: { stackable: false, moduleSubtype: 'Tool Bay' },
+      occupantId: 'axe',
+    });
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.entries).toEqual([]);
+    expect(snapshot.equipment).toEqual([
+      expect.objectContaining({ slotId: 'inventory-0', index: 0, itemId: 'axe' }),
+    ]);
+    expect(store.getSlotOccupantByIndex(0)).toBe('axe');
+    expect(store.getQuantity('axe')).toBe(0);
+  });
 });
 

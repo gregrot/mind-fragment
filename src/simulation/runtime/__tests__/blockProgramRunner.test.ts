@@ -343,7 +343,8 @@ describe('BlockProgramRunner', () => {
     mechanism.tick(1);
 
     const inventoryAfter = mechanism.getInventorySnapshot();
-    expect(inventoryAfter.used).toBe(0);
+    expect(inventoryAfter.used).toBe(1);
+    expect(inventoryAfter.entries).toEqual([]);
 
     const mechanismState = mechanism.getStateSnapshot();
     const nodes = mechanism.resourceField.list();

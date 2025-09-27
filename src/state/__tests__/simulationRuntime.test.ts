@@ -39,6 +39,7 @@ const createSceneStub = () => {
       entries: [],
       slots: [],
       slotCapacity: 0,
+      equipment: [],
     })),
     subscribeInventory: vi.fn(() => () => {}),
     subscribeTelemetry: vi.fn((listener: (snapshot: SimulationTelemetrySnapshot, mechanismId: string | null) => void) => {
@@ -266,9 +267,9 @@ describe('simulationRuntime', () => {
     expect(snapshot.slotCapacity).toBe(4);
     expect(snapshot.used).toBe(4);
     expect(snapshot.available).toBe(0);
-    expect(snapshot.entries).toEqual([
-      { resource: 'core.movement', quantity: 1 },
-      { resource: 'resource.ore', quantity: 3 },
+    expect(snapshot.entries).toEqual([{ resource: 'resource.ore', quantity: 3 }]);
+    expect(snapshot.equipment).toEqual([
+      expect.objectContaining({ slotId: 'inventory-0', itemId: 'core.movement' }),
     ]);
     expect(snapshot.slots).toHaveLength(3);
 

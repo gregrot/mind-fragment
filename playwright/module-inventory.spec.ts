@@ -45,8 +45,20 @@ test.describe('module inventory management', () => {
 
     await overlay.getByRole('tab', { name: 'Systems' }).click();
 
-    const inventorySlot = overlay.getByTestId('inventory-slot-inventory-0');
-    await expect(inventorySlot).toContainText('Empty slot');
+    const toolSlot = overlay.getByTestId('inventory-slot-inventory-0');
+    await expect(toolSlot).toContainText(/Axe/i);
+
+    const inventorySlotLocator = overlay
+      .locator('[data-testid^="inventory-slot-"]')
+      .filter({ hasText: 'Empty slot' })
+      .first();
+    await expect(inventorySlotLocator).toContainText('Empty slot');
+
+    const inventorySlotId = await inventorySlotLocator.getAttribute('data-testid');
+    if (!inventorySlotId) {
+      throw new Error('Unable to resolve inventory slot identifier.');
+    }
+    const inventorySlot = overlay.getByTestId(inventorySlotId);
 
     await page.waitForFunction(() => Boolean(window.__mfEntityOverlayManager));
 
@@ -103,6 +115,7 @@ test.describe('module inventory management', () => {
 
     const sensorSlot = overlay.getByTestId('chassis-slot-sensor-0');
     await expect(sensorSlot).toContainText('Empty slot');
+    await expect(toolSlot).toContainText(/Axe/i);
     await expect(inventorySlot).toContainText('Survey Scanner Suite');
 
     await overlay.getByRole('tab', { name: 'Programming' }).click();

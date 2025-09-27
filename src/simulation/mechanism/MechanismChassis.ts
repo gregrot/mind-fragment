@@ -118,6 +118,11 @@ export class MechanismChassis {
     this.inventory = new InventoryStore();
     this.resourceField = new ResourceField(createDefaultResourceNodes());
 
+    this.inventory.setSlotConfiguration(0, {
+      metadata: { stackable: false, moduleSubtype: 'Tool Bay' },
+      occupantId: 'axe',
+    });
+
     const initialSlots = Array.isArray(slotSchema) && slotSchema.length > 0 ? slotSchema : DEFAULT_CHASSIS_SLOTS;
     for (const definition of initialSlots) {
       this.registerSlotDefinition(definition);

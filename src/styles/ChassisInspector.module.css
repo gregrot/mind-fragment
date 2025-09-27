@@ -132,6 +132,8 @@
   align-items: center;
   gap: var(--space-3);
   cursor: pointer;
+  -ms-touch-action: none;
+  touch-action: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 

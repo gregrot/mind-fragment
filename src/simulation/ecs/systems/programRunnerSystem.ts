@@ -9,7 +9,7 @@ export function createProgramRunnerSystem({
 ]> {
   return {
     name: 'ProgramRunnerSystem',
-    components: [ProgramRunner],
+    createQuery: (world) => world.query.withAll(ProgramRunner),
     update: (_world, entities, delta) => {
       for (const [, runner] of entities) {
         runner.update(delta);

@@ -18,7 +18,7 @@ export function createStatusIndicatorSystem(
 ]> {
   return {
     name: 'StatusIndicatorSystem',
-    components: [MechanismCore, StatusIndicator],
+    createQuery: (world) => world.query.withAll(MechanismCore, StatusIndicator),
     update: (_world, entities) => {
       for (const [, mechanismCore, { indicator }] of entities) {
         const hasStatusModule = Boolean(mechanismCore.moduleStack.getModule(statusModuleId));

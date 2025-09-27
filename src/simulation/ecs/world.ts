@@ -1,4 +1,5 @@
 import { Entity, type EntityHost } from './entity';
+import { QueryBuilder, type QueryableWorld } from './queryBuilder';
 
 export type EntityId = number;
 
@@ -29,7 +30,8 @@ export type QueryResult<TComponents extends ComponentTuple> = [Entity, ...Compon
 export interface System<TComponents extends ComponentTuple = ComponentTuple> {
   readonly name?: string;
   readonly group?: string;
-  readonly components: TComponents;
+  readonly components?: TComponents;
+  readonly createQuery?: (world: ECSWorld) => QueryBuilder<TComponents>;
   update(world: ECSWorld, entities: Iterable<QueryResult<TComponents>>, delta: number): void;
 }
 
@@ -39,7 +41,7 @@ interface ComponentStore<TValue> extends ComponentHandle<TValue> {
 
 const EMPTY_ENTITY_SET: ReadonlySet<Entity> = new Set();
 
-export class ECSWorld implements EntityHost {
+export class ECSWorld implements EntityHost, QueryableWorld {
   private nextEntityId = 1 as EntityId;
   readonly entities = new Set<Entity>();
   readonly systemsByGroup = new Map<string, System[]>();
@@ -50,12 +52,16 @@ export class ECSWorld implements EntityHost {
   private readonly componentVersions = new Map<ComponentHandle<unknown>, number>();
   private readonly systems: System[] = [];
   private readonly entitySubscriptions = new Map<Entity, Array<() => void>>();
+  private readonly systemQueryBuilders = new Map<System, QueryBuilder<ComponentTuple>>();
+  private readonly queryPool: QueryBuilder<ComponentTuple>[] = [];
+  private worldVersion = 0;
 
   createEntity(): Entity {
     const entity = new Entity(this, this.nextEntityId++);
     this.entities.add(entity);
     this.entityLookup.set(entity.id as EntityId, entity);
     this.trackEntity(entity);
+    this.bumpWorldVersion();
     return entity;
   }
 
@@ -88,6 +94,7 @@ export class ECSWorld implements EntityHost {
     }
 
     entity.markDestroyed();
+    this.bumpWorldVersion();
   }
 
   hasEntity(entity: Entity): boolean {
@@ -156,13 +163,47 @@ export class ECSWorld implements EntityHost {
 
   runSystems(delta: number): void {
     for (const system of this.systems) {
-      const entities = this.iterateQuery(system.components);
-      system.update(this, entities, delta);
+      this.runSystem(system, delta);
     }
   }
 
-  query<TComponents extends ComponentTuple>(...components: TComponents): QueryResult<TComponents>[] {
-    return Array.from(this.iterateQuery(components));
+  private runSystem<TComponents extends ComponentTuple>(system: System<TComponents>, delta: number): void {
+    let builder = this.systemQueryBuilders.get(system) as QueryBuilder<TComponents> | undefined;
+    if (!builder) {
+      if (system.createQuery) {
+        builder = system.createQuery(this);
+      } else if (system.components) {
+        builder = this.query.withAll(...system.components);
+      } else {
+        builder = this.query as unknown as QueryBuilder<TComponents>;
+      }
+      this.systemQueryBuilders.set(system, builder as QueryBuilder<ComponentTuple>);
+    }
+
+    const entities = builder.iterate();
+    system.update(this, entities, delta);
+  }
+
+  queryAll<TComponents extends ComponentTuple>(...components: TComponents): QueryResult<TComponents>[] {
+    const builder = this.query.withAll(...components);
+    const results = builder.collect();
+    builder.release();
+    return results;
+  }
+
+  get query(): QueryBuilder<[]> {
+    const builder =
+      (this.queryPool.pop() as QueryBuilder<[]> | undefined) ??
+      (new QueryBuilder<[]>(this, (returned) => {
+        const pooled = returned as QueryBuilder<ComponentTuple>;
+        this.queryPool.push(pooled);
+      }));
+    builder.reset();
+    return builder;
+  }
+
+  getWorldVersion(): number {
+    return this.worldVersion;
   }
 
   getEntitiesWith(component: ComponentHandle<unknown>): ReadonlySet<Entity> {
@@ -191,73 +232,6 @@ export class ECSWorld implements EntityHost {
     entity.receiveComponentRemoval(component, previous);
   }
 
-  private *iterateQuery<TComponents extends ComponentTuple>(
-    components: TComponents,
-  ): IterableIterator<QueryResult<TComponents>> {
-    if (components.length === 0) {
-      for (const entity of this.entities) {
-        if (!entity.enabled) {
-          continue;
-        }
-        yield [entity] as unknown as QueryResult<TComponents>;
-      }
-      return;
-    }
-
-    const [first, ...rest] = components;
-    const indexed = this.componentIndex.get(first);
-
-    if (indexed) {
-      for (const entity of indexed) {
-        if (!this.entities.has(entity) || !entity.enabled) {
-          continue;
-        }
-
-        const collected: unknown[] = [];
-
-        if (!first.has(entity)) {
-          continue;
-        }
-        collected.push(first.get(entity));
-
-        let missing = false;
-        for (const component of rest) {
-          if (!component.has(entity)) {
-            missing = true;
-            break;
-          }
-          collected.push(component.get(entity));
-        }
-
-        if (!missing) {
-          yield [entity, ...collected] as unknown as QueryResult<TComponents>;
-        }
-      }
-      return;
-    }
-
-    for (const [entity, firstValue] of first.entries()) {
-      if (!this.entities.has(entity) || !entity.enabled) {
-        continue;
-      }
-
-      const collected: unknown[] = [firstValue];
-      let missing = false;
-
-      for (const component of rest) {
-        if (!component.has(entity)) {
-          missing = true;
-          break;
-        }
-        collected.push(component.get(entity));
-      }
-
-      if (!missing) {
-        yield [entity, ...collected] as unknown as QueryResult<TComponents>;
-      }
-    }
-  }
-
   private getComponentStore<TValue>(component: ComponentHandle<TValue>): ComponentStore<TValue> {
     const store = this.components.get(component.id) as ComponentStore<TValue> | undefined;
     if (!store) {
@@ -275,6 +249,7 @@ export class ECSWorld implements EntityHost {
           this.addToComponentIndex(component, entity);
         }
         this.bumpComponentVersion(component);
+        this.bumpWorldVersion();
       }),
     );
 
@@ -282,12 +257,14 @@ export class ECSWorld implements EntityHost {
       entity.componentRemoved.connect(({ component }) => {
         this.removeFromComponentIndex(component, entity);
         this.bumpComponentVersion(component);
+        this.bumpWorldVersion();
       }),
     );
 
     subscriptions.push(
       entity.componentChanged.connect(({ component }) => {
         this.bumpComponentVersion(component);
+        this.bumpWorldVersion();
       }),
     );
 
@@ -301,6 +278,25 @@ export class ECSWorld implements EntityHost {
           }
           this.bumpComponentVersion(component);
         }
+        this.bumpWorldVersion();
+      }),
+    );
+
+    subscriptions.push(
+      entity.parentChanged.connect(() => {
+        this.bumpWorldVersion();
+      }),
+    );
+
+    subscriptions.push(
+      entity.childAdded.connect(() => {
+        this.bumpWorldVersion();
+      }),
+    );
+
+    subscriptions.push(
+      entity.childRemoved.connect(() => {
+        this.bumpWorldVersion();
       }),
     );
 
@@ -333,6 +329,10 @@ export class ECSWorld implements EntityHost {
   private bumpComponentVersion(component: ComponentHandle<unknown>): void {
     const current = this.componentVersions.get(component) ?? 0;
     this.componentVersions.set(component, current + 1);
+  }
+
+  private bumpWorldVersion(): void {
+    this.worldVersion += 1;
   }
 
   private assertOwnership(entity: Entity): void {

@@ -11,7 +11,7 @@ export function createMechanismPhysicsSystem({
 ]> {
   return {
     name: 'MechanismPhysicsSystem',
-    components: [MechanismCore, Transform],
+    createQuery: (world) => world.query.withAll(MechanismCore, Transform),
     update: (_world, entities, delta) => {
       for (const [entity, mechanism] of entities) {
         mechanism.tick(delta);

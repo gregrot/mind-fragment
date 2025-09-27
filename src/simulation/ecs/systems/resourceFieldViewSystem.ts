@@ -23,7 +23,7 @@ export function createResourceFieldViewSystem(
 
   return {
     name: 'ResourceFieldViewSystem',
-    components: [ResourceFieldView],
+    createQuery: (world) => world.query.withAll(ResourceFieldView),
     update: (world, entities) => {
       const activeEntities = new Set<Entity>();
 

@@ -41,7 +41,7 @@ export function createSelectableSystem({
 
   return {
     name: 'SelectableSystem',
-    components: [Selectable, SpriteRef],
+    createQuery: (world) => world.query.withAll(Selectable, SpriteRef),
     update: (world, entities) => {
       const active = new Set<Entity>();
 

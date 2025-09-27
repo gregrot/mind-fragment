@@ -83,17 +83,17 @@ describe('ECSWorld', () => {
     velocity.set(walker, { x: 1, y: 0 });
     position.set(statue, { x: 5, y: 5 });
 
-    expect(world.query(position)).toEqual([
+    expect(world.queryAll(position)).toEqual([
       [walker, { x: 1, y: 1 }],
       [statue, { x: 5, y: 5 }],
     ]);
-    expect(world.query(position, velocity)).toEqual([[walker, { x: 1, y: 1 }, { x: 1, y: 0 }]]);
+    expect(world.queryAll(position, velocity)).toEqual([[walker, { x: 1, y: 1 }, { x: 1, y: 0 }]]);
 
     walker.disable();
-    expect(world.query(position, velocity)).toEqual([]);
+    expect(world.queryAll(position, velocity)).toEqual([]);
 
     walker.enable();
-    expect(world.query(position, velocity)).toEqual([[walker, { x: 1, y: 1 }, { x: 1, y: 0 }]]);
+    expect(world.queryAll(position, velocity)).toEqual([[walker, { x: 1, y: 1 }, { x: 1, y: 0 }]]);
   });
 
   it('runs systems against matching entities', () => {
@@ -110,7 +110,7 @@ describe('ECSWorld', () => {
 
     world.addSystem({
       name: 'movement',
-      components: [position, velocity],
+      createQuery: (lookup) => lookup.query.withAll(position, velocity),
       update: (_, entities, delta) => {
         for (const [entity, pos, vel] of entities) {
           position.set(entity, {

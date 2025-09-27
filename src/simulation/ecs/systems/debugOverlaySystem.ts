@@ -51,7 +51,7 @@ export function createDebugOverlaySystem(
 ]> {
   return {
     name: 'DebugOverlaySystem',
-    components: [MechanismCore, ProgramRunner, SpriteRef, DebugOverlay],
+    createQuery: (world) => world.query.withAll(MechanismCore, ProgramRunner, SpriteRef, DebugOverlay),
     update: (_world, entities) => {
       const processed = new Set<Entity>();
 

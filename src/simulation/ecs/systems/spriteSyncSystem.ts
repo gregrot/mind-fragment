@@ -11,7 +11,7 @@ export function createSpriteSyncSystem({
 ]> {
   return {
     name: 'SpriteSyncSystem',
-    components: [Transform, SpriteRef],
+    createQuery: (world) => world.query.withAll(Transform, SpriteRef),
     update: (_world, entities) => {
       for (const [, transform, sprite] of entities) {
         sprite.rotation = transform.rotation;

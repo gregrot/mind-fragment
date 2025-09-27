@@ -123,7 +123,7 @@ export class Entity {
     if (next && next.host !== this.host) {
       throw new Error('Parent must belong to the same world.');
     }
-    if (next && next.isDescendantOf(this)) {
+    if (next && next.hasAncestor(this)) {
       throw new Error('Cannot parent an entity to its descendant.');
     }
     if (this._parent === next) {
@@ -223,7 +223,7 @@ export class Entity {
     }
   }
 
-  private isDescendantOf(target: Entity): boolean {
+  hasAncestor(target: Entity): boolean {
     let current: Entity | null = this._parent;
     while (current) {
       if (current === target) {

@@ -1,6 +1,7 @@
 import type { EntityId } from '../simulation/ecs/world';
 import type { EntityOverlayData } from '../types/overlay';
 import { chassisState, inventoryState } from './runtime';
+import { simulationRuntime } from './simulationRuntime';
 
 export interface OverlayPersistenceAdapter {
   saveEntity: (next: EntityOverlayData, previous: EntityOverlayData | undefined) => Promise<void>;
@@ -18,6 +19,7 @@ const defaultAdapter: OverlayPersistenceAdapter = {
     if (next.inventory) {
       inventoryState.applyOverlayUpdate(next.inventory);
     }
+    simulationRuntime.applyOverlayPersistence(next);
   },
   async removeEntity() {
     // Complex overlays remain in memory so there is no persistence layer to clear.

@@ -11,7 +11,9 @@ import {
 import { createSimulationWorld, DEFAULT_MECHANISM_ID, type SimulationWorldContext } from './runtime/simulationWorld';
 import type { EntityId } from './ecs/world';
 import type { InventorySnapshot } from './mechanism/inventory';
-import type { ChassisSnapshot } from './mechanism';
+import { InventoryStore } from './mechanism/inventory';
+import { MechanismChassis, type MechanismModule, type ChassisSnapshot, createModuleInstance } from './mechanism';
+import type { SlotSchema } from '../types/slots';
 
 interface TickPayload {
   deltaMS: number;
@@ -43,6 +45,189 @@ const EMPTY_PROGRAM_DEBUG_STATE: ProgramDebugState = {
   currentInstruction: null,
   timeRemaining: 0,
   frames: [],
+};
+
+export interface MechanismOverlayChassisUpdate {
+  capacity: number;
+  slots: SlotSchema[];
+}
+
+export interface MechanismOverlayInventoryUpdate {
+  capacity: number;
+  slots: SlotSchema[];
+}
+
+export interface MechanismOverlayUpdate {
+  chassis?: MechanismOverlayChassisUpdate;
+  inventory?: MechanismOverlayInventoryUpdate;
+}
+
+const sortSlots = <T extends { index: number }>(slots: T[]): T[] => {
+  return [...slots].sort((a, b) => a.index - b.index);
+};
+
+const reconcileChassisFromOverlay = (
+  mechanism: MechanismChassis,
+  update: MechanismOverlayChassisUpdate,
+): void => {
+  const targetSlots = sortSlots(update.slots ?? []);
+  if (targetSlots.length === 0) {
+    return;
+  }
+
+  const actualSnapshot = mechanism.getSlotSchemaSnapshot();
+  const targetSlotsById = new Map(targetSlots.map((slot) => [slot.id, slot]));
+  const detachedModules = new Map<string, MechanismModule>();
+  const attachedModuleIds = new Set(mechanism.moduleStack.list().map((module) => module.definition.id));
+
+  const detach = (moduleId: string): void => {
+    const module = mechanism.detachModule(moduleId);
+    if (module) {
+      detachedModules.set(moduleId, module);
+      attachedModuleIds.delete(moduleId);
+    }
+  };
+
+  for (const actualSlot of actualSnapshot.slots) {
+    const targetSlot = targetSlotsById.get(actualSlot.id);
+    if (actualSlot.metadata.locked) {
+      continue;
+    }
+    const expectedOccupant = targetSlot?.occupantId ?? null;
+    if (actualSlot.occupantId && actualSlot.occupantId !== expectedOccupant) {
+      detach(actualSlot.occupantId);
+    }
+  }
+
+  for (const targetSlot of targetSlots) {
+    const occupantId = targetSlot.occupantId;
+    if (!occupantId || attachedModuleIds.has(occupantId)) {
+      continue;
+    }
+    const reserved = detachedModules.get(occupantId) ?? createModuleInstance(occupantId);
+    try {
+      mechanism.attachModule(reserved);
+      attachedModuleIds.add(occupantId);
+      detachedModules.delete(occupantId);
+    } catch (error) {
+      console.warn(`Failed to attach module ${occupantId} during overlay reconciliation.`, error);
+    }
+  }
+
+};
+
+const ensureInventoryCapacity = (inventory: InventoryStore, capacity: number): void => {
+  if (capacity <= 0) {
+    return;
+  }
+  const current = inventory.getSlotSchemaSnapshot().capacity;
+  if (capacity > current) {
+    inventory.configureSlotCapacity(capacity);
+  }
+};
+
+const ensureInventorySlotMetadata = (inventory: InventoryStore, slot: SlotSchema): void => {
+  const existing = inventory.getSlot(slot.id);
+  if (
+    !existing ||
+    existing.metadata.locked !== slot.metadata.locked ||
+    existing.metadata.stackable !== slot.metadata.stackable ||
+    existing.metadata.moduleSubtype !== slot.metadata.moduleSubtype
+  ) {
+    inventory.setSlotMetadata(slot.id, slot.metadata);
+  }
+};
+
+const ensureInventorySlotOccupant = (inventory: InventoryStore, slot: SlotSchema): void => {
+  const desiredId = slot.occupantId;
+  if (!desiredId) {
+    return;
+  }
+
+  const desiredCount = Math.max(slot.stackCount ?? 1, 1);
+  const currentSlot = inventory.getSlot(slot.id);
+  if (currentSlot?.occupantId === desiredId) {
+    const currentCount = Math.max(currentSlot.stackCount ?? 1, 1);
+    if (currentCount > desiredCount) {
+      inventory.withdraw(desiredId, currentCount - desiredCount);
+    } else if (currentCount < desiredCount) {
+      inventory.store(desiredId, desiredCount - currentCount);
+    }
+    return;
+  }
+
+  const snapshot = inventory.getSlotSchemaSnapshot();
+  const donor = snapshot.slots.find((candidate) => candidate.occupantId === desiredId);
+  if (donor && !donor.metadata.locked && !slot.metadata.locked) {
+    inventory.transferSlotItem(donor.id, slot.id);
+    const updatedSlot = inventory.getSlot(slot.id);
+    const updatedCount = Math.max(updatedSlot?.stackCount ?? 1, 1);
+    if (updatedCount > desiredCount) {
+      inventory.withdraw(desiredId, updatedCount - desiredCount);
+    } else if (updatedCount < desiredCount) {
+      inventory.store(desiredId, desiredCount - updatedCount);
+    }
+    return;
+  }
+
+  inventory.store(desiredId, desiredCount);
+  const afterStoreSnapshot = inventory.getSlotSchemaSnapshot();
+  const stored = afterStoreSnapshot.slots.find((candidate) => candidate.occupantId === desiredId);
+  if (stored && stored.id !== slot.id && !stored.metadata.locked && !slot.metadata.locked) {
+    inventory.transferSlotItem(stored.id, slot.id);
+  }
+};
+
+const clearInventorySlot = (inventory: InventoryStore, slot: SlotSchema): void => {
+  if (slot.metadata.locked) {
+    return;
+  }
+  const current = inventory.getSlot(slot.id);
+  if (!current?.occupantId) {
+    return;
+  }
+  const amount = Math.max(current.stackCount ?? 1, 1);
+  inventory.withdraw(current.occupantId, amount);
+};
+
+const reconcileInventoryFromOverlay = (
+  inventory: InventoryStore,
+  update: MechanismOverlayInventoryUpdate,
+): void => {
+  const targetSlots = sortSlots(update.slots ?? []);
+  if (targetSlots.length === 0) {
+    return;
+  }
+
+  ensureInventoryCapacity(inventory, Math.max(update.capacity, targetSlots.length));
+
+  for (const slot of targetSlots) {
+    ensureInventorySlotMetadata(inventory, slot);
+  }
+
+  for (const slot of targetSlots) {
+    if (slot.occupantId) {
+      ensureInventorySlotOccupant(inventory, slot);
+    }
+  }
+
+  for (const slot of targetSlots) {
+    if (!slot.occupantId) {
+      clearInventorySlot(inventory, slot);
+    }
+  }
+};
+
+export const reconcileMechanismOverlayState = (
+  mechanism: MechanismChassis,
+  overlay: MechanismOverlayUpdate,
+): void => {
+  if (overlay.chassis) {
+    reconcileChassisFromOverlay(mechanism, overlay.chassis);
+  }
+  if (overlay.inventory) {
+    reconcileInventoryFromOverlay(mechanism.inventory, overlay.inventory);
+  }
 };
 
 export class RootScene {
@@ -394,6 +579,17 @@ export class RootScene {
       teardown?.();
       teardown = null;
     };
+  }
+
+  reconcileMechanismOverlay(mechanismId: string, overlay: MechanismOverlayUpdate): void {
+    const targetId = mechanismId ?? this.getActiveMechanismId();
+    this.onContextReady((context) => {
+      const mechanismCore = context.getMechanismCore(targetId);
+      if (!mechanismCore) {
+        return;
+      }
+      reconcileMechanismOverlayState(mechanismCore, overlay);
+    });
   }
 
   subscribeProgramStatus(listener: (status: ProgramRunnerStatus, mechanismId: string) => void): () => void {

@@ -1,4 +1,4 @@
-import type { RootScene } from '../simulation/rootScene';
+import type { MechanismOverlayUpdate, RootScene } from '../simulation/rootScene';
 import type { CompiledProgram, Diagnostic } from '../simulation/runtime/blockProgram';
 import type { ProgramDebugState, ProgramRunnerStatus } from '../simulation/runtime/blockProgramRunner';
 import { DEFAULT_STARTUP_PROGRAM } from '../simulation/runtime/defaultProgram';
@@ -7,6 +7,7 @@ import { DEFAULT_MECHANISM_ID } from '../simulation/runtime/simulationWorld';
 import type { EntityId } from '../simulation/ecs/world';
 import type { InventorySnapshot } from '../simulation/mechanism/inventory';
 import type { ChassisSnapshot } from '../simulation/mechanism';
+import type { EntityOverlayData } from '../types/overlay';
 import {
   chassisState,
   type ChassisListener,
@@ -281,6 +282,27 @@ class SimulationRuntime {
 
   applyChassisOverlayUpdate(update: ChassisOverlayUpdate): void {
     chassisState.applyOverlayUpdate(update);
+  }
+
+  applyOverlayPersistence(data: EntityOverlayData): void {
+    if (data.overlayType !== 'complex') {
+      return;
+    }
+    const overlay: MechanismOverlayUpdate = {};
+    if (data.chassis) {
+      overlay.chassis = data.chassis;
+    }
+    if (data.inventory) {
+      overlay.inventory = data.inventory;
+    }
+    if (!overlay.chassis && !overlay.inventory) {
+      return;
+    }
+    if (!this.scene) {
+      return;
+    }
+    const targetMechanismId = this.normaliseMechanismId(data.mechanismId ?? this.selectedMechanismId);
+    this.scene.reconcileMechanismOverlay(targetMechanismId, overlay);
   }
 
   private normaliseMechanismId(mechanismId: string | null | undefined): string {

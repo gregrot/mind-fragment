@@ -1,6 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ECSWorld, Entity } from '../index';
+import { System as BaseSystem } from '../system';
+import type { ComponentHandle, QueryResult } from '../world';
+
+class MovementSystem extends BaseSystem<[
+  ComponentHandle<{ x: number; y: number }>,
+  ComponentHandle<{ x: number; y: number }>,
+]> {
+  constructor(
+    private readonly position: ComponentHandle<{ x: number; y: number }>,
+    private readonly velocity: ComponentHandle<{ x: number; y: number }>,
+  ) {
+    super({ name: 'movement' });
+  }
+
+  protected override query(world: ECSWorld) {
+    return world.query.withAll(this.position, this.velocity);
+  }
+
+  override process(
+    [entity, pos, vel]: QueryResult<[
+      ComponentHandle<{ x: number; y: number }>,
+      ComponentHandle<{ x: number; y: number }>,
+    ]>,
+    delta: number,
+    _world: ECSWorld,
+  ): void {
+    this.position.set(entity, {
+      x: pos.x + vel.x * delta,
+      y: pos.y + vel.y * delta,
+    });
+  }
+}
 
 describe('ECSWorld', () => {
   it('creates and destroys entities', () => {
@@ -108,18 +140,7 @@ describe('ECSWorld', () => {
     velocity.set(mover, { x: 2, y: -1 });
     position.set(parked, { x: 10, y: 10 });
 
-    world.addSystem({
-      name: 'movement',
-      createQuery: (lookup) => lookup.query.withAll(position, velocity),
-      update: (_, entities, delta) => {
-        for (const [entity, pos, vel] of entities) {
-          position.set(entity, {
-            x: pos.x + vel.x * delta,
-            y: pos.y + vel.y * delta,
-          });
-        }
-      },
-    });
+    world.addSystem(new MovementSystem(position, velocity));
 
     world.runSystems(0.5);
 

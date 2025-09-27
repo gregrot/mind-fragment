@@ -1,6 +1,7 @@
 import type { SimulationWorldComponents, StatusIndicatorComponent } from '../../runtime/simulationWorld';
 import type { MechanismChassis } from '../../mechanism';
-import type { ComponentHandle, System } from '../world';
+import type { ComponentHandle, QueryResult, ECSWorld } from '../world';
+import { System } from '../system';
 
 interface StatusIndicatorSystemDependencies
   extends Pick<SimulationWorldComponents, 'MechanismCore' | 'StatusIndicator'> {}
@@ -9,33 +10,54 @@ interface StatusIndicatorSystemOptions {
   statusModuleId: string;
 }
 
-export function createStatusIndicatorSystem(
-  { MechanismCore, StatusIndicator }: StatusIndicatorSystemDependencies,
-  { statusModuleId }: StatusIndicatorSystemOptions,
-): System<[
+class StatusIndicatorSystem extends System<[
   ComponentHandle<MechanismChassis>,
   ComponentHandle<StatusIndicatorComponent>,
 ]> {
-  return {
-    name: 'StatusIndicatorSystem',
-    createQuery: (world) => world.query.withAll(MechanismCore, StatusIndicator),
-    update: (_world, entities) => {
-      for (const [, mechanismCore, { indicator }] of entities) {
-        const hasStatusModule = Boolean(mechanismCore.moduleStack.getModule(statusModuleId));
+  constructor(
+    private readonly MechanismCore: ComponentHandle<MechanismChassis>,
+    private readonly StatusIndicator: ComponentHandle<StatusIndicatorComponent>,
+    private readonly statusModuleId: string,
+  ) {
+    super({ name: 'StatusIndicatorSystem' });
+  }
 
-        if (!hasStatusModule) {
-          indicator.visible = false;
-          continue;
-        }
+  protected override query(world: ECSWorld) {
+    return world.query.withAll(this.MechanismCore, this.StatusIndicator);
+  }
 
-        const telemetry = mechanismCore.getTelemetrySnapshot();
-        const statusTelemetry = telemetry.values?.[statusModuleId];
-        const activeEntry = statusTelemetry?.active;
-        const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;
+  override process(
+    [
+      ,
+      mechanismCore,
+      { indicator },
+    ]: QueryResult<[
+      ComponentHandle<MechanismChassis>,
+      ComponentHandle<StatusIndicatorComponent>,
+    ]>,
+    _delta: number,
+    _world: ECSWorld,
+  ): void {
+    const hasStatusModule = Boolean(mechanismCore.moduleStack.getModule(this.statusModuleId));
 
-        indicator.alpha = isActive ? 1 : 0.2;
-        indicator.visible = true;
-      }
-    },
-  };
+    if (!hasStatusModule) {
+      indicator.visible = false;
+      return;
+    }
+
+    const telemetry = mechanismCore.getTelemetrySnapshot();
+    const statusTelemetry = telemetry.values?.[this.statusModuleId];
+    const activeEntry = statusTelemetry?.active;
+    const isActive = typeof activeEntry?.value === 'boolean' ? activeEntry.value : false;
+
+    indicator.alpha = isActive ? 1 : 0.2;
+    indicator.visible = true;
+  }
+}
+
+export function createStatusIndicatorSystem(
+  { MechanismCore, StatusIndicator }: StatusIndicatorSystemDependencies,
+  { statusModuleId }: StatusIndicatorSystemOptions,
+): StatusIndicatorSystem {
+  return new StatusIndicatorSystem(MechanismCore, StatusIndicator, statusModuleId);
 }

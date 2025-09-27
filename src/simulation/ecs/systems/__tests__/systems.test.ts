@@ -19,6 +19,8 @@ import { ResourceField } from '../../../resources/resourceField';
 import type { ResourceFieldViewComponent, SelectableComponent } from '../../../runtime/simulationWorld';
 
 import { ECSWorld } from '../../world';
+import { System as BaseSystem, type SystemOptions } from '../../system';
+import type { ComponentHandle, QueryResult } from '../../world';
 import {
   createDebugOverlaySystem,
   createProgramRunnerSystem,
@@ -202,6 +204,41 @@ const createActionEntry = (revision = 1) => ({
   metadata: {},
   revision,
 });
+
+class NoopSystem extends BaseSystem<[]> {
+  constructor(
+    name: string,
+    private readonly onRun: (name: string) => void,
+    options: SystemOptions = {},
+  ) {
+    super({ name, processEmpty: true, ...options });
+  }
+
+  protected override query(world: ECSWorld) {
+    return world.query;
+  }
+
+  override processAll(_world: ECSWorld, _entities: QueryResult<[]>[], _delta: number): void {
+    this.onRun(this.name);
+  }
+}
+
+class QueryCachingSystem extends BaseSystem<[ComponentHandle<number>]> {
+  public queryCalls = 0;
+
+  constructor(
+    private readonly handle: ComponentHandle<number>,
+  ) {
+    super({ name: 'QueryCachingSystem', processEmpty: true });
+  }
+
+  protected override query(world: ECSWorld) {
+    this.queryCalls += 1;
+    return world.query.withAll(this.handle);
+  }
+
+  override processAll(_world: ECSWorld, _entities: QueryResult<[ComponentHandle<number>]>[], _delta: number): void {}
+}
 
 describe('simulation systems', () => {
   it('advances program runners by the provided delta time', () => {
@@ -535,5 +572,52 @@ describe('simulation systems', () => {
     world.runSystems(0);
 
     expect(sprite.off).toHaveBeenCalledTimes(2);
+  });
+
+  it('executes systems grouped by their declared group order', () => {
+    const world = new ECSWorld();
+    const executionOrder: string[] = [];
+    const record = (name: string) => executionOrder.push(name);
+
+    world.addSystem(new NoopSystem('simulation/first', record, { group: 'simulation' }));
+    world.addSystem(new NoopSystem('render/only', record, { group: 'render' }));
+    world.addSystem(new NoopSystem('simulation/second', record, { group: 'simulation' }));
+
+    world.runSystems(0);
+
+    expect(executionOrder).toEqual(['simulation/first', 'simulation/second', 'render/only']);
+  });
+
+  it('resolves system dependencies when determining execution order', () => {
+    const world = new ECSWorld();
+    const executionOrder: string[] = [];
+    const record = (name: string) => executionOrder.push(name);
+
+    const systemA = new NoopSystem('A', record, { group: 'simulation' });
+    const systemB = new NoopSystem('B', record, { group: 'simulation', dependencies: ['A'] });
+    const systemC = new NoopSystem('C', record, { group: 'simulation', after: ['B'] });
+    const systemD = new NoopSystem('D', record, { group: 'simulation', before: ['C'], after: ['B'] });
+
+    world.addSystem(systemC);
+    world.addSystem(systemD);
+    world.addSystem(systemA);
+    world.addSystem(systemB);
+
+    world.runSystems(0);
+
+    expect(executionOrder).toEqual(['A', 'B', 'D', 'C']);
+  });
+
+  it('caches queries per system instance', () => {
+    const world = new ECSWorld();
+    const TestHandle = world.defineComponent<number>('TestComponent');
+    const system = new QueryCachingSystem(TestHandle);
+
+    world.addSystem(system);
+
+    world.runSystems(0);
+    world.runSystems(0);
+
+    expect(system.queryCalls).toBe(1);
   });
 });

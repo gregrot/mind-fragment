@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import MechanismProgrammingPanel from '../MechanismProgrammingPanel';
+import type { PaletteBlockEntry } from '../BlockPalette';
 import type { InspectorProps } from '../../overlay/inspectorRegistry';
 import { useProgrammingInspector } from '../../state/ProgrammingInspectorContext';
 import { useSimulationRuntime } from '../../hooks/useSimulationRuntime';
-import { MODULE_LIBRARY } from '../../simulation/mechanism/modules/moduleLibrary';
+import { DEFAULT_MODULE_LOADOUT, MODULE_LIBRARY } from '../../simulation/mechanism/modules/moduleLibrary';
+import { BLOCK_LIBRARY } from '../../blocks/library';
 import type { BlockInstance, WorkspaceState } from '../../types/blocks';
 
 const MODULE_LABELS = new Map(MODULE_LIBRARY.map((module) => [module.id, module.title]));
@@ -73,7 +75,11 @@ const MechanismProgrammingInspector = ({ entity }: InspectorProps): JSX.Element 
   const { status, stopProgram } = useSimulationRuntime(mechanismId);
 
   const installedModules = useMemo(() => {
-    const slots = entity.chassis?.slots ?? [];
+    const slots = entity.chassis?.slots;
+    if (!slots || slots.length === 0) {
+      return new Set(DEFAULT_MODULE_LOADOUT);
+    }
+
     const installed = new Set<string>();
     for (const slot of slots) {
       if (slot.occupantId) {
@@ -115,12 +121,52 @@ const MechanismProgrammingInspector = ({ entity }: InspectorProps): JSX.Element 
     });
   }, [missingModuleIds]);
 
+  const formatModuleList = useCallback((moduleIds: string[]): string => {
+    if (moduleIds.length === 0) {
+      return '';
+    }
+
+    const labels = moduleIds.map((moduleId) => MODULE_LABELS.get(moduleId) ?? moduleId);
+    if (labels.length === 1) {
+      return labels[0];
+    }
+
+    if (labels.length === 2) {
+      return `${labels[0]} and ${labels[1]}`;
+    }
+
+    const last = labels.pop();
+    return `${labels.join(', ')}, and ${last}`;
+  }, []);
+
+  const paletteBlocks = useMemo<PaletteBlockEntry[]>(() => {
+    return BLOCK_LIBRARY.map((definition) => {
+      const requiredModules = BLOCK_MODULE_REQUIREMENTS[definition.id];
+      if (!requiredModules || requiredModules.every((moduleId) => installedModules.has(moduleId))) {
+        return { definition, isLocked: false };
+      }
+
+      const missingModules = requiredModules.filter((moduleId) => !installedModules.has(moduleId));
+      const moduleList = formatModuleList(missingModules);
+      const lockMessage = moduleList
+        ? `Install ${moduleList} to use this block.`
+        : 'Install the required module to use this block.';
+
+      return {
+        definition,
+        isLocked: true,
+        lockMessage,
+      };
+    });
+  }, [formatModuleList, installedModules]);
+
   const isRunning = status === 'running' || entity.programState?.isRunning === true;
   const activeBlockId = entity.programState?.activeBlockId ?? null;
   const canStopProgram = status === 'running' ? stopProgram : undefined;
 
   return (
     <MechanismProgrammingPanel
+      paletteBlocks={paletteBlocks}
       workspace={workspace}
       onDrop={onDrop}
       onTouchDrop={onTouchDrop}

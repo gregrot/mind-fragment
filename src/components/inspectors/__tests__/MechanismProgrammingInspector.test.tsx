@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MechanismProgrammingInspector from '../MechanismProgrammingInspector';
 import { ProgrammingInspectorProvider } from '../../../state/ProgrammingInspectorContext';
@@ -121,7 +121,8 @@ describe('MechanismProgrammingInspector', () => {
     renderInspector(entity, workspace);
 
     expect(screen.getByTestId('module-warning-panel')).toBeInTheDocument();
-    expect(screen.getByText(/locomotion thrusters mk1/i)).toBeInTheDocument();
+    const warningPanel = screen.getByTestId('module-warning-panel');
+    expect(within(warningPanel).getByText(/locomotion thrusters mk1/i)).toBeInTheDocument();
     const moveBlock = screen.getByTestId('block-move');
     expect(moveBlock).toHaveAttribute('data-state-warning', 'true');
   });
@@ -163,5 +164,37 @@ describe('MechanismProgrammingInspector', () => {
     );
 
     expect(screen.getByTestId('block-move')).toHaveAttribute('data-state-active', 'true');
+  });
+
+  it('disables palette blocks that require missing modules and reenables them once installed', () => {
+    mockStatus = 'idle';
+    const workspace = createWorkspaceWithMoveBlock();
+    const entityWithoutModule = createEntity({
+      chassis: {
+        capacity: 1,
+        slots: [createSlot('core-0', 0, null)],
+      },
+    });
+
+    const { rerender, contextValue } = renderInspector(entityWithoutModule, workspace);
+
+    const lockedMovePalette = screen.getByTestId('palette-move');
+    expect(lockedMovePalette).toHaveAttribute('aria-disabled', 'true');
+    expect(lockedMovePalette).toHaveAttribute('draggable', 'false');
+    expect(lockedMovePalette).toHaveAttribute('data-locked', 'true');
+    expect(lockedMovePalette).toHaveTextContent(/Install Locomotion Thrusters Mk1/i);
+
+    const entityWithModule = createEntity();
+
+    rerender(
+      <ProgrammingInspectorProvider value={contextValue}>
+        <MechanismProgrammingInspector entity={entityWithModule} onClose={() => {}} />
+      </ProgrammingInspectorProvider>,
+    );
+
+    const availableMovePalette = screen.getByTestId('palette-move');
+    expect(availableMovePalette).not.toHaveAttribute('aria-disabled');
+    expect(availableMovePalette).toHaveAttribute('draggable', 'true');
+    expect(availableMovePalette).not.toHaveAttribute('data-locked');
   });
 });

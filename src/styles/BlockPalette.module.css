@@ -83,6 +83,12 @@
   align-self: start;
 }
 
+.paletteItemLocked {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
 .paletteItem:active {
   cursor: grabbing;
   transform: scale(0.98);
@@ -167,6 +173,12 @@
   margin-top: var(--space-2);
   pointer-events: auto;
   inline-size: 100%;
+}
+
+.paletteLockMessage {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
 }
 
 .paletteItemActive {

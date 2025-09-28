@@ -145,6 +145,7 @@ export class CargoHoldModule extends MechanismModule {
         entries: [],
         slots: [],
         slotCapacity: 0,
+        equipment: [],
       });
     }
   }

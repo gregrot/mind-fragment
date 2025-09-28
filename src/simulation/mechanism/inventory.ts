@@ -5,6 +5,13 @@ export interface InventoryEntry {
   quantity: number;
 }
 
+export interface EquipmentEntry {
+  slotId: string;
+  index: number;
+  itemId: string;
+  metadata: SlotMetadata;
+}
+
 export interface InventorySnapshot {
   capacity: number;
   used: number;
@@ -12,6 +19,7 @@ export interface InventorySnapshot {
   entries: InventoryEntry[];
   slots: SlotSchema[];
   slotCapacity: number;
+  equipment: EquipmentEntry[];
 }
 
 export interface StoreResult {
@@ -70,6 +78,11 @@ const DEFAULT_SLOT_CAPACITY = 10;
 const SLOT_ID_PREFIX = 'inventory';
 
 const createSlotId = (index: number): string => `${SLOT_ID_PREFIX}-${index}`;
+
+const normaliseResourceId = (resource: string | null | undefined): string | null => {
+  const trimmed = resource?.trim().toLowerCase();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+};
 
 export class InventoryStore {
   private readonly capacitySources = new Map<string, number>();
@@ -162,15 +175,21 @@ export class InventoryStore {
   }
 
   getQuantity(resource: string): number {
-    const normalised = resource.trim().toLowerCase();
+    const normalised = normaliseResourceId(resource);
     if (!normalised) {
       return 0;
     }
     let total = 0;
-    for (const state of this.slotStates.values()) {
-      if (state.occupantId === normalised) {
-        total += Math.max(state.stackCount, 0);
+    for (const definition of this.getOrderedSlotDefinitions()) {
+      if (!definition.metadata.stackable) {
+        continue;
       }
+      const state = this.getSlotState(definition.id);
+      if (state.occupantId !== normalised) {
+        continue;
+      }
+      const stackCount = Math.max(state.stackCount, 0);
+      total += stackCount > 0 ? stackCount : 1;
     }
     return total;
   }
@@ -196,6 +215,67 @@ export class InventoryStore {
       return null;
     }
     return this.buildSlotSchema(definition);
+  }
+
+  getSlotSchemaByIndex(index: number): SlotSchema | null {
+    const definition = this.getSlotDefinitionByIndex(index);
+    if (!definition) {
+      return null;
+    }
+    return this.buildSlotSchema(definition);
+  }
+
+  getSlotOccupantByIndex(index: number): string | null {
+    const definition = this.getSlotDefinitionByIndex(index);
+    if (!definition) {
+      return null;
+    }
+    const state = this.getSlotState(definition.id);
+    return state.occupantId;
+  }
+
+  setSlotConfiguration(
+    index: number,
+    { occupantId, stackCount, metadata }: { occupantId?: string | null; stackCount?: number; metadata?: Partial<SlotMetadata> } = {},
+  ): SlotSchema | null {
+    const definition = this.getSlotDefinitionByIndex(index);
+    if (!definition) {
+      return null;
+    }
+
+    let updatedDefinition = definition;
+    let metadataChanged = false;
+    if (metadata) {
+      const nextMetadata = this.createSlotMetadata({ ...definition.metadata, ...metadata });
+      updatedDefinition = { ...definition, metadata: nextMetadata } satisfies SlotDefinition;
+      this.slotDefinitions.set(definition.id, updatedDefinition);
+      metadataChanged = true;
+    }
+
+    const state = this.getSlotState(updatedDefinition.id);
+    const normalisedOccupant = normaliseResourceId(occupantId);
+    let contentsChanged = false;
+
+    if (!normalisedOccupant) {
+      if (state.occupantId !== null || state.stackCount !== 0) {
+        state.occupantId = null;
+        state.stackCount = 0;
+        contentsChanged = true;
+      }
+    } else {
+      const resolvedStackCount = this.resolveStackCount(updatedDefinition, stackCount);
+      if (state.occupantId !== normalisedOccupant || state.stackCount !== resolvedStackCount) {
+        state.occupantId = normalisedOccupant;
+        state.stackCount = resolvedStackCount;
+        contentsChanged = true;
+      }
+    }
+
+    if (metadataChanged || contentsChanged) {
+      this.notifyChange();
+    }
+
+    return this.buildSlotSchema(updatedDefinition);
   }
 
   getSlotSchemaSnapshot(): SlotSnapshot {
@@ -308,9 +388,10 @@ export class InventoryStore {
   }
 
   store(resource: string, amount: number): StoreResult {
-    const normalisedResource = resource.trim().toLowerCase();
+    const normalisedResource = normaliseResourceId(resource);
     if (!normalisedResource || !Number.isFinite(amount) || amount <= 0) {
-      return { stored: 0, overflow: 0, total: this.getQuantity(normalisedResource) } satisfies StoreResult;
+      const total = normalisedResource ? this.getQuantity(normalisedResource) : 0;
+      return { stored: 0, overflow: 0, total } satisfies StoreResult;
     }
 
     const available = this.getAvailable();
@@ -328,7 +409,10 @@ export class InventoryStore {
         break;
       }
       const state = this.getSlotState(definition.id);
-      if (state.occupantId === normalisedResource && definition.metadata.stackable) {
+      if (!definition.metadata.stackable) {
+        continue;
+      }
+      if (state.occupantId === normalisedResource) {
         state.stackCount += remaining;
         stored += remaining;
         remaining = 0;
@@ -341,12 +425,13 @@ export class InventoryStore {
         break;
       }
       const state = this.getSlotState(definition.id);
-      if (!state.occupantId) {
-        state.occupantId = normalisedResource;
-        state.stackCount = remaining;
-        stored += remaining;
-        remaining = 0;
+      if (state.occupantId || !definition.metadata.stackable) {
+        continue;
       }
+      state.occupantId = normalisedResource;
+      state.stackCount = remaining;
+      stored += remaining;
+      remaining = 0;
     }
 
     if (stored > 0) {
@@ -363,9 +448,9 @@ export class InventoryStore {
   }
 
   withdraw(resource: string, amount: number): WithdrawResult {
-    const normalisedResource = resource.trim().toLowerCase();
+    const normalisedResource = normaliseResourceId(resource);
     if (!normalisedResource || !Number.isFinite(amount) || amount <= 0) {
-      const total = this.getQuantity(normalisedResource);
+      const total = normalisedResource ? this.getQuantity(normalisedResource) : 0;
       return { withdrawn: 0, remaining: total, total } satisfies WithdrawResult;
     }
 
@@ -382,7 +467,7 @@ export class InventoryStore {
         break;
       }
       const state = this.getSlotState(definition.id);
-      if (state.occupantId !== normalisedResource) {
+      if (!definition.metadata.stackable || state.occupantId !== normalisedResource) {
         continue;
       }
       const removed = Math.min(state.stackCount, remaining);
@@ -429,7 +514,14 @@ export class InventoryStore {
   getSnapshot(): InventorySnapshot {
     const { slots } = this.getSlotSchemaSnapshot();
     const entries = this.buildEntries(slots);
-    const used = slots.reduce((total, slot) => total + Math.max(slot.stackCount ?? 0, 0), 0);
+    const equipment = this.buildEquipmentEntries(slots);
+    const used = slots.reduce((total, slot) => {
+      if (!slot.occupantId) {
+        return total;
+      }
+      const stackCount = Number.isFinite(slot.stackCount) ? Math.max(slot.stackCount ?? 0, 0) : 0;
+      return total + (stackCount > 0 ? stackCount : 1);
+    }, 0);
     const capacity = this.getCapacity();
     return {
       capacity,
@@ -438,6 +530,7 @@ export class InventoryStore {
       entries,
       slots,
       slotCapacity: this.slotCapacity,
+      equipment,
     } satisfies InventorySnapshot;
   }
 
@@ -477,6 +570,17 @@ export class InventoryStore {
     } satisfies SlotMetadata;
   }
 
+  private resolveStackCount(definition: SlotDefinition, requested?: number): number {
+    if (!definition.metadata.stackable) {
+      return 1;
+    }
+    if (!Number.isFinite(requested)) {
+      return 1;
+    }
+    const safe = Math.max(Math.floor(requested ?? 0), 0);
+    return safe > 0 ? safe : 1;
+  }
+
   private getSlotState(slotId: string): SlotState {
     let state = this.slotStates.get(slotId);
     if (!state) {
@@ -484,6 +588,14 @@ export class InventoryStore {
       this.slotStates.set(slotId, state);
     }
     return state;
+  }
+
+  private getSlotDefinitionByIndex(index: number): SlotDefinition | null {
+    if (!Number.isFinite(index)) {
+      return null;
+    }
+    const safeIndex = Math.max(Math.floor(index), 0);
+    return this.slotDefinitions.get(createSlotId(safeIndex)) ?? null;
   }
 
   private getOrderedSlotDefinitions(): SlotDefinition[] {
@@ -504,10 +616,10 @@ export class InventoryStore {
   private buildEntries(slots: SlotSchema[]): InventoryEntry[] {
     const totals = new Map<string, number>();
     for (const slot of slots) {
-      if (!slot.occupantId) {
+      if (!slot.occupantId || !slot.metadata.stackable) {
         continue;
       }
-      const amount = Math.max(slot.stackCount ?? 1, 0);
+      const amount = Math.max(slot.stackCount ?? 1, 0) || 1;
       totals.set(slot.occupantId, (totals.get(slot.occupantId) ?? 0) + amount);
     }
     const entries: InventoryEntry[] = [];
@@ -516,6 +628,22 @@ export class InventoryStore {
     }
     entries.sort((a, b) => a.resource.localeCompare(b.resource));
     return entries;
+  }
+
+  private buildEquipmentEntries(slots: SlotSchema[]): EquipmentEntry[] {
+    const equipment: EquipmentEntry[] = [];
+    for (const slot of slots) {
+      if (!slot.occupantId || slot.metadata.stackable) {
+        continue;
+      }
+      equipment.push({
+        slotId: slot.id,
+        index: slot.index,
+        itemId: slot.occupantId,
+        metadata: { ...slot.metadata },
+      });
+    }
+    return equipment;
   }
 
   private notifyChange(): void {

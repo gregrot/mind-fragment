@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MechanismChassis } from '../../MechanismChassis';
 import { CargoHoldModule } from '../cargoHoldModule';
 import { ManipulationModule } from '../manipulationModule';
@@ -27,7 +27,11 @@ describe('ManipulationModule dropResource', () => {
     expect(result.resources).toHaveLength(2);
 
     const inventoryAfter = mechanism.getInventorySnapshot();
-    expect(inventoryAfter.used).toBe(0);
+    expect(inventoryAfter.used).toBe(1);
+    expect(inventoryAfter.entries).toEqual([]);
+    expect(inventoryAfter.equipment).toEqual([
+      expect.objectContaining({ itemId: 'axe', slotId: 'inventory-0' }),
+    ]);
 
     const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
     expect(telemetry?.totalDeposited.value).toBe(15);
@@ -66,7 +70,8 @@ describe('ManipulationModule dropResource', () => {
     expect(result.resources[0].remaining).toBe(6);
 
     const inventoryAfter = mechanism.getInventorySnapshot();
-    expect(inventoryAfter.used).toBe(6);
+    expect(inventoryAfter.used).toBe(7);
+    expect(inventoryAfter.entries).toEqual([{ resource: 'ferrous-ore', quantity: 6 }]);
 
     const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
     expect(telemetry?.totalDeposited.value).toBe(4);
@@ -78,5 +83,76 @@ describe('ManipulationModule dropResource', () => {
     expect(lastDrop?.status).toBe('partial');
     expect(lastDrop?.totalDropped).toBe(4);
     expect(lastDrop?.resources[0].remaining).toBe(6);
+  });
+});
+
+describe('ManipulationModule useInventoryItem', () => {
+  it('rejects empty slots', () => {
+    const mechanism = createChassis();
+    const hitSpy = vi.spyOn(mechanism.resourceField, 'registerHit');
+
+    const result = mechanism.invokeAction('arm.manipulator', 'useInventoryItem', {
+      slot: 1,
+      nodeId: 'tree-1',
+      target: { x: 12, y: -4 },
+    }) as { status: string };
+
+    expect(result.status).toBe('empty-slot');
+    expect(hitSpy).not.toHaveBeenCalled();
+  });
+
+  it('consumes exactly one hit per call and forwards tool swings', () => {
+    const mechanism = createChassis();
+    const node = mechanism.resourceField.upsertNode({
+      id: 'tree-1',
+      type: 'arboreal-node',
+      position: { x: 10, y: 5 },
+      quantity: 2,
+      metadata: { hitPoints: 2, hitsRemaining: 2, requiredTool: 'axe' },
+    });
+
+    const hitSpy = vi.spyOn(mechanism.resourceField, 'registerHit');
+
+    const firstResult = mechanism.invokeAction('arm.manipulator', 'useInventoryItem', {
+      slot: 0,
+      nodeId: node.id,
+      target: { x: 14, y: 9 },
+    }) as { status: string; remaining: number };
+
+    expect(firstResult.status).toBe('ok');
+    expect(firstResult.remaining).toBe(1);
+    expect(hitSpy).toHaveBeenCalledTimes(1);
+    expect(hitSpy).toHaveBeenLastCalledWith({ nodeId: node.id, toolType: 'axe' });
+
+    hitSpy.mockClear();
+
+    const secondResult = mechanism.invokeAction('arm.manipulator', 'useInventoryItem', {
+      slot: 0,
+      nodeId: node.id,
+      target: { x: 14, y: 9 },
+    }) as { status: string; remaining: number };
+
+    expect(secondResult.status).toBe('depleted');
+    expect(secondResult.remaining).toBe(0);
+    expect(hitSpy).toHaveBeenCalledTimes(1);
+
+    const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
+    const lastToolUse = telemetry?.lastToolUse.value as
+      | { status: string; remaining: number; target: { x: number; y: number } }
+      | null;
+    expect(lastToolUse?.status).toBe('depleted');
+    expect(lastToolUse?.remaining).toBe(0);
+    expect(lastToolUse?.target).toEqual({ x: 14, y: 9 });
+
+    const pending = (mechanism as unknown as { pendingActuators: Map<string, unknown[]> }).pendingActuators;
+    const toolRequests = pending.get('manipulation.tool') as Array<{ payload: unknown }> | undefined;
+    expect(toolRequests).toBeDefined();
+    const latestRequest = toolRequests?.[toolRequests.length - 1];
+    expect(latestRequest?.payload).toMatchObject({
+      slotIndex: 0,
+      item: 'axe',
+      nodeId: node.id,
+      target: { x: 14, y: 9 },
+    });
   });
 });

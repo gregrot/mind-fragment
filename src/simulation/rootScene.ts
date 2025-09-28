@@ -500,7 +500,7 @@ export class RootScene {
   getInventorySnapshot(mechanismId: string = this.getActiveMechanismId()): InventorySnapshot {
     const mechanismCore = this.context?.getMechanismCore(mechanismId);
     if (!mechanismCore) {
-      return { capacity: 0, used: 0, available: 0, entries: [], slots: [], slotCapacity: 0 };
+      return { capacity: 0, used: 0, available: 0, entries: [], slots: [], slotCapacity: 0, equipment: [] };
     }
     return mechanismCore.getInventorySnapshot();
   }

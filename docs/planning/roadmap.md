@@ -13,6 +13,7 @@
 - 🚧 Surface runtime compile errors inline in the overlay using `ProgramRunnerStatus`.
 - 🚧 Persist overlay edits optimistically and implement retry flows via `EntityOverlayManager` events.
 - 📌 Audit drag-and-drop affordances for accessibility (keyboard focus, ARIA labelling, and touch targets).
+- ✅ Capture the tree-harvesting recipe (`Forever → Scan Area → Move To → Use Tool Slot → Gather Resource → Deposit Cargo / Wait`) so designers can script the new automation path.
 
 ## Phase 2 — Telemetry & Debugging
 **Objective**: make the consequences of a programme obvious by expanding telemetry capture and visualisation.

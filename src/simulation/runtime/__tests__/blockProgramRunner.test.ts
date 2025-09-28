@@ -274,6 +274,124 @@ describe('BlockProgramRunner', () => {
     actionSpy.mockRestore();
   });
 
+  it('harvests logs from a tree by looping scan, move-to, tool use, and gather instructions', () => {
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
+
+    const upsertSpy = vi.spyOn(mechanism.resourceField, 'upsertNode');
+
+    const tree = mechanism.resourceField.upsertNode({
+      id: 'playtest-tree',
+      type: 'tree',
+      position: { x: 80, y: 0 },
+      quantity: 3,
+      metadata: { hitPoints: 3, hitsRemaining: 3, requiredTool: 'axe', drop: { type: 'log', quantity: 2 } },
+    });
+
+    for (const node of mechanism.resourceField.list()) {
+      if (node.id !== tree.id) {
+        mechanism.resourceField.removeNode(node.id);
+      }
+    }
+
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'loop',
+          mode: 'forever',
+          instructions: [
+            {
+              kind: 'scan',
+              duration: createNumberLiteralBinding(0.25, { label: 'Tree loop → scan duration' }),
+              filter: null,
+              sourceBlockId: 'tree-loop-scan',
+            },
+            {
+              kind: 'move-to',
+              duration: createNumberLiteralBinding(1.5, { label: 'Tree loop → move-to duration' }),
+              speed: createNumberLiteralBinding(80, { label: 'Tree loop → move-to speed' }),
+              target: {
+                useScanHit: createBooleanLiteralBinding(true, { label: 'Tree loop → use scan hit' }),
+                scanHitIndex: createNumberLiteralBinding(1, { label: 'Tree loop → scan hit index' }),
+                literalPosition: {
+                  x: createNumberLiteralBinding(tree.position.x, { label: 'Tree loop → fallback X' }),
+                  y: createNumberLiteralBinding(tree.position.y, { label: 'Tree loop → fallback Y' }),
+                },
+              },
+              sourceBlockId: 'tree-loop-move-to',
+            },
+            {
+              kind: 'use-item',
+              duration: createNumberLiteralBinding(3, { label: 'Tree loop → tool duration' }),
+              slot: {
+                index: createNumberLiteralBinding(1, { label: 'Tree loop → slot index' }),
+                label: { value: 'Primary Tool', source: 'default', label: 'Tree loop → slot label' },
+              },
+              target: {
+                useScanHit: createBooleanLiteralBinding(true, { label: 'Tree loop → use scan target' }),
+                scanHitIndex: createNumberLiteralBinding(1, { label: 'Tree loop → scan target index' }),
+                literalPosition: {
+                  x: createNumberLiteralBinding(tree.position.x, { label: 'Tree loop → literal X' }),
+                  y: createNumberLiteralBinding(tree.position.y, { label: 'Tree loop → literal Y' }),
+                },
+              },
+              sourceBlockId: 'tree-loop-use-item',
+            },
+            {
+              kind: 'gather',
+              duration: createNumberLiteralBinding(1, { label: 'Tree loop → gather duration' }),
+              target: 'auto',
+              sourceBlockId: 'tree-loop-gather',
+            },
+            {
+              kind: 'wait',
+              duration: createNumberLiteralBinding(0.5, { label: 'Tree loop → wait duration' }),
+              sourceBlockId: 'tree-loop-wait',
+            },
+          ],
+          sourceBlockId: 'tree-loop-forever',
+        },
+      ],
+    } satisfies CompiledProgram;
+
+    runner.load(program);
+
+    const simulateStep = (seconds: number) => {
+      runner.update(seconds);
+      mechanism.tick(seconds);
+    };
+
+    let sawTreeDepleted = false;
+
+    for (let index = 0; index < 24; index += 1) {
+      simulateStep(0.5);
+      const nodesDuringLoop = mechanism.resourceField.list();
+      const treeNode = nodesDuringLoop.find((node) => node.id === tree.id);
+      if (!treeNode || treeNode.quantity <= 0) {
+        sawTreeDepleted = true;
+      }
+    }
+
+    expect(sawTreeDepleted).toBe(true);
+
+    const logDropCall = upsertSpy.mock.calls.find((call) => {
+      const options = call[0] as { type?: string } | undefined;
+      return options?.type === 'log';
+    });
+    expect(logDropCall).toBeDefined();
+    expect(((logDropCall?.[0] as { quantity?: number })?.quantity ?? 0)).toBeGreaterThanOrEqual(2);
+
+    const nodes = mechanism.resourceField.list();
+    const harvestedTree = nodes.find((node) => node.id === tree.id);
+    expect(!harvestedTree || harvestedTree.quantity <= 0).toBe(true);
+    expect(nodes.filter((node) => node.type === 'log').length).toBeGreaterThanOrEqual(1);
+
+    const inventory = mechanism.getInventorySnapshot();
+    expect(inventory.entries).toContainEqual(expect.objectContaining({ resource: 'log', quantity: 2 }));
+
+    upsertSpy.mockRestore();
+  });
+
   it('stores scan hit positions in memory for later targeting', () => {
     const mechanism = createMechanism();
     const runner = new BlockProgramRunner(mechanism);

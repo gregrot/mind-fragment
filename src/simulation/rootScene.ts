@@ -14,6 +14,7 @@ import type { InventorySnapshot } from './mechanism/inventory';
 import { InventoryStore } from './mechanism/inventory';
 import { MechanismChassis, type MechanismModule, type ChassisSnapshot, createModuleInstance } from './mechanism';
 import type { SlotSchema } from '../types/slots';
+import type { ResourceNode, UpsertNodeOptions } from './resources/resourceField';
 
 interface TickPayload {
   deltaMS: number;
@@ -511,6 +512,67 @@ export class RootScene {
       return EMPTY_CHASSIS_SNAPSHOT;
     }
     return mechanismCore.getSlotSchemaSnapshot();
+  }
+
+  getResourceFieldSnapshot(mechanismId: string = this.getActiveMechanismId()): ResourceNode[] {
+    const context = this.context;
+    if (!context) {
+      return [];
+    }
+    const targetId = mechanismId ?? this.getActiveMechanismId(context);
+    const mechanismCore = context.getMechanismCore(targetId);
+    if (!mechanismCore) {
+      return [];
+    }
+    return mechanismCore.resourceField.list();
+  }
+
+  upsertResourceNode(
+    mechanismId: string | null | undefined,
+    node: UpsertNodeOptions,
+  ): Promise<ResourceNode | null> {
+    const execute = (context: SimulationWorldContext): ResourceNode | null => {
+      const targetId = mechanismId ?? this.getActiveMechanismId(context);
+      const mechanismCore = context.getMechanismCore(targetId);
+      if (!mechanismCore) {
+        return null;
+      }
+      return mechanismCore.resourceField.upsertNode(node);
+    };
+
+    if (this.context) {
+      return Promise.resolve(execute(this.context));
+    }
+
+    return new Promise((resolve) => {
+      this.onContextReady((context) => {
+        resolve(execute(context));
+      });
+    });
+  }
+
+  removeResourceNode(
+    mechanismId: string | null | undefined,
+    nodeId: string,
+  ): Promise<boolean> {
+    const execute = (context: SimulationWorldContext): boolean => {
+      const targetId = mechanismId ?? this.getActiveMechanismId(context);
+      const mechanismCore = context.getMechanismCore(targetId);
+      if (!mechanismCore) {
+        return false;
+      }
+      return mechanismCore.resourceField.removeNode(nodeId);
+    };
+
+    if (this.context) {
+      return Promise.resolve(execute(this.context));
+    }
+
+    return new Promise((resolve) => {
+      this.onContextReady((context) => {
+        resolve(execute(context));
+      });
+    });
   }
 
   subscribeInventory(listener: (snapshot: InventorySnapshot) => void): () => void {

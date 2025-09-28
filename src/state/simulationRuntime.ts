@@ -8,6 +8,7 @@ import type { EntityId } from '../simulation/ecs/world';
 import type { InventorySnapshot } from '../simulation/mechanism/inventory';
 import type { ChassisSnapshot } from '../simulation/mechanism';
 import type { EntityOverlayData } from '../types/overlay';
+import type { ResourceNode, UpsertNodeOptions } from '../simulation/resources/resourceField';
 import {
   chassisState,
   type ChassisListener,
@@ -33,6 +34,12 @@ const EMPTY_PROGRAM_DEBUG_STATE: ProgramDebugState = {
   frames: [],
 };
 
+declare global {
+  interface Window {
+    __mfSimulationRuntime?: SimulationRuntime;
+  }
+}
+
 class SimulationRuntime {
   private scene: RootScene | null = null;
   private readonly pendingPrograms = new Map<string, CompiledProgram>();
@@ -41,6 +48,16 @@ class SimulationRuntime {
   private readonly debugListeners = new Map<string, Set<DebugListener>>();
   private readonly debugStateByMechanism = new Map<string, ProgramDebugState>();
   private readonly selectionListeners = new Set<SelectionListener>();
+  private readonly pendingResourceUpserts: Array<{
+    mechanismId: string;
+    node: UpsertNodeOptions;
+    resolve: (value: ResourceNode | null) => void;
+  }> = [];
+  private readonly pendingResourceRemovals: Array<{
+    mechanismId: string;
+    nodeId: string;
+    resolve: (value: boolean) => void;
+  }> = [];
   private unsubscribeScene: (() => void) | null = null;
   private sceneInventoryUnsubscribe: (() => void) | null = null;
   private sceneChassisUnsubscribe: (() => void) | null = null;
@@ -100,6 +117,28 @@ class SimulationRuntime {
     if (!this.pendingPrograms.has(DEFAULT_MECHANISM_ID) && !this.hasAutoStartedDefault) {
       scene.runProgram(DEFAULT_MECHANISM_ID, DEFAULT_STARTUP_PROGRAM);
       this.hasAutoStartedDefault = true;
+    }
+
+    if (this.pendingResourceUpserts.length > 0) {
+      const pending = [...this.pendingResourceUpserts];
+      this.pendingResourceUpserts.length = 0;
+      for (const entry of pending) {
+        void scene
+          .upsertResourceNode(entry.mechanismId, entry.node)
+          .then((result) => entry.resolve(result))
+          .catch(() => entry.resolve(null));
+      }
+    }
+
+    if (this.pendingResourceRemovals.length > 0) {
+      const pendingRemovals = [...this.pendingResourceRemovals];
+      this.pendingResourceRemovals.length = 0;
+      for (const entry of pendingRemovals) {
+        void scene
+          .removeResourceNode(entry.mechanismId, entry.nodeId)
+          .then((result) => entry.resolve(result))
+          .catch(() => entry.resolve(false));
+      }
     }
 
     for (const [mechanismId, program] of this.pendingPrograms) {
@@ -236,6 +275,37 @@ class SimulationRuntime {
       return this.scene.getChassisSnapshot(targetMechanismId);
     }
     return EMPTY_CHASSIS_SNAPSHOT;
+  }
+
+  getResourceFieldSnapshot(mechanismId: string | null = this.selectedMechanismId): ResourceNode[] {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    if (this.scene) {
+      return this.scene.getResourceFieldSnapshot(targetMechanismId);
+    }
+    return [];
+  }
+
+  upsertResourceNode(
+    mechanismId: string | null,
+    node: UpsertNodeOptions,
+  ): Promise<ResourceNode | null> {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    if (this.scene) {
+      return this.scene.upsertResourceNode(targetMechanismId, node);
+    }
+    return new Promise((resolve) => {
+      this.pendingResourceUpserts.push({ mechanismId: targetMechanismId, node, resolve });
+    });
+  }
+
+  removeResourceNode(mechanismId: string | null, nodeId: string): Promise<boolean> {
+    const targetMechanismId = this.normaliseMechanismId(mechanismId);
+    if (this.scene) {
+      return this.scene.removeResourceNode(targetMechanismId, nodeId);
+    }
+    return new Promise((resolve) => {
+      this.pendingResourceRemovals.push({ mechanismId: targetMechanismId, nodeId, resolve });
+    });
   }
 
   subscribeTelemetry(listener: TelemetryListener): () => void {
@@ -452,3 +522,7 @@ class SimulationRuntime {
 }
 
 export const simulationRuntime = new SimulationRuntime();
+
+if (typeof window !== 'undefined') {
+  window.__mfSimulationRuntime = simulationRuntime;
+}

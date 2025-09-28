@@ -11,6 +11,7 @@ import {
 } from '../blockProgram';
 import { MechanismChassis } from '../../mechanism';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../mechanism/modules/moduleLibrary';
+import { DEFAULT_STARTUP_PROGRAM } from '../defaultProgram';
 
 const STATUS_SIGNAL_DESCRIPTOR = {
   id: 'status.signal.active',
@@ -390,6 +391,81 @@ describe('BlockProgramRunner', () => {
     expect(inventory.entries).toContainEqual(expect.objectContaining({ resource: 'log', quantity: 2 }));
 
     upsertSpy.mockRestore();
+  });
+
+  it('runs the default startup program to chop trees and collect logs', () => {
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
+
+    // Limit the field to trees so the scan filter stays focused on arboreal targets.
+    for (const node of mechanism.resourceField.list()) {
+      if (node.type !== 'tree') {
+        mechanism.resourceField.removeNode(node.id);
+      }
+    }
+
+    const secondaryTree = mechanism.resourceField
+      .list()
+      .find((node) => node.id === 'node-tree-2');
+    if (secondaryTree) {
+      mechanism.resourceField.removeNode(secondaryTree.id);
+    }
+
+    runner.load(DEFAULT_STARTUP_PROGRAM);
+
+    const simulateStep = (seconds: number) => {
+      runner.update(seconds);
+      mechanism.tick(seconds);
+    };
+
+    let observedInventoryUsage = false;
+    let observedTreeDepletion = false;
+
+    for (let stepIndex = 0; stepIndex < 160; stepIndex += 1) {
+      simulateStep(0.5);
+
+      const inventorySnapshot = mechanism.getInventorySnapshot();
+      if (inventorySnapshot.used > 0) {
+        observedInventoryUsage = true;
+      }
+
+      const telemetry = mechanism.getTelemetrySnapshot();
+      const manipulatorTelemetry = telemetry.values['arm.manipulator']?.lastGather;
+      const lastGather =
+        manipulatorTelemetry && typeof manipulatorTelemetry.value === 'object'
+          ? (manipulatorTelemetry.value as { type?: string | null; harvested?: number | null } | null)
+          : null;
+      if (lastGather && lastGather.type === 'log' && (lastGather.harvested ?? 0) > 0) {
+        observedInventoryUsage = true;
+      }
+
+      const remainingTrees = mechanism.resourceField
+        .list()
+        .filter((node) => node.type === 'tree');
+      if (remainingTrees.some((node) => node.quantity <= 0)) {
+        observedTreeDepletion = true;
+      }
+
+      if (observedInventoryUsage && observedTreeDepletion) {
+        break;
+      }
+    }
+
+    expect(observedInventoryUsage).toBe(true);
+    expect(observedTreeDepletion).toBe(true);
+
+    const telemetry = mechanism.getTelemetrySnapshot();
+    const manipulatorTelemetry = telemetry.values['arm.manipulator']?.lastGather;
+    const lastGather =
+      manipulatorTelemetry && typeof manipulatorTelemetry.value === 'object'
+        ? (manipulatorTelemetry.value as { type?: string | null; harvested?: number | null } | null)
+        : null;
+    expect(lastGather?.type).toBe('log');
+
+    const droppedLogs = mechanism.resourceField
+      .list()
+      .filter((node) => node.type === 'log' && node.quantity > 0);
+    expect(droppedLogs.length).toBeGreaterThan(0);
   });
 
   it('stores scan hit positions in memory for later targeting', () => {

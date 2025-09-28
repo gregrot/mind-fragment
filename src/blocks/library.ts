@@ -113,6 +113,31 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     paletteGroup: 'Actions',
   },
   {
+    id: 'use-item-slot',
+    label: 'Use Tool Slot',
+    category: 'action',
+    summary:
+      'Activate a tool stored in a specific inventory slot, preferring the latest scanned resource target.',
+    parameters: {
+      slotIndex: { kind: 'number', defaultValue: 1, min: 1, step: 1 },
+      slotLabel: { kind: 'string', defaultValue: 'Primary Tool' },
+      useScanHit: { kind: 'boolean', defaultValue: true },
+      scanHitIndex: { kind: 'number', defaultValue: 1, min: 1, step: 1 },
+      targetX: { kind: 'number', defaultValue: 0 },
+      targetY: { kind: 'number', defaultValue: 0 },
+    },
+    expressionInputs: ['slotIndex', 'useScanHit', 'scanHitIndex', 'targetX', 'targetY'],
+    expressionInputDefaults: {
+      slotIndex: ['literal-number'],
+      useScanHit: ['literal-boolean'],
+      scanHitIndex: ['literal-number'],
+      targetX: ['literal-number'],
+      targetY: ['literal-number'],
+    },
+    paletteGroup: 'Actions',
+    paletteTags: ['manipulation', 'tool', 'resource'],
+  },
+  {
     id: 'return-home',
     label: 'Return to Core',
     category: 'action',

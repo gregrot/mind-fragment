@@ -94,6 +94,54 @@ describe('compileWorkspaceProgram', () => {
     }
   });
 
+  it('compiles use item slot instructions with slot metadata and scan targeting', () => {
+    const start = createBlockInstance('start');
+    const useItem = createBlockInstance('use-item-slot');
+
+    useItem.parameters!.slotIndex = { kind: 'number', value: 2 };
+    useItem.parameters!.slotLabel = { kind: 'string', value: 'Axe Bay' };
+    useItem.parameters!.useScanHit = { kind: 'boolean', value: true };
+    useItem.parameters!.scanHitIndex = { kind: 'number', value: 3 };
+    useItem.parameters!.targetX = { kind: 'number', value: -12 };
+    useItem.parameters!.targetY = { kind: 'number', value: 64 };
+
+    start.slots!.do = [useItem];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(1);
+    const instruction = result.program.instructions[0];
+    if (instruction.kind !== 'use-item') {
+      throw new Error('Expected a use-item instruction to be emitted.');
+    }
+    expect(instruction.sourceBlockId).toBe(useItem.instanceId);
+    expect(instruction.duration.literal?.value).toBeCloseTo(3);
+    expect(instruction.slot.index.literal?.value).toBe(2);
+    expect(instruction.slot.index.literal?.source).toBe('user');
+    expect(instruction.slot.label.value).toBe('Axe Bay');
+    expect(instruction.slot.label.source).toBe('user');
+    expect(instruction.target.useScanHit.literal?.value).toBe(true);
+    expect(instruction.target.scanHitIndex.literal?.value).toBe(3);
+    expect(instruction.target.literalPosition.x.literal?.value).toBe(-12);
+    expect(instruction.target.literalPosition.y.literal?.value).toBe(64);
+  });
+
+  it('reports diagnostics when the use item slot is missing slot index data', () => {
+    const start = createBlockInstance('start');
+    const useItem = createBlockInstance('use-item-slot');
+
+    // Simulate a malformed workspace entry where the slot index parameter is absent.
+    delete useItem.parameters!.slotIndex;
+
+    start.slots!.do = [useItem];
+
+    const result = compileWorkspaceProgram(buildWorkspace(start));
+
+    expect(result.program.instructions).toHaveLength(0);
+    const diagnostic = result.diagnostics.find((diag) => diag.message.includes('slot index parameter'));
+    expect(diagnostic?.severity).toBe('error');
+  });
+
   it('compiles status control blocks with literal overrides', () => {
     const start = createBlockInstance('start');
     const toggle = createBlockInstance('toggle-status');

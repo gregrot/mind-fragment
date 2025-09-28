@@ -11,6 +11,7 @@ import type {
   NumberExpression,
   NumberParameterBinding,
   SignalDescriptor,
+  UseItemInstruction,
 } from './blockProgram';
 import { SimpleNavigator } from '../mechanism/modules/navigator';
 
@@ -20,6 +21,8 @@ const MOVEMENT_MODULE_ID = 'core.movement';
 const SCANNER_MODULE_ID = 'sensor.survey';
 const MANIPULATOR_MODULE_ID = 'arm.manipulator';
 const STATUS_MODULE_ID = 'status.signal';
+const USE_ITEM_SWING_INTERVAL = 1;
+const USE_ITEM_SWING_COUNT = 3;
 const EPSILON = 1e-5;
 
 interface ScanMemoryHit {
@@ -33,6 +36,14 @@ interface ScanMemoryHit {
 interface ScanMemory {
   filter: string | null;
   hits: ScanMemoryHit[];
+}
+
+interface UseItemRuntimeState {
+  slotIndex: number;
+  nodeId: string;
+  target: Vector2;
+  swingsRemaining: number;
+  cooldown: number;
 }
 
 type ExecutionFrameKind = 'sequence' | 'loop-forever' | 'loop-counted';
@@ -81,6 +92,7 @@ export class BlockProgramRunner {
   private status: ProgramRunnerStatus = 'idle';
   private statusListener: ((status: ProgramRunnerStatus) => void) | null = null;
   private scanMemory: ScanMemory | null = null;
+  private activeUseItem: UseItemRuntimeState | null = null;
   private frames: ExecutionFrame[] = [];
   private activeProgram: CompiledProgram | null = null;
   private debugFrames: ProgramDebugFrame[] = [];
@@ -117,6 +129,7 @@ export class BlockProgramRunner {
     this.currentInstruction = null;
     this.timeRemaining = 0;
     this.scanMemory = null;
+    this.activeUseItem = null;
     this.frames = [];
     this.debugFrames = [];
     this.resetMovement();
@@ -139,6 +152,7 @@ export class BlockProgramRunner {
     this.currentInstruction = null;
     this.timeRemaining = 0;
     this.scanMemory = null;
+    this.activeUseItem = null;
     this.frames = [];
     this.debugFrames = [];
     this.resetMovement();
@@ -166,6 +180,9 @@ export class BlockProgramRunner {
       }
 
       const delta = Math.min(remaining, this.timeRemaining);
+      if (this.currentInstruction?.kind === 'use-item') {
+        this.tickUseItemInstruction(delta);
+      }
       this.timeRemaining -= delta;
       remaining -= delta;
 
@@ -186,6 +203,7 @@ export class BlockProgramRunner {
     }
 
     this.currentInstruction = null;
+    this.activeUseItem = null;
 
     while (this.frames.length > 0) {
       const frame = this.frames[this.frames.length - 1];
@@ -290,6 +308,7 @@ export class BlockProgramRunner {
     this.currentInstruction = null;
     this.timeRemaining = 0;
     this.resetMovement();
+    this.activeUseItem = null;
     this.frames = [];
     this.debugFrames = [];
     this.updateStatus('completed');
@@ -333,6 +352,12 @@ export class BlockProgramRunner {
         this.applyLinearVelocity(0, 0);
         this.applyAngularVelocity(0);
         this.executeGather();
+        break;
+      }
+      case 'use-item': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.executeUseItemInstruction(instruction, telemetry);
         break;
       }
       case 'deposit': {
@@ -432,34 +457,17 @@ export class BlockProgramRunner {
   }
 
   private selectScanTarget(requestedIndex: number): Vector2 | null {
-    if (!this.scanMemory || this.scanMemory.hits.length === 0) {
-      return null;
-    }
-
-    const safeIndex = Number.isFinite(requestedIndex)
-      ? Math.max(1, Math.floor(requestedIndex))
-      : 1;
-    const hit = this.scanMemory.hits[safeIndex - 1] ?? null;
+    const hit = this.selectScanHitMetadata(requestedIndex);
     if (!hit) {
       return null;
     }
 
-    if (hit.position) {
-      return { x: hit.position.x, y: hit.position.y } satisfies Vector2;
+    const resolved = this.resolveScanHitTarget(hit);
+    if (resolved.position) {
+      return { x: resolved.position.x, y: resolved.position.y } satisfies Vector2;
     }
 
-    if (!hit.id) {
-      return null;
-    }
-
-    const node = this.mechanism.resourceField
-      .list()
-      .find((candidate) => candidate.id === hit.id);
-    if (!node) {
-      return null;
-    }
-
-    return { x: node.position.x, y: node.position.y } satisfies Vector2;
+    return null;
   }
 
   private resetMovement(): void {
@@ -560,12 +568,232 @@ export class BlockProgramRunner {
     this.updateScanMemoryAfterGather(result);
   }
 
+  private executeUseItemInstruction(instruction: UseItemInstruction, telemetry: ValuesSnapshot): void {
+    this.activeUseItem = null;
+
+    if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+      this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      return;
+    }
+
+    const slotLabel = instruction.slot.index.literal?.label ?? 'Use Tool Slot → slotIndex';
+    const requestedSlot = this.evaluateNumberBinding(instruction.slot.index, slotLabel, telemetry);
+    const normalisedSlot = Number.isFinite(requestedSlot) ? Math.max(1, Math.floor(requestedSlot)) : 1;
+    const slotIndex = normalisedSlot - 1;
+
+    const target = this.resolveUseItemTarget(instruction, telemetry);
+    if (!target) {
+      this.warn('Use Tool Slot could not determine a valid target; skipping instruction.');
+      this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      return;
+    }
+
+    const runtimeState: UseItemRuntimeState = {
+      slotIndex,
+      nodeId: target.nodeId,
+      target: target.target,
+      swingsRemaining: USE_ITEM_SWING_COUNT,
+      cooldown: 0,
+    } satisfies UseItemRuntimeState;
+
+    this.activeUseItem = runtimeState;
+    this.performInitialUseItemSwing(runtimeState);
+  }
+
+  private performInitialUseItemSwing(state: UseItemRuntimeState): void {
+    if (!this.activeUseItem || state.swingsRemaining <= 0) {
+      this.activeUseItem = null;
+      this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      return;
+    }
+
+    const result = this.performUseItemSwing(state);
+    if (result === 'halt') {
+      this.activeUseItem = null;
+      this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      return;
+    }
+
+    state.swingsRemaining -= 1;
+
+    if (result === 'depleted' || state.swingsRemaining <= 0) {
+      this.activeUseItem = null;
+      this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      return;
+    }
+
+    state.cooldown = USE_ITEM_SWING_INTERVAL;
+  }
+
+  private tickUseItemInstruction(delta: number): void {
+    if (!this.activeUseItem) {
+      return;
+    }
+
+    const state = this.activeUseItem;
+
+    if (delta <= 0) {
+      if (state.swingsRemaining <= 0) {
+        this.activeUseItem = null;
+        this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+      }
+      return;
+    }
+
+    let remaining = delta;
+
+    while (remaining > EPSILON && this.activeUseItem && state.swingsRemaining > 0) {
+      if (state.cooldown > EPSILON) {
+        const step = Math.min(state.cooldown, remaining);
+        state.cooldown -= step;
+        remaining -= step;
+        if (remaining <= EPSILON) {
+          break;
+        }
+      }
+
+      if (state.cooldown > EPSILON || state.swingsRemaining <= 0) {
+        break;
+      }
+
+      const result = this.performUseItemSwing(state);
+      if (result === 'halt') {
+        this.activeUseItem = null;
+        this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+        return;
+      }
+
+      state.swingsRemaining -= 1;
+
+      if (result === 'depleted' || state.swingsRemaining <= 0) {
+        this.activeUseItem = null;
+        this.timeRemaining = Math.min(this.timeRemaining, EPSILON);
+        return;
+      }
+
+      state.cooldown = USE_ITEM_SWING_INTERVAL;
+    }
+  }
+
+  private performUseItemSwing(state: UseItemRuntimeState): 'continue' | 'halt' | 'depleted' {
+    const payload = {
+      slot: state.slotIndex,
+      nodeId: state.nodeId,
+      target: { x: state.target.x, y: state.target.y },
+    };
+
+    const result = this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'useInventoryItem', payload);
+    this.updateScanMemoryAfterGather(result);
+
+    if (!result || typeof result !== 'object') {
+      return 'halt';
+    }
+
+    const typed = result as {
+      status?: unknown;
+      nodeId?: unknown;
+      target?: unknown;
+    };
+
+    const status = typeof typed.status === 'string' ? typed.status : 'unknown';
+
+    if (typeof typed.nodeId === 'string' && typed.nodeId.trim().length > 0) {
+      state.nodeId = typed.nodeId;
+    }
+
+    if (typed.target && typeof typed.target === 'object') {
+      const nextTarget = typed.target as { x?: unknown; y?: unknown };
+      if (typeof nextTarget.x === 'number' && Number.isFinite(nextTarget.x)) {
+        state.target.x = nextTarget.x;
+      }
+      if (typeof nextTarget.y === 'number' && Number.isFinite(nextTarget.y)) {
+        state.target.y = nextTarget.y;
+      }
+    }
+
+    switch (status) {
+      case 'ok':
+        return 'continue';
+      case 'depleted':
+        return 'depleted';
+      case 'empty-slot':
+      case 'invalid-slot':
+      case 'invalid-item':
+      case 'invalid-target':
+      case 'not-found':
+      case 'missing-systems':
+      case 'inactive':
+        return 'halt';
+      default:
+        return 'continue';
+    }
+  }
+
   private executeDeposit(): void {
     if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
       return;
     }
 
     this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'dropResource', {});
+  }
+
+  private resolveUseItemTarget(
+    instruction: UseItemInstruction,
+    telemetry: ValuesSnapshot,
+  ): { nodeId: string; target: Vector2 } | null {
+    const useScanLabel = instruction.target.useScanHit.literal?.label ?? 'Use Tool Slot → useScanHit';
+    const useScan = this.evaluateBooleanBinding(instruction.target.useScanHit, useScanLabel, telemetry);
+
+    if (useScan) {
+      const indexLabel = instruction.target.scanHitIndex.literal?.label ?? 'Use Tool Slot → scanHitIndex';
+      const requestedIndex = this.evaluateNumberBinding(
+        instruction.target.scanHitIndex,
+        indexLabel,
+        telemetry,
+      );
+      const hit = this.selectScanHitMetadata(requestedIndex);
+      if (hit) {
+        const resolved = this.resolveScanHitTarget(hit);
+        if (resolved.node && resolved.position) {
+          return { nodeId: resolved.node.id, target: resolved.position };
+        }
+      }
+    }
+
+    const targetXLabel = instruction.target.literalPosition.x.literal?.label ?? 'Use Tool Slot → targetX';
+    const targetYLabel = instruction.target.literalPosition.y.literal?.label ?? 'Use Tool Slot → targetY';
+    const literalX = this.evaluateNumberBinding(instruction.target.literalPosition.x, targetXLabel, telemetry);
+    const literalY = this.evaluateNumberBinding(instruction.target.literalPosition.y, targetYLabel, telemetry);
+
+    if (Number.isFinite(literalX) && Number.isFinite(literalY)) {
+      const manualPosition = { x: literalX, y: literalY } satisfies Vector2;
+      const nearbyNode = this.findClosestNodeToPosition(manualPosition);
+      if (nearbyNode) {
+        return { nodeId: nearbyNode.id, target: manualPosition };
+      }
+    }
+
+    const fallbackNodeId = this.resolveGatherTarget();
+    if (!fallbackNodeId) {
+      return null;
+    }
+
+    const fallbackNode = this.mechanism.resourceField
+      .list()
+      .find((candidate) => candidate.id === fallbackNodeId);
+
+    if (fallbackNode) {
+      return {
+        nodeId: fallbackNodeId,
+        target: { x: fallbackNode.position.x, y: fallbackNode.position.y },
+      } satisfies { nodeId: string; target: Vector2 };
+    }
+
+    const state = this.mechanism.getStateSnapshot();
+    return {
+      nodeId: fallbackNodeId,
+      target: { x: state.position.x, y: state.position.y },
+    } satisfies { nodeId: string; target: Vector2 };
   }
 
   private resolveGatherTarget(): string | null {
@@ -626,6 +854,62 @@ export class BlockProgramRunner {
     }
 
     return closestToMechanism?.id ?? null;
+  }
+
+  private selectScanHitMetadata(requestedIndex: number): ScanMemoryHit | null {
+    if (!this.scanMemory || this.scanMemory.hits.length === 0) {
+      return null;
+    }
+
+    const safeIndex = Number.isFinite(requestedIndex) ? Math.max(1, Math.floor(requestedIndex)) : 1;
+    return this.scanMemory.hits[safeIndex - 1] ?? null;
+  }
+
+  private resolveScanHitTarget(
+    hit: ScanMemoryHit,
+  ): { node: ResourceNode | null; position: Vector2 | null } {
+    let node: ResourceNode | null = null;
+    if (hit.id) {
+      node = this.mechanism.resourceField
+        .list()
+        .find((candidate) => candidate.id === hit.id)
+        ?? null;
+    }
+
+    if (!node && hit.position) {
+      node = this.findClosestNodeToPosition(hit.position);
+    }
+
+    const position: Vector2 | null = hit.position
+      ? { x: hit.position.x, y: hit.position.y }
+      : node
+        ? { x: node.position.x, y: node.position.y }
+        : null;
+
+    return { node, position };
+  }
+
+  private findClosestNodeToPosition(position: Vector2): ResourceNode | null {
+    const nodes = this.mechanism.resourceField
+      .list()
+      .filter((node) => node.quantity > 0);
+
+    if (nodes.length === 0) {
+      return null;
+    }
+
+    let closest: ResourceNode | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const node of nodes) {
+      const distance = Math.hypot(node.position.x - position.x, node.position.y - position.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        closest = node;
+      }
+    }
+
+    return closest;
   }
 
   private updateScanMemoryAfterGather(result: unknown): void {

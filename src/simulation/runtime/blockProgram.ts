@@ -91,6 +91,26 @@ export interface MoveToTargetMetadata {
   };
 }
 
+export interface StringLiteralValue {
+  value: string;
+  source: ParameterSource;
+  label?: string;
+}
+
+export interface UseItemSlotMetadata {
+  index: NumberParameterBinding;
+  label: StringLiteralValue;
+}
+
+export interface UseItemTargetMetadata {
+  useScanHit: BooleanParameterBinding;
+  scanHitIndex: NumberParameterBinding;
+  literalPosition: {
+    x: NumberParameterBinding;
+    y: NumberParameterBinding;
+  };
+}
+
 export interface BlockInstructionMetadata {
   sourceBlockId: string;
 }
@@ -102,8 +122,16 @@ export type MoveToInstruction = BlockInstructionMetadata & {
   target: MoveToTargetMetadata;
 };
 
+export type UseItemInstruction = BlockInstructionMetadata & {
+  kind: 'use-item';
+  duration: NumberParameterBinding;
+  slot: UseItemSlotMetadata;
+  target: UseItemTargetMetadata;
+};
+
 export type BlockInstruction =
   | MoveToInstruction
+  | UseItemInstruction
   | (BlockInstructionMetadata & {
       kind: 'move';
       duration: NumberParameterBinding;
@@ -173,6 +201,7 @@ const TURN_RATE = Math.PI / 2;
 const WAIT_DURATION = 1;
 const SCAN_DURATION = 1;
 const GATHER_DURATION = 1.5;
+const USE_ITEM_DURATION = 3;
 
 interface CompilationContext {
   unsupportedBlocks: Set<string>;
@@ -291,6 +320,14 @@ interface NumberBindingOptions {
 interface BooleanBindingOptions {
   label: string;
   fallback?: boolean;
+}
+
+interface StringBindingOptions {
+  label: string;
+  fallback?: string;
+  trim?: boolean;
+  allowEmpty?: boolean;
+  required?: boolean;
 }
 
 const clampNumber = (value: number, min?: number, max?: number): number => {
@@ -434,6 +471,51 @@ const resolveBooleanBinding = (
   });
 
   return { literal, expression } satisfies BooleanParameterBinding;
+};
+
+const resolveStringParameter = (
+  block: BlockInstance,
+  parameterName: string,
+  diagnostics: Diagnostic[],
+  options: StringBindingOptions,
+): StringLiteralValue => {
+  const blockLabel = getBlockLabel(block.type);
+  const label = formatParameterLabel(blockLabel, parameterName);
+  const definition = getParameterDefinition(block.type, parameterName);
+
+  const fallback =
+    typeof options.fallback === 'string'
+      ? options.fallback
+      : definition?.kind === 'string'
+        ? definition.defaultValue
+        : '';
+
+  const parameter = block.parameters?.[parameterName];
+  if (!parameter) {
+    if (options.required) {
+      diagnostics.push({
+        severity: 'error',
+        message: `${getBlockLabel(block.type)} block is missing its ${parameterName} parameter and will be ignored.`,
+      });
+    }
+    return { value: fallback, source: 'default', label } satisfies StringLiteralValue;
+  }
+
+  if (parameter.kind !== 'string') {
+    diagnostics.push({
+      severity: 'warning',
+      message: `${label} received ${describeValue((parameter as { value?: unknown })?.value)}; defaulting to "${fallback}".`,
+    });
+    return { value: fallback, source: 'default', label } satisfies StringLiteralValue;
+  }
+
+  const rawValue = typeof parameter.value === 'string' ? parameter.value : '';
+  const trimmed = options.trim === false ? rawValue : rawValue.trim();
+  const allowEmpty = options.allowEmpty === true;
+  const value = trimmed.length > 0 || allowEmpty ? trimmed : fallback;
+  const source: ParameterSource = value === fallback ? 'default' : 'user';
+
+  return { value, source, label } satisfies StringLiteralValue;
 };
 
 interface NumberExpressionOptions {
@@ -896,6 +978,66 @@ const compileBlock = (
           sourceBlockId,
         },
       ];
+    case 'use-item-slot': {
+      const hasSlotIndex =
+        !!block.parameters && Object.prototype.hasOwnProperty.call(block.parameters, 'slotIndex');
+      if (!hasSlotIndex) {
+        diagnostics.push({
+          severity: 'error',
+          message: `${getBlockLabel(block.type)} block is missing its slot index parameter and will be ignored.`,
+        });
+        return [];
+      }
+
+      const slotIndexBinding = resolveNumberBinding(block, 'slotIndex', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'slotIndex'),
+        fallback: 1,
+        minimum: 1,
+        enforceInteger: true,
+      });
+      const slotLabel = resolveStringParameter(block, 'slotLabel', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'slotLabel'),
+        fallback: 'Primary Tool',
+      });
+      const useScanBinding = resolveBooleanBinding(block, 'useScanHit', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'useScanHit'),
+        fallback: true,
+      });
+      const scanHitIndexBinding = resolveNumberBinding(block, 'scanHitIndex', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'scanHitIndex'),
+        fallback: 1,
+        minimum: 1,
+        enforceInteger: true,
+      });
+      const targetXBinding = resolveNumberBinding(block, 'targetX', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'targetX'),
+        fallback: 0,
+      });
+      const targetYBinding = resolveNumberBinding(block, 'targetY', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('use-item-slot'), 'targetY'),
+        fallback: 0,
+      });
+
+      return [
+        {
+          kind: 'use-item',
+          duration: createNumberLiteralBinding(USE_ITEM_DURATION, { label: 'Use Tool Slot → duration' }),
+          slot: {
+            index: slotIndexBinding,
+            label: slotLabel,
+          },
+          target: {
+            useScanHit: useScanBinding,
+            scanHitIndex: scanHitIndexBinding,
+            literalPosition: {
+              x: targetXBinding,
+              y: targetYBinding,
+            },
+          },
+          sourceBlockId,
+        },
+      ];
+    }
     case 'deposit-cargo':
       return [
         {

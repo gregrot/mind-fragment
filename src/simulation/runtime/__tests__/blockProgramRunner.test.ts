@@ -7,6 +7,7 @@ import {
   createNumberLiteralExpression,
   type CompiledProgram,
   type NumberExpression,
+  type UseItemInstruction,
 } from '../blockProgram';
 import { MechanismChassis } from '../../mechanism';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../mechanism/modules/moduleLibrary';
@@ -168,6 +169,108 @@ describe('BlockProgramRunner', () => {
       ([moduleId, actionName]) => moduleId === 'arm.manipulator' && actionName === 'gatherResource',
     );
     expect(gatherCall?.[2]).toEqual(expect.objectContaining({ nodeId: targetNode.id }));
+    actionSpy.mockRestore();
+  });
+
+  it('uses the configured tool slot against scanned targets with timed swings', () => {
+    const mechanism = createMechanism();
+    const runner = new BlockProgramRunner(mechanism);
+
+    const targetNode = mechanism.resourceField.upsertNode({
+      id: 'arboreal-target-1',
+      type: 'arboreal-node',
+      position: { x: 48, y: 18 },
+      quantity: 3,
+      metadata: { hitPoints: 3, hitsRemaining: 3, requiredTool: 'axe' },
+    });
+
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'scan',
+          duration: createNumberLiteralBinding(0.25, { label: 'Test → scan duration' }),
+          filter: null,
+          sourceBlockId: 'test-scan-for-tool',
+        },
+        {
+          kind: 'use-item',
+          duration: createNumberLiteralBinding(3, { label: 'Test → tool duration' }),
+          slot: {
+            index: createNumberLiteralBinding(1, { label: 'Test → slot index' }),
+            label: { value: 'Primary Tool', source: 'default', label: 'Test → slot label' },
+          },
+          target: {
+            useScanHit: createBooleanLiteralBinding(true, { label: 'Test → use scan hit' }),
+            scanHitIndex: createNumberLiteralBinding(1, { label: 'Test → scan hit index' }),
+            literalPosition: {
+              x: createNumberLiteralBinding(0, { label: 'Test → target X' }),
+              y: createNumberLiteralBinding(0, { label: 'Test → target Y' }),
+            },
+          },
+          sourceBlockId: 'test-use-tool',
+        } satisfies UseItemInstruction,
+      ],
+    } satisfies CompiledProgram;
+
+    const originalInvoke = mechanism.invokeAction.bind(mechanism);
+    const actionSpy = vi.spyOn(mechanism, 'invokeAction');
+    const distanceToNode = Math.hypot(
+      targetNode.position.x - mechanism.getStateSnapshot().position.x,
+      targetNode.position.y - mechanism.getStateSnapshot().position.y,
+    );
+
+    actionSpy.mockImplementation((moduleId, actionName, payload) => {
+      if (moduleId === 'sensor.survey' && actionName === 'scan') {
+        return {
+          status: 'ok',
+          filter: null,
+          resources: {
+            filter: null,
+            total: 1,
+            hits: [
+              {
+                id: targetNode.id,
+                type: targetNode.type,
+                quantity: targetNode.quantity,
+                distance: distanceToNode,
+                position: { ...targetNode.position },
+              },
+            ],
+          },
+        };
+      }
+      return originalInvoke(moduleId, actionName, payload);
+    });
+
+    runner.load(program);
+
+    runner.update(0.25);
+    mechanism.tick(0.25);
+
+    runner.update(1);
+    mechanism.tick(1);
+    runner.update(1);
+    mechanism.tick(1);
+    runner.update(1);
+    mechanism.tick(1);
+
+    expect(runner.getStatus()).toBe('completed');
+
+    const useCalls = actionSpy.mock.calls.filter(
+      ([moduleId, actionName]) => moduleId === 'arm.manipulator' && actionName === 'useInventoryItem',
+    );
+    expect(useCalls).toHaveLength(3);
+    const [firstCall] = useCalls;
+    const firstPayload = firstCall?.[2] as { slot?: number; nodeId?: string; target?: { x?: number; y?: number } } | undefined;
+    expect(firstPayload?.slot).toBe(0);
+    expect(firstPayload?.nodeId).toBe(targetNode.id);
+    expect(firstPayload?.target).toEqual(targetNode.position);
+
+    const remainingNode = mechanism.resourceField
+      .list()
+      .find((candidate) => candidate.id === targetNode.id);
+    expect(remainingNode?.quantity).toBe(0);
+
     actionSpy.mockRestore();
   });
 

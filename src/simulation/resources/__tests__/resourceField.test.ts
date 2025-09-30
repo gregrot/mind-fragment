@@ -115,4 +115,74 @@ describe('ResourceField registerHit', () => {
     expect(log?.quantity).toBe(2);
     expect(log?.position).toEqual(treeNode.position);
   });
+
+  it('allows a respawned tree without hitsRemaining to be felled again and notifies depletion', () => {
+    const field = createField([treeNode]);
+    const events: ResourceFieldEvent[] = [];
+    field.subscribe((event) => events.push(event));
+
+    for (let i = 0; i < 3; i += 1) {
+      field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    }
+
+    events.length = 0;
+
+    field.upsertNode({
+      id: treeNode.id,
+      type: treeNode.type,
+      position: { ...treeNode.position },
+      quantity: 3,
+      metadata: { hitPoints: 3 },
+    });
+
+    events.length = 0;
+
+    const firstHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(firstHit).toMatchObject({ status: 'ok', remaining: 2 });
+
+    const secondHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(secondHit).toMatchObject({ status: 'ok', remaining: 1 });
+
+    const finalHit = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(finalHit).toMatchObject({ status: 'depleted', remaining: 0 });
+
+    const treeEvents = events
+      .filter((event) => event.type !== 'added' && 'node' in event && event.node.id === treeNode.id)
+      .map((event) => event.type);
+    expect(treeEvents).toEqual(['updated', 'updated', 'depleted']);
+
+    const tree = field.list().find((node) => node.id === treeNode.id);
+    expect(tree?.quantity).toBe(0);
+  });
+
+  it('notifies depletion and drops when a zero-hit tree is struck again', () => {
+    const field = createField([treeNode]);
+    const events: ResourceFieldEvent[] = [];
+    field.subscribe((event) => events.push(event));
+
+    for (let i = 0; i < 3; i += 1) {
+      field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    }
+
+    events.length = 0;
+
+    field.upsertNode({
+      id: treeNode.id,
+      type: treeNode.type,
+      position: { ...treeNode.position },
+      quantity: 3,
+      metadata: { hitPoints: 3, hitsRemaining: 0 },
+    });
+
+    events.length = 0;
+
+    const result = field.registerHit({ nodeId: treeNode.id, toolType: 'axe' });
+    expect(result).toMatchObject({ status: 'depleted', remaining: 0 });
+
+    expect(events[0]).toMatchObject({ type: 'depleted', node: expect.objectContaining({ id: treeNode.id }) });
+
+    const log = field.list().find((node) => node.type === 'log');
+    expect(log).toBeDefined();
+    expect(log?.quantity).toBeGreaterThan(0);
+  });
 });

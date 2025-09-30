@@ -257,16 +257,29 @@ export class ResourceField {
 
     const baseNode = existing ? this.cloneNode(existing) : null;
     const targetId = baseNode?.id ?? this.generateNodeId(requestedId, trimmedType);
+    let mergedMetadata: Record<string, unknown> | undefined;
+    if (metadata) {
+      const baseMetadata = baseNode?.metadata ?? {};
+      mergedMetadata = { ...baseMetadata, ...metadata };
+
+      const rawHitPoints = (metadata as { hitPoints?: unknown }).hitPoints;
+      const hasIncomingHitPoints =
+        typeof rawHitPoints === 'number' && Number.isFinite(rawHitPoints) && rawHitPoints > 0;
+      const hasIncomingHitsRemaining = Object.prototype.hasOwnProperty.call(metadata, 'hitsRemaining');
+
+      if (hasIncomingHitPoints && !hasIncomingHitsRemaining) {
+        mergedMetadata.hitsRemaining = rawHitPoints;
+      }
+    } else if (baseNode?.metadata) {
+      mergedMetadata = { ...baseNode.metadata };
+    }
+
     const nextNode: ResourceNode = {
       id: targetId,
       type: baseNode?.type ?? trimmedType,
       position: safePosition,
       quantity: (baseNode?.quantity ?? 0) + safeQuantity,
-      metadata: metadata
-        ? { ...(baseNode?.metadata ?? {}), ...metadata }
-        : baseNode?.metadata
-        ? { ...baseNode.metadata }
-        : undefined,
+      metadata: mergedMetadata,
     };
 
     const sanitised = this.cloneNode(nextNode);
@@ -370,8 +383,28 @@ export class ResourceField {
 
     const hitsRemaining = clamp(metadata.hitsRemaining, 0, metadata.hitPoints);
     node.quantity = hitsRemaining;
-    if (hitsRemaining <= 0) {
+
+    const resolveDepletion = (): RegisterHitResult => {
+      this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
+
+      const drop = metadata.drop;
+      if (drop) {
+        const dropType = drop.type.trim();
+        const dropQuantity = drop.quantity;
+        if (dropType && Number.isFinite(dropQuantity) && dropQuantity > 0) {
+          this.upsertNode({
+            type: dropType,
+            position: { ...node.position },
+            quantity: dropQuantity,
+          });
+        }
+      }
+
       return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+    };
+
+    if (hitsRemaining <= 0) {
+      return resolveDepletion();
     }
 
     const nextHits = hitsRemaining - 1;
@@ -389,22 +422,7 @@ export class ResourceField {
       return { status: 'ok', nodeId, type: node.type, remaining: nextMetadata.hitsRemaining };
     }
 
-    this.notifyListeners({ type: 'depleted', node: this.cloneNode(node) });
-
-    const drop = metadata.drop;
-    if (drop) {
-      const dropType = drop.type.trim();
-      const dropQuantity = drop.quantity;
-      if (dropType && Number.isFinite(dropQuantity) && dropQuantity > 0) {
-        this.upsertNode({
-          type: dropType,
-          position: { ...node.position },
-          quantity: dropQuantity,
-        });
-      }
-    }
-
-    return { status: 'depleted', nodeId, type: node.type, remaining: 0 };
+    return resolveDepletion();
   }
 
   harvest({ nodeId, origin, amount, maxDistance = DEFAULT_MAX_DISTANCE }: HarvestOptions): HarvestResult {

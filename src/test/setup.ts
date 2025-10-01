@@ -12,6 +12,65 @@ vi.mock('pixi.js', () => {
     height = 0;
     events: Record<string, unknown> = {};
     generateTexture = vi.fn(() => ({ destroy: vi.fn() }));
+    destroy = vi.fn();
+  }
+
+  class MockContainer {
+    children: unknown[] = [];
+
+    addChild<T>(child: T): T {
+      this.children.push(child);
+      return child;
+    }
+
+    removeChild<T>(child: T): T {
+      this.children = this.children.filter((entry) => entry !== child);
+      return child;
+    }
+
+    destroy = vi.fn();
+  }
+
+  class MockGraphics extends MockContainer {
+    lineStyle(): this {
+      return this;
+    }
+    moveTo(): this {
+      return this;
+    }
+    lineTo(): this {
+      return this;
+    }
+  }
+
+  class MockSprite extends MockContainer {
+    anchor = {
+      x: 0,
+      y: 0,
+      set: vi.fn((x: number, y?: number) => {
+        this.anchor.x = x;
+        this.anchor.y = y ?? x;
+      }),
+    };
+    position = {
+      x: 0,
+      y: 0,
+      set: vi.fn((x: number, y: number) => {
+        this.position.x = x;
+        this.position.y = y;
+      }),
+    };
+    scale = {
+      x: 1,
+      y: 1,
+      set: vi.fn((x: number, y?: number) => {
+        this.scale.x = x;
+        this.scale.y = y ?? x;
+      }),
+    };
+    alpha = 1;
+    rotation = 0;
+    destroy = vi.fn();
   }
 
   class MockApplication {
@@ -29,41 +88,11 @@ vi.mock('pixi.js', () => {
     destroy(): void {}
   }
 
-  class MockContainer {
-    children: unknown[] = [];
-
-    addChild<T>(child: T): T {
-      this.children.push(child);
-      return child;
-    }
-
-    removeChild<T>(child: T): void {
-      this.children = this.children.filter((entry) => entry !== child);
-    }
-  }
-
-  class MockGraphics extends MockContainer {
-    lineStyle(): this {
-      return this;
-    }
-    moveTo(): this {
-      return this;
-    }
-    lineTo(): this {
-      return this;
-    }
-  }
-
-  class MockSprite extends MockContainer {
-    anchor = { set: vi.fn() };
-    position = { set: vi.fn() };
-    rotation = 0;
-  }
-
   return {
     Application: MockApplication,
     Container: MockContainer,
     Graphics: MockGraphics,
+    Renderer: MockRenderer,
     Sprite: MockSprite,
   };
 });

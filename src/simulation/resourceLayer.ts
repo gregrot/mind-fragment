@@ -107,26 +107,34 @@ export class ResourceLayer {
       return;
     }
 
+    const currentNode = this.resourceField
+      .list()
+      .find((entry) => entry.id === node.id);
+
+    if (!currentNode || currentNode.quantity <= 0) {
+      return;
+    }
+
     if (this.spriteEntries.has(node.id)) {
-      this.updateSprite(node);
+      this.updateSprite(currentNode);
       return;
     }
 
     const sprite = new Sprite(texture);
-    if (node.type === 'tree') {
+    if (currentNode.type === 'tree') {
       sprite.anchor.set(0.5, 1);
     } else {
       sprite.anchor.set(0.5);
     }
-    sprite.position.set(node.position.x, node.position.y);
+    sprite.position.set(currentNode.position.x, currentNode.position.y);
 
     this.container.addChild(sprite);
     this.spriteEntries.set(node.id, {
       sprite,
-      maxQuantity: Math.max(node.quantity, 1),
+      maxQuantity: Math.max(currentNode.quantity, 1),
     });
 
-    this.updateSprite(node);
+    this.updateSprite(currentNode);
   }
 
   private updateSprite(node: ResourceNode): void {
@@ -153,6 +161,7 @@ export class ResourceLayer {
   }
 
   private removeSprite(nodeId: string): void {
+    this.pendingLoads.delete(nodeId);
     const entry = this.spriteEntries.get(nodeId);
     if (!entry) {
       return;

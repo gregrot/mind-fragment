@@ -61,22 +61,7 @@ const MechanismProgrammingPanel = ({
 
   return (
     <div className={styles.programming}>
-      <div className={styles.summary}>
-        <p className={styles.kicker}>Selected mechanism</p>
-        <h3 className={styles.title}>Chassis {mechanismId}</h3>
-        <p className={styles.description}>
-          Combine blocks from the palette and deploy updates to steer the prototype within the simulation.
-        </p>
-      </div>
       <div className={styles.layout} data-testid="programming-layout">
-        <aside
-          className={styles.palette}
-          ref={paletteRef}
-          data-read-only={isReadOnly ? 'true' : undefined}
-        >
-          <h4>Block palette</h4>
-          <BlockPalette blocks={paletteBlocks} onTouchDrop={onTouchDrop} />
-        </aside>
         <section className={styles.workspace} data-read-only={isReadOnly ? 'true' : undefined}>
           <h4>Workspace</h4>
           {isReadOnly ? (
@@ -133,11 +118,28 @@ const MechanismProgrammingPanel = ({
             />
           </div>
         </section>
+        <div className={styles.sidebar}>
+          <div className={styles.summary}>
+            <p className={styles.kicker}>Selected mechanism</p>
+            <h3 className={styles.title}>Chassis {mechanismId}</h3>
+            <p className={styles.description}>
+              Combine blocks from the palette and deploy updates to steer the prototype within the simulation.
+            </p>
+          </div>
+          <aside
+            className={styles.palette}
+            ref={paletteRef}
+            data-read-only={isReadOnly ? 'true' : undefined}
+          >
+            <h4>Block palette</h4>
+            <BlockPalette blocks={paletteBlocks} onTouchDrop={onTouchDrop} />
+          </aside>
+          <footer className={styles.footer}>
+            <RuntimeControls mechanismId={mechanismId} onRun={onRunProgram} diagnostics={diagnostics} />
+            <p className={styles.autosaveHint}>Changes save automatically while you edit.</p>
+          </footer>
+        </div>
       </div>
-      <footer className={styles.footer}>
-        <RuntimeControls mechanismId={mechanismId} onRun={onRunProgram} diagnostics={diagnostics} />
-        <p className={styles.autosaveHint}>Changes save automatically while you edit.</p>
-      </footer>
     </div>
   );
 };

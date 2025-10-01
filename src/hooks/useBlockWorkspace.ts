@@ -53,7 +53,7 @@ const parsePayload = (event: DragEvent<HTMLElement>): DragPayload | null => {
   return null;
 };
 
-export function useBlockWorkspace(): {
+export function useBlockWorkspace(initialWorkspace: WorkspaceState = []): {
   workspace: WorkspaceState;
   handleDrop: (event: DragEvent<HTMLElement>, target: DropTarget) => void;
   handleTouchDrop: (payload: DragPayload, target: DropTarget) => void;
@@ -61,7 +61,7 @@ export function useBlockWorkspace(): {
   updateBlockInstance: (instanceId: string, updater: (block: BlockInstance) => BlockInstance) => void;
   removeBlockInstance: (instanceId: string) => void;
 } {
-  const [workspace, setWorkspace] = useState<WorkspaceState>([]);
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => initialWorkspace);
 
   const applyDropPayload = useCallback(
     (payload: DragPayload | null, target: DropTarget) => {

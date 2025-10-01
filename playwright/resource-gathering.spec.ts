@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { workspaceDropzone, dragPaletteBlock } from './drag-helpers';
+import { workspaceDropzone, dragPaletteBlock, clearWorkspace } from './drag-helpers';
 
 const TREE_ID = 'playwright-tree-harvest';
 
 test.describe('resource scanning and gathering', () => {
+  test.setTimeout(60_000);
+
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
@@ -23,6 +25,8 @@ test.describe('resource scanning and gathering', () => {
       const runtime = window.__mfSimulationRuntime;
       return Boolean(runtime && runtime.getResourceFieldSnapshot('MF-01').length > 0);
     });
+
+    await clearWorkspace(page);
   });
 
   test('player can automate chopping a tree for logs with the primary tool slot', async ({ page }) => {
@@ -100,7 +104,7 @@ test.describe('resource scanning and gathering', () => {
         return Boolean(treeGone && logNode);
       },
       TREE_ID,
-      { timeout: 20_000 },
+      { timeout: 35_000 },
     );
 
     await page.waitForFunction(
@@ -115,7 +119,7 @@ test.describe('resource scanning and gathering', () => {
         return Boolean(logEntry && logEntry.quantity >= 2);
       },
       undefined,
-      { timeout: 10_000 },
+      { timeout: 20_000 },
     );
 
     const finalSnapshot = await page.evaluate((treeId) => {

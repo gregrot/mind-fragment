@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export const workspaceDropzone = '[data-testid="workspace-dropzone"]';
 
@@ -205,4 +205,30 @@ export async function dragPaletteBlock(page: Page, blockId: string, targetSelect
 
 export async function dragWorkspaceBlock(page: Page, blockId: string, targetSelector: string): Promise<void> {
   await performDragAndDrop(page, `[data-testid="block-${blockId}"]`, targetSelector);
+}
+
+export async function clearWorkspace(page: Page): Promise<void> {
+  const workspace = page.locator(workspaceDropzone);
+  await expect(workspace).toBeVisible();
+  try {
+    await expect(page.getByTestId('block-start')).toBeVisible({ timeout: 2000 });
+  } catch {
+    // If the workspace is already empty or the default program is unavailable, continue.
+  }
+
+  await expect
+    .poll(async () => {
+      return page.evaluate((selector) => {
+        const root = document.querySelector(selector);
+        if (!root) {
+          return 0;
+        }
+
+        const deleteButtons = root.querySelectorAll('[data-testid$="-delete"]');
+        deleteButtons.forEach((button) => (button as HTMLButtonElement).click());
+
+        return root.querySelectorAll('[data-testid^="block-"]').length;
+      }, workspaceDropzone);
+    })
+    .toBe(0);
 }

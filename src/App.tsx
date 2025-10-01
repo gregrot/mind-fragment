@@ -23,6 +23,7 @@ import styles from './styles/App.module.css';
 import type { SlotSchema } from './types/slots';
 import type { ProgramDebugState, ProgramRunnerStatus } from './simulation/runtime/blockProgramRunner';
 import { compileWorkspaceProgram, type Diagnostic } from './simulation/runtime/blockProgram';
+import { createDefaultStartupWorkspace } from './blocks/defaultStartupWorkspace';
 
 const DEFAULT_MECHANISM_ID = 'MF-01';
 const ONBOARDING_ENABLED = false;
@@ -125,6 +126,7 @@ const buildMechanismOverlayData = (
 });
 
 const AppContent = (): JSX.Element => {
+  const defaultWorkspace = useMemo(() => createDefaultStartupWorkspace(), []);
   const {
     workspace,
     handleDrop,
@@ -132,7 +134,7 @@ const AppContent = (): JSX.Element => {
     replaceWorkspace,
     updateBlockInstance,
     removeBlockInstance,
-  } = useBlockWorkspace();
+  } = useBlockWorkspace(defaultWorkspace);
   const { selectedMechanismId, selectedEntityId, clearSelection } = useMechanismSelection();
   const {
     isOpen,
@@ -143,7 +145,9 @@ const AppContent = (): JSX.Element => {
     getEntityData,
     upsertEntityData,
   } = useEntityOverlayManager();
-  const [mechanismPrograms, setMechanismPrograms] = useState<Record<string, WorkspaceState>>({});
+  const [mechanismPrograms, setMechanismPrograms] = useState<Record<string, WorkspaceState>>(() => ({
+    [DEFAULT_MECHANISM_ID]: defaultWorkspace,
+  }));
   const [compileDiagnosticsByMechanism, setCompileDiagnosticsByMechanism] = useState<Record<string, Diagnostic[]>>({});
   const [workspaceMechanismId, setWorkspaceMechanismId] = useState<string>(
     () => selectedMechanismId ?? DEFAULT_MECHANISM_ID,

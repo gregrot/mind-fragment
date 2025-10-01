@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { workspaceDropzone, dragPaletteBlock } from './drag-helpers';
+import { workspaceDropzone, dragPaletteBlock, clearWorkspace } from './drag-helpers';
 
 test.describe('module inventory management', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,6 +18,8 @@ test.describe('module inventory management', () => {
       await stopButton.click();
     }
     await expect(overlay.getByTestId('run-program')).toBeEnabled();
+
+    await clearWorkspace(page);
   });
 
   test('systems tab shows chassis inspector with module slots', async ({ page }) => {

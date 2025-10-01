@@ -17,6 +17,8 @@ const BLOCK_MODULE_REQUIREMENTS: Record<string, string[]> = {
   'scan-resources': ['sensor.survey'],
   'gather-resource': ['arm.manipulator'],
   'deposit-cargo': ['arm.manipulator'],
+  'store-storage': ['arm.manipulator'],
+  'withdraw-storage': ['arm.manipulator'],
   'toggle-status': ['status.signal'],
   'set-status': ['status.signal'],
   'broadcast-signal': ['status.signal'],

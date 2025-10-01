@@ -122,6 +122,16 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         label: 'Drop resource',
         description: 'Release stored resources to create or expand nearby ground piles.',
       },
+      {
+        name: 'storeInStorageBox',
+        label: 'Store to storage box',
+        description: 'Move inventory into a storage box, defaulting to the base container when unspecified.',
+      },
+      {
+        name: 'withdrawFromStorageBox',
+        label: 'Withdraw from storage box',
+        description: 'Retrieve stored resources from a storage box back into inventory.',
+      },
     ],
     telemetry: [
       {
@@ -163,6 +173,11 @@ export const MODULE_LIBRARY: ModuleBlueprint[] = [
         key: 'lastDrop',
         label: 'Last drop',
         description: 'Summary of the most recent drop operation.',
+      },
+      {
+        key: 'lastStorageTransfer',
+        label: 'Last storage transfer',
+        description: 'Summary of the most recent storage interaction.',
       },
     ],
     instantiate: () => new ManipulationModule(),

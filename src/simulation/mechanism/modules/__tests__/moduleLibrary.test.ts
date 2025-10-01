@@ -49,6 +49,8 @@ describe('module library definitions', () => {
     const gripStrength = manipulatorValues?.gripStrength.value as number;
     expect(gripStrength).toBeGreaterThan(0);
     expect(manipulatorActions?.grip.metadata.label).toBe('Grip target');
+    expect(manipulatorActions?.storeInStorageBox.metadata.label).toBe('Store to storage box');
+    expect(manipulatorActions?.withdrawFromStorageBox.metadata.label).toBe('Withdraw from storage box');
 
     const cargoValues = telemetry.values['storage.cargo'];
     const cargoActions = telemetry.actions['storage.cargo'];
@@ -136,6 +138,7 @@ describe('module library definitions', () => {
     expect(manipulatorTelemetry?.heldItem.value).toBe('glyph');
     const totalHarvested = manipulatorTelemetry?.totalHarvested.value as number;
     expect(totalHarvested).toBeGreaterThanOrEqual(gatherResult.harvested);
+    expect(manipulatorTelemetry?.lastStorageTransfer.value).toBeNull();
 
     const fabricatorTelemetry = refreshedTelemetry.values['fabricator.basic'];
     const remainingQueue = fabricatorTelemetry?.queueLength.value as number;

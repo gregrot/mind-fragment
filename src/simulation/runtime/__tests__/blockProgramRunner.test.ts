@@ -7,10 +7,12 @@ import {
   createNumberLiteralExpression,
   type CompiledProgram,
   type NumberExpression,
+  type StringLiteralValue,
   type UseItemInstruction,
 } from '../blockProgram';
 import { MechanismChassis } from '../../mechanism';
 import { DEFAULT_MODULE_LOADOUT, createModuleInstance } from '../../mechanism/modules/moduleLibrary';
+import { DEFAULT_STORAGE_BOX_ID } from '../../storage/storageBox';
 import { DEFAULT_STARTUP_PROGRAM } from '../defaultProgram';
 
 const STATUS_SIGNAL_DESCRIPTOR = {
@@ -643,6 +645,17 @@ describe('BlockProgramRunner', () => {
     expect(inventoryAfter.used).toBe(1);
     expect(inventoryAfter.entries).toEqual([]);
 
+    const storageSnapshot = mechanism.getStorageSnapshot();
+    const baseBox = storageSnapshot.boxes.find((box) => box.id === DEFAULT_STORAGE_BOX_ID);
+    expect(baseBox).toBeDefined();
+    expect(baseBox?.used).toBeGreaterThanOrEqual(9);
+    expect(
+      baseBox?.contents.find((entry) => entry.resource === 'ferrous-ore')?.quantity ?? 0,
+    ).toBeGreaterThanOrEqual(6);
+    expect(
+      baseBox?.contents.find((entry) => entry.resource === 'silicate-crystal')?.quantity ?? 0,
+    ).toBeGreaterThanOrEqual(3);
+
     const mechanismState = mechanism.getStateSnapshot();
     const nodes = mechanism.resourceField.list();
     const nearbyNodes = nodes.filter((node) => {
@@ -650,11 +663,68 @@ describe('BlockProgramRunner', () => {
       const dy = node.position.y - mechanismState.position.y;
       return Math.hypot(dx, dy) <= 1;
     });
-    expect(nearbyNodes.length).toBeGreaterThanOrEqual(2);
-    const ferrousPile = nearbyNodes.find((node) => node.type === 'ferrous-ore');
-    const silicatePile = nearbyNodes.find((node) => node.type === 'silicate-crystal');
-    expect(ferrousPile?.quantity).toBeGreaterThanOrEqual(6);
-    expect(silicatePile?.quantity).toBeGreaterThanOrEqual(3);
+    expect(nearbyNodes.length).toBe(0);
+  });
+
+  it('stores and withdraws resources when executing storage instructions', () => {
+    const mechanism = createMechanism();
+    mechanism.inventory.store('ferrous-ore', 7);
+    mechanism.inventory.store('silicate-crystal', 2);
+
+    const runner = new BlockProgramRunner(mechanism);
+    const emptyStringLiteral = (label: string): StringLiteralValue => ({
+      value: '',
+      source: 'default',
+      label,
+    });
+    const program: CompiledProgram = {
+      instructions: [
+        {
+          kind: 'store-storage',
+          duration: createNumberLiteralBinding(0.5, { label: 'Test → store duration' }),
+          boxId: emptyStringLiteral('Test → store box'),
+          resource: emptyStringLiteral('Test → store resource'),
+          amount: createNumberLiteralBinding(0, { label: 'Test → store amount' }),
+          sourceBlockId: 'test-store-storage',
+        },
+        {
+          kind: 'withdraw-storage',
+          duration: createNumberLiteralBinding(0.5, { label: 'Test → withdraw duration' }),
+          boxId: { value: DEFAULT_STORAGE_BOX_ID, source: 'user', label: 'Test → withdraw box' },
+          resource: { value: 'ferrous-ore', source: 'user', label: 'Test → withdraw resource' },
+          amount: createNumberLiteralBinding(4, { label: 'Test → withdraw amount' }),
+          sourceBlockId: 'test-withdraw-storage',
+        },
+      ],
+    };
+
+    runner.load(program);
+    runner.update(0.5);
+    mechanism.tick(0.5);
+    runner.update(0.5);
+    mechanism.tick(0.5);
+
+    const inventorySnapshot = mechanism.getInventorySnapshot();
+    expect(
+      inventorySnapshot.entries.find((entry) => entry.resource === 'ferrous-ore')?.quantity ?? 0,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      inventorySnapshot.entries.find((entry) => entry.resource === 'silicate-crystal'),
+    ).toBeUndefined();
+
+    const storageSnapshot = mechanism.getStorageSnapshot();
+    const baseBox = storageSnapshot.boxes.find((box) => box.id === DEFAULT_STORAGE_BOX_ID);
+    expect(baseBox?.used).toBeGreaterThanOrEqual(5);
+    expect(
+      baseBox?.contents.find((entry) => entry.resource === 'ferrous-ore')?.quantity ?? 0,
+    ).toBeLessThanOrEqual(3);
+
+    const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
+    const lastTransfer = telemetry?.lastStorageTransfer.value as
+      | { type: string; status: string; totalTransferred: number }
+      | null;
+    expect(lastTransfer?.type).toBe('withdraw');
+    expect(lastTransfer?.totalTransferred).toBeGreaterThan(0);
   });
 
   it('loops gather instructions until the targeted node is depleted', () => {

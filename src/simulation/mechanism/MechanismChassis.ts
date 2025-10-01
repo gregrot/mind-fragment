@@ -10,6 +10,12 @@ import { MechanismState, type MechanismStateSnapshot, type MechanismStateOptions
 import type { MechanismModule } from './MechanismModule';
 import { InventoryStore } from './inventory';
 import { ResourceField, createDefaultResourceNodes } from '../resources/resourceField';
+import {
+  DEFAULT_STORAGE_BOX_ID,
+  createDefaultStorageRegistry,
+  type StorageRegistry,
+  type StorageRegistrySnapshot,
+} from '../storage/storageBox';
 import type { SlotMetadata, SlotSchema } from '../../types/slots';
 
 const DEFAULT_CAPACITY = 8;
@@ -91,6 +97,7 @@ export interface ModuleActionContext {
     mechanismStateUtils: typeof mechanismStateUtils;
     inventory: InventoryStore;
     resourceField: ResourceField;
+    storage: StorageRegistry;
   };
 }
 
@@ -104,6 +111,7 @@ export class MechanismChassis {
   readonly moduleStack: ModuleStack;
   readonly inventory: InventoryStore;
   readonly resourceField: ResourceField;
+  readonly storage: StorageRegistry;
   private readonly bus: ModuleBus;
   private readonly actuatorHandlers = new Map<string, ActuatorHandler>();
   private readonly pendingActuators = new Map<string, ActuatorRequest[]>();
@@ -117,6 +125,7 @@ export class MechanismChassis {
     this.bus = new ModuleBus();
     this.inventory = new InventoryStore();
     this.resourceField = new ResourceField(createDefaultResourceNodes());
+    this.storage = createDefaultStorageRegistry();
 
     this.inventory.setSlotConfiguration(0, {
       metadata: { stackable: false, moduleSubtype: 'Tool Bay' },
@@ -366,10 +375,19 @@ export class MechanismChassis {
         mechanismStateUtils,
         inventory: this.inventory,
         resourceField: this.resourceField,
+        storage: this.storage,
       },
     };
 
     return action.handler(payload, context);
+  }
+
+  getStorageSnapshot(): StorageRegistrySnapshot {
+    return this.storage.getSnapshot();
+  }
+
+  clearStorage(boxId: string = DEFAULT_STORAGE_BOX_ID): void {
+    this.storage.clear(boxId);
   }
 }
 

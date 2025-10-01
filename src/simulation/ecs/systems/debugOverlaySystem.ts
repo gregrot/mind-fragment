@@ -327,6 +327,16 @@ function formatInstruction(instruction: BlockInstruction): string {
       return `scan${instruction.filter ? ` • ${instruction.filter}` : ''} • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'gather':
       return `gather • ${formatNumberBinding(instruction.duration, 1)}s`;
+    case 'store-storage': {
+      const box = instruction.boxId.value.trim() || 'default';
+      const resource = instruction.resource.value.trim() || 'all';
+      return `store → ${box} • ${resource} • ${formatNumberBinding(instruction.amount, 1)} units`;
+    }
+    case 'withdraw-storage': {
+      const box = instruction.boxId.value.trim() || 'default';
+      const resource = instruction.resource.value.trim() || 'all';
+      return `withdraw ← ${box} • ${resource} • ${formatNumberBinding(instruction.amount, 1)} units`;
+    }
     case 'deposit':
       return `deposit • ${formatNumberBinding(instruction.duration, 1)}s`;
     case 'status-toggle':

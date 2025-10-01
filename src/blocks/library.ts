@@ -152,6 +152,40 @@ export const BLOCK_LIBRARY: BlockDefinition[] = [
     paletteGroup: 'Actions',
   },
   {
+    id: 'store-storage',
+    label: 'Store to Storage Box',
+    category: 'action',
+    summary: 'Move inventory into a storage box, defaulting to the base container when none is specified.',
+    parameters: {
+      boxId: { kind: 'string', defaultValue: 'storage.box.base' },
+      resource: { kind: 'string', defaultValue: '' },
+      amount: { kind: 'number', defaultValue: 0 },
+    },
+    expressionInputs: ['amount'],
+    expressionInputDefaults: {
+      amount: ['literal-number'],
+    },
+    paletteGroup: 'Actions',
+    paletteTags: ['storage', 'inventory'],
+  },
+  {
+    id: 'withdraw-storage',
+    label: 'Withdraw from Storage Box',
+    category: 'action',
+    summary: 'Retrieve resources from a storage box and return them to inventory.',
+    parameters: {
+      boxId: { kind: 'string', defaultValue: 'storage.box.base' },
+      resource: { kind: 'string', defaultValue: '' },
+      amount: { kind: 'number', defaultValue: 0 },
+    },
+    expressionInputs: ['amount'],
+    expressionInputDefaults: {
+      amount: ['literal-number'],
+    },
+    paletteGroup: 'Actions',
+    paletteTags: ['storage', 'inventory'],
+  },
+  {
     id: 'repeat',
     label: 'Repeat',
     category: 'c',

@@ -30,6 +30,24 @@ const getWorkspaceDropzone = (): HTMLElement => {
   return zones[zones.length - 1];
 };
 
+const clearWorkspace = async (): Promise<void> => {
+  const workspace = getWorkspaceDropzone();
+  const deleteButton = within(workspace).queryByTestId('block-start-delete');
+  if (!deleteButton) {
+    return;
+  }
+  fireEvent.click(deleteButton);
+  await waitFor(() => {
+    expect(within(getWorkspaceDropzone()).queryByTestId('block-start')).toBeNull();
+  });
+};
+
+const getLatestStartBlock = (): HTMLElement => {
+  const workspace = getWorkspaceDropzone();
+  const startBlocks = within(workspace).getAllByTestId('block-start');
+  return startBlocks[startBlocks.length - 1];
+};
+
 const stubElementFromPoint = (element: Element | null) => {
   const doc = document as Document & {
     elementFromPoint?: (x: number, y: number) => Element | null;
@@ -72,11 +90,28 @@ const renderAppWithOverlay = async () => {
   });
   const overlays = await screen.findAllByTestId('entity-overlay');
   expect(overlays.length).toBeGreaterThan(0);
+
+  await waitFor(() => {
+    const workspace = getWorkspaceDropzone();
+    const startBlock = within(workspace).getByTestId('block-start');
+    const foreverBlock = within(startBlock).getByTestId('block-forever');
+    expect(within(foreverBlock).getByTestId('block-scan-resources')).toBeInTheDocument();
+  });
+
+  const workspace = getWorkspaceDropzone();
+  const startBlock = within(workspace).getByTestId('block-start');
+  const foreverBlock = within(startBlock).getByTestId('block-forever');
+  expect(within(foreverBlock).getAllByTestId('block-move-to')).toHaveLength(3);
+  expect(within(foreverBlock).getAllByTestId('block-wait')).toHaveLength(2);
+  expect(within(foreverBlock).getByTestId('block-use-item-slot')).toBeInTheDocument();
+  expect(within(foreverBlock).getByTestId('block-gather-resource')).toBeInTheDocument();
+  expect(within(foreverBlock).getByTestId('block-deposit-cargo')).toBeInTheDocument();
 };
 
 describe('block workspace drag and drop', () => {
   it('allows dragging a palette block into the workspace root', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -92,6 +127,7 @@ describe('block workspace drag and drop', () => {
 
   it('supports dropping blocks into C-shaped slots', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -117,6 +153,7 @@ describe('block workspace drag and drop', () => {
 
   it('moves existing blocks between containers', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -153,6 +190,7 @@ describe('block workspace drag and drop', () => {
 
   it('allows event blocks to host starting behaviours', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -162,8 +200,7 @@ describe('block workspace drag and drop', () => {
     fireEvent.dragOver(workspaceDropzone, { dataTransfer: startTransfer });
     fireEvent.drop(workspaceDropzone, { dataTransfer: startTransfer });
 
-    const workspace = getWorkspaceDropzone();
-    const startBlock = within(workspace).getByTestId('block-start');
+    const startBlock = getLatestStartBlock();
     const doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
 
     const [movePaletteItem] = screen.getAllByTestId('palette-move');
@@ -178,6 +215,7 @@ describe('block workspace drag and drop', () => {
 
   it('populates both branches of a parallel block', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [parallelPaletteItem] = screen.getAllByTestId('palette-parallel');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -211,6 +249,7 @@ describe('block workspace drag and drop', () => {
 
   it('prevents dropping a block into its own descendant', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -244,6 +283,7 @@ describe('block workspace drag and drop', () => {
 
   it('restores saved workspaces when switching between mechanisms', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const initialDropzone = getWorkspaceDropzone();
@@ -254,7 +294,7 @@ describe('block workspace drag and drop', () => {
     fireEvent.drop(initialDropzone, { dataTransfer: startTransfer });
 
     let workspace = getWorkspaceDropzone();
-    let startBlock = within(workspace).getByTestId('block-start');
+    let startBlock = getLatestStartBlock();
     let doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
     const [movePaletteItem] = screen.getAllByTestId('palette-move');
     const moveTransfer = createDataTransfer();
@@ -283,7 +323,7 @@ describe('block workspace drag and drop', () => {
     fireEvent.drop(secondDropzone, { dataTransfer: secondStartTransfer });
 
     workspace = getWorkspaceDropzone();
-    startBlock = within(workspace).getByTestId('block-start');
+    startBlock = getLatestStartBlock();
     doSlotDropzone = within(startBlock).getByTestId('slot-do-dropzone');
     const [turnPaletteItem] = screen.getAllByTestId('palette-turn');
     const turnTransfer = createDataTransfer();
@@ -299,8 +339,7 @@ describe('block workspace drag and drop', () => {
     });
 
     await waitFor(() => {
-      const restoredWorkspace = getWorkspaceDropzone();
-      const restoredStart = within(restoredWorkspace).getByTestId('block-start');
+      const restoredStart = getLatestStartBlock();
       expect(within(restoredStart).getByTestId('block-move')).toBeInTheDocument();
       expect(within(restoredStart).queryByTestId('block-turn')).toBeNull();
     });
@@ -394,6 +433,8 @@ describe('block workspace drag and drop', () => {
   });
   it('compiles user-authored literals, signals, and operator expressions when Run Program is pressed', async () => {
     await renderAppWithOverlay();
+
+    await clearWorkspace();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -534,6 +575,8 @@ describe('block workspace drag and drop', () => {
 
   it('persists compile errors when navigating away from the programming tab', async () => {
     await renderAppWithOverlay();
+
+    await clearWorkspace();
 
     const runSpy = vi.spyOn(simulationRuntime, 'runProgram');
     const runButtons = screen.getAllByTestId('run-program');

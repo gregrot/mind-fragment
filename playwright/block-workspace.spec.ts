@@ -3,6 +3,7 @@ import {
   workspaceDropzone,
   dragPaletteBlock,
   dragWorkspaceBlock,
+  clearWorkspace,
 } from './drag-helpers';
 
 test.describe('block workspace drag-and-drop', () => {
@@ -20,6 +21,8 @@ test.describe('block workspace drag-and-drop', () => {
       await stopButton.click();
       await expect(page.getByTestId('run-program')).toBeEnabled();
     }
+
+    await clearWorkspace(page);
   });
 
   test('adds a palette block to the workspace root', async ({ page }) => {

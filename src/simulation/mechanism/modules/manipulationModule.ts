@@ -1,6 +1,7 @@
 import { MechanismModule } from '../MechanismModule';
 import type { ModulePort } from '../moduleBus';
 import type { ModuleActionContext } from '../MechanismChassis';
+import { DEFAULT_STORAGE_BOX_ID, type StorageBoxSnapshot } from '../../storage/storageBox';
 
 interface GripPayload {
   item?: string;
@@ -28,6 +29,32 @@ interface UseInventoryItemPayload {
   target?: { x?: number; y?: number };
 }
 
+interface StorageTransferPayload {
+  boxId?: string;
+  resource?: string;
+  amount?: number;
+}
+
+interface StorageTransferDetail {
+  resource: string;
+  requested: number;
+  withdrawn: number;
+  transferred: number;
+  overflow: number;
+  boxQuantity: number;
+}
+
+interface StorageTransferTelemetry {
+  type: 'store' | 'withdraw';
+  status: string;
+  boxId: string;
+  totalTransferred: number;
+  totalOverflow: number;
+  resources: StorageTransferDetail[];
+  box: StorageBoxSnapshot | null;
+  timestamp: number;
+}
+
 export interface ManipulationModuleOptions {
   gripStrength?: number;
 }
@@ -35,6 +62,15 @@ export interface ManipulationModuleOptions {
 const DEFAULT_GATHER_RANGE = 220;
 const DEFAULT_GATHER_AMOUNT = 12;
 const DEFAULT_DROP_MERGE_DISTANCE = 32;
+const normaliseResourceId = (value: string | undefined | null): string | null => {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+};
+
+const normaliseBoxId = (value: string | undefined | null): string | null => {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+};
 
 export class ManipulationModule extends MechanismModule {
   private readonly defaultGripStrength: number;
@@ -42,6 +78,7 @@ export class ManipulationModule extends MechanismModule {
   private operationsCompleted = 0;
   private harvestedTotal = 0;
   private depositedTotal = 0;
+  private lastStorageTransfer: StorageTransferTelemetry | null = null;
 
   constructor({ gripStrength = 35 }: ManipulationModuleOptions = {}) {
     super({
@@ -60,6 +97,7 @@ export class ManipulationModule extends MechanismModule {
     this.operationsCompleted = 0;
     this.harvestedTotal = 0;
     this.depositedTotal = 0;
+    this.lastStorageTransfer = null;
 
     port.publishValue('gripStrength', this.defaultGripStrength, {
       label: 'Grip strength',
@@ -94,6 +132,9 @@ export class ManipulationModule extends MechanismModule {
     });
     port.publishValue('lastToolUse', null, {
       label: 'Last tool use',
+    });
+    port.publishValue('lastStorageTransfer', null, {
+      label: 'Last storage transfer',
     });
 
     port.registerAction(
@@ -167,6 +208,34 @@ export class ManipulationModule extends MechanismModule {
         ],
       },
     );
+
+    port.registerAction(
+      'storeInStorageBox',
+      (payload, context) => this.storeInStorageBox(payload, context),
+      {
+        label: 'Store to storage box',
+        summary: 'Move inventory into a storage box, defaulting to the base container when none is provided.',
+        parameters: [
+          { key: 'boxId', label: 'Storage box id' },
+          { key: 'resource', label: 'Resource id' },
+          { key: 'amount', label: 'Amount', unit: 'units' },
+        ],
+      },
+    );
+
+    port.registerAction(
+      'withdrawFromStorageBox',
+      (payload, context) => this.withdrawFromStorageBox(payload, context),
+      {
+        label: 'Withdraw from storage box',
+        summary: 'Retrieve stored resources from a storage box and return them to inventory.',
+        parameters: [
+          { key: 'boxId', label: 'Storage box id' },
+          { key: 'resource', label: 'Resource id' },
+          { key: 'amount', label: 'Amount', unit: 'units' },
+        ],
+      },
+    );
   }
 
   override onDetach(): void {
@@ -176,6 +245,9 @@ export class ManipulationModule extends MechanismModule {
     this.port?.unregisterAction('gatherResource');
     this.port?.unregisterAction('dropResource');
     this.port?.unregisterAction('useInventoryItem');
+    this.port?.unregisterAction('storeInStorageBox');
+    this.port?.unregisterAction('withdrawFromStorageBox');
+    this.updateStorageTelemetry(null);
     this.port = null;
   }
 
@@ -416,6 +488,272 @@ export class ManipulationModule extends MechanismModule {
 
     this.port.updateValue('lastDrop', summary);
     return summary;
+  }
+
+  private storeInStorageBox(payload: unknown, context: unknown): StorageTransferTelemetry {
+    if (!this.port) {
+      const summary = this.createStorageSummary('store', 'inactive', DEFAULT_STORAGE_BOX_ID, [], 0, 0, null);
+      return summary;
+    }
+
+    const typedContext = context as ModuleActionContext;
+    const inventory = typedContext?.utilities?.inventory ?? null;
+    const storage = typedContext?.utilities?.storage ?? null;
+
+    if (!inventory || !storage) {
+      const summary = this.createStorageSummary('store', 'missing-systems', DEFAULT_STORAGE_BOX_ID, [], 0, 0, null);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const typedPayload = (payload ?? {}) as StorageTransferPayload;
+    const requestedBoxId = normaliseBoxId(typedPayload.boxId) ?? DEFAULT_STORAGE_BOX_ID;
+    const box = storage.getBox(requestedBoxId);
+    if (!box) {
+      const summary = this.createStorageSummary('store', 'not-found', requestedBoxId, [], 0, 0, null);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const requestedResource = normaliseResourceId(typedPayload.resource);
+    const requestedAmount = Number.isFinite(typedPayload.amount)
+      ? Math.max((typedPayload.amount as number) ?? 0, 0)
+      : 0;
+
+    const queue: Array<{ resource: string; requested: number }> = [];
+    if (requestedResource) {
+      const available = inventory.getQuantity(requestedResource);
+      const desired = requestedAmount > 0 ? Math.min(requestedAmount, available) : available;
+      if (desired > 0) {
+        queue.push({ resource: requestedResource, requested: desired });
+      }
+    } else {
+      const snapshot = inventory.getSnapshot();
+      for (const entry of snapshot.entries) {
+        if (entry.quantity > 0) {
+          queue.push({ resource: entry.resource, requested: entry.quantity });
+        }
+      }
+    }
+
+    if (queue.length === 0) {
+      const snapshot = storage.getBoxSnapshot(requestedBoxId);
+      const summary = this.createStorageSummary('store', 'empty', requestedBoxId, [], 0, 0, snapshot);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const details: StorageTransferDetail[] = [];
+    let totalStored = 0;
+    let totalOverflow = 0;
+
+    for (const entry of queue) {
+      const withdrawal = inventory.withdraw(entry.resource, entry.requested);
+      if (withdrawal.withdrawn <= 0) {
+        details.push({
+          resource: entry.resource,
+          requested: entry.requested,
+          withdrawn: 0,
+          transferred: 0,
+          overflow: 0,
+          boxQuantity: 0,
+        });
+        continue;
+      }
+
+      const storeResult = storage.store(requestedBoxId, entry.resource, withdrawal.withdrawn);
+      if (storeResult.overflow > 0) {
+        inventory.store(entry.resource, storeResult.overflow);
+      }
+      totalStored += storeResult.stored;
+      totalOverflow += storeResult.overflow;
+      details.push({
+        resource: entry.resource,
+        requested: entry.requested,
+        withdrawn: withdrawal.withdrawn,
+        transferred: storeResult.stored,
+        overflow: storeResult.overflow,
+        boxQuantity: 0,
+      });
+    }
+
+    const boxSnapshot = storage.getBoxSnapshot(requestedBoxId);
+    const quantities = new Map<string, number>();
+    if (boxSnapshot) {
+      for (const entry of boxSnapshot.contents) {
+        quantities.set(entry.resource, entry.quantity);
+      }
+    }
+    for (const detail of details) {
+      detail.boxQuantity = quantities.get(detail.resource) ?? 0;
+    }
+
+    const status =
+      totalStored <= 0
+        ? 'no-space'
+        : totalOverflow > 0
+          ? 'partial'
+          : 'stored';
+
+    if (totalStored > 0) {
+      this.depositedTotal += totalStored;
+      this.port.updateValue('totalDeposited', this.depositedTotal);
+    }
+
+    const summary = this.createStorageSummary('store', status, requestedBoxId, details, totalStored, totalOverflow, boxSnapshot);
+    this.updateStorageTelemetry(summary);
+    return summary;
+  }
+
+  private withdrawFromStorageBox(payload: unknown, context: unknown): StorageTransferTelemetry {
+    if (!this.port) {
+      const summary = this.createStorageSummary('withdraw', 'inactive', DEFAULT_STORAGE_BOX_ID, [], 0, 0, null);
+      return summary;
+    }
+
+    const typedContext = context as ModuleActionContext;
+    const inventory = typedContext?.utilities?.inventory ?? null;
+    const storage = typedContext?.utilities?.storage ?? null;
+
+    if (!inventory || !storage) {
+      const summary = this.createStorageSummary('withdraw', 'missing-systems', DEFAULT_STORAGE_BOX_ID, [], 0, 0, null);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const typedPayload = (payload ?? {}) as StorageTransferPayload;
+    const requestedBoxId = normaliseBoxId(typedPayload.boxId) ?? DEFAULT_STORAGE_BOX_ID;
+    const initialSnapshot = storage.getBoxSnapshot(requestedBoxId);
+    if (!initialSnapshot) {
+      const summary = this.createStorageSummary('withdraw', 'not-found', requestedBoxId, [], 0, 0, null);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const requestedResource = normaliseResourceId(typedPayload.resource);
+    const requestedAmount = Number.isFinite(typedPayload.amount)
+      ? Math.max((typedPayload.amount as number) ?? 0, 0)
+      : 0;
+
+    const queue: Array<{ resource: string; requested: number }> = [];
+    if (requestedResource) {
+      const match = initialSnapshot.contents.find((entry) => entry.resource === requestedResource);
+      const available = match?.quantity ?? 0;
+      const desired = requestedAmount > 0 ? Math.min(requestedAmount, available) : available;
+      if (desired > 0) {
+        queue.push({ resource: requestedResource, requested: desired });
+      }
+    } else {
+      for (const entry of initialSnapshot.contents) {
+        if (entry.quantity <= 0) {
+          continue;
+        }
+        const desired = requestedAmount > 0 ? Math.min(requestedAmount, entry.quantity) : entry.quantity;
+        if (desired > 0) {
+          queue.push({ resource: entry.resource, requested: desired });
+        }
+      }
+    }
+
+    if (queue.length === 0) {
+      const summary = this.createStorageSummary('withdraw', 'empty', requestedBoxId, [], 0, 0, initialSnapshot);
+      this.updateStorageTelemetry(summary);
+      return summary;
+    }
+
+    const details: StorageTransferDetail[] = [];
+    let totalTransferred = 0;
+    let totalOverflow = 0;
+
+    for (const entry of queue) {
+      const withdrawal = storage.withdraw(requestedBoxId, entry.resource, entry.requested);
+      if (withdrawal.withdrawn <= 0) {
+        details.push({
+          resource: entry.resource,
+          requested: entry.requested,
+          withdrawn: 0,
+          transferred: 0,
+          overflow: 0,
+          boxQuantity: 0,
+        });
+        continue;
+      }
+
+      const storeResult = inventory.store(entry.resource, withdrawal.withdrawn);
+      totalTransferred += storeResult.stored;
+      totalOverflow += storeResult.overflow;
+      if (storeResult.overflow > 0) {
+        storage.store(requestedBoxId, entry.resource, storeResult.overflow);
+      }
+
+      details.push({
+        resource: entry.resource,
+        requested: entry.requested,
+        withdrawn: withdrawal.withdrawn,
+        transferred: storeResult.stored,
+        overflow: storeResult.overflow,
+        boxQuantity: 0,
+      });
+    }
+
+    const boxSnapshot = storage.getBoxSnapshot(requestedBoxId);
+    const quantities = new Map<string, number>();
+    if (boxSnapshot) {
+      for (const entry of boxSnapshot.contents) {
+        quantities.set(entry.resource, entry.quantity);
+      }
+    }
+    for (const detail of details) {
+      detail.boxQuantity = quantities.get(detail.resource) ?? 0;
+    }
+
+    const status =
+      totalTransferred <= 0
+        ? 'empty'
+        : totalOverflow > 0
+          ? 'partial'
+          : 'withdrawn';
+
+    const summary = this.createStorageSummary(
+      'withdraw',
+      status,
+      requestedBoxId,
+      details,
+      totalTransferred,
+      totalOverflow,
+      boxSnapshot,
+    );
+    this.updateStorageTelemetry(summary);
+    return summary;
+  }
+
+  private createStorageSummary(
+    type: 'store' | 'withdraw',
+    status: string,
+    boxId: string,
+    resources: StorageTransferDetail[],
+    totalTransferred: number,
+    totalOverflow: number,
+    boxSnapshot: StorageBoxSnapshot | null,
+  ): StorageTransferTelemetry {
+    return {
+      type,
+      status,
+      boxId,
+      totalTransferred,
+      totalOverflow,
+      resources,
+      box: boxSnapshot,
+      timestamp: Date.now(),
+    } satisfies StorageTransferTelemetry;
+  }
+
+  private updateStorageTelemetry(summary: StorageTransferTelemetry | null): void {
+    this.lastStorageTransfer = summary;
+    if (!this.port) {
+      return;
+    }
+    this.port.updateValue('lastStorageTransfer', summary);
   }
 
   private useInventoryItem(payload: unknown, context: unknown): Record<string, unknown> {

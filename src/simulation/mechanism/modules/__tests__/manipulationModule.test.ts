@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MechanismChassis } from '../../MechanismChassis';
 import { CargoHoldModule } from '../cargoHoldModule';
 import { ManipulationModule } from '../manipulationModule';
+import { DEFAULT_STORAGE_BOX_ID } from '../../../storage/storageBox';
 
 const createChassis = (): MechanismChassis => {
   const mechanism = new MechanismChassis();
@@ -83,6 +84,93 @@ describe('ManipulationModule dropResource', () => {
     expect(lastDrop?.status).toBe('partial');
     expect(lastDrop?.totalDropped).toBe(4);
     expect(lastDrop?.resources[0].remaining).toBe(6);
+  });
+});
+
+describe('ManipulationModule storage transfers', () => {
+  it('stores all inventory resources into the default storage box when no resource is specified', () => {
+    const mechanism = createChassis();
+    mechanism.inventory.store('ferrous-ore', 6);
+    mechanism.inventory.store('silicate-crystal', 3);
+
+    const result = mechanism.invokeAction('arm.manipulator', 'storeInStorageBox', {}) as {
+      status: string;
+      boxId: string;
+      totalTransferred: number;
+      resources: Array<{ resource: string; transferred: number }>;
+      box: { contents: Array<{ resource: string; quantity: number }> } | null;
+    };
+
+    expect(result.status).toBe('stored');
+    expect(result.boxId).toBe(DEFAULT_STORAGE_BOX_ID);
+    expect(result.totalTransferred).toBe(9);
+    expect(result.resources).toHaveLength(2);
+    expect(result.box?.contents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ resource: 'ferrous-ore', quantity: expect.any(Number) }),
+        expect.objectContaining({ resource: 'silicate-crystal', quantity: expect.any(Number) }),
+      ]),
+    );
+
+    const storageSnapshot = mechanism.getStorageSnapshot();
+    const baseBox = storageSnapshot.boxes.find((box) => box.id === DEFAULT_STORAGE_BOX_ID);
+    expect(baseBox?.used).toBe(9);
+    expect(
+      baseBox?.contents.some((entry) => entry.resource === 'ferrous-ore' && entry.quantity >= 6),
+    ).toBe(true);
+    expect(
+      baseBox?.contents.some((entry) => entry.resource === 'silicate-crystal' && entry.quantity >= 3),
+    ).toBe(true);
+
+    const inventoryAfter = mechanism.getInventorySnapshot();
+    expect(inventoryAfter.entries).toEqual([]);
+
+    const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
+    expect(telemetry?.totalDeposited.value).toBeGreaterThanOrEqual(9);
+    const lastTransfer = telemetry?.lastStorageTransfer.value as
+      | { type: string; status: string; totalTransferred: number }
+      | null;
+    expect(lastTransfer?.type).toBe('store');
+    expect(lastTransfer?.status).toBe('stored');
+    expect(lastTransfer?.totalTransferred).toBe(9);
+  });
+
+  it('withdraws resources from the storage box into inventory', () => {
+    const mechanism = createChassis();
+    mechanism.inventory.store('ferrous-ore', 8);
+    mechanism.invokeAction('arm.manipulator', 'storeInStorageBox', {});
+
+    const withdrawResult = mechanism.invokeAction('arm.manipulator', 'withdrawFromStorageBox', {
+      resource: 'ferrous-ore',
+      amount: 5,
+    }) as {
+      status: string;
+      totalTransferred: number;
+      resources: Array<{ resource: string; transferred: number; boxQuantity: number }>;
+    };
+
+    expect(['withdrawn', 'partial']).toContain(withdrawResult.status);
+    expect(withdrawResult.totalTransferred).toBeGreaterThan(0);
+
+    const inventoryAfter = mechanism.getInventorySnapshot();
+    expect(
+      inventoryAfter.entries.some((entry) => entry.resource === 'ferrous-ore' && entry.quantity >= 5),
+    ).toBe(true);
+
+    const storageSnapshot = mechanism.getStorageSnapshot();
+    const baseBox = storageSnapshot.boxes.find((box) => box.id === DEFAULT_STORAGE_BOX_ID);
+    expect(baseBox?.used).toBeGreaterThanOrEqual(0);
+    expect(
+      baseBox?.contents.find((entry) => entry.resource === 'ferrous-ore')?.quantity ?? 0,
+    ).toBeLessThan(8);
+
+    const telemetry = mechanism.getTelemetrySnapshot().values['arm.manipulator'];
+    const lastTransfer = telemetry?.lastStorageTransfer.value as
+      | { type: string; status: string; totalTransferred: number }
+      | null;
+    expect(lastTransfer?.type).toBe('withdraw');
+    expect(['withdrawn', 'partial']).toContain(lastTransfer?.status ?? '');
+    expect(lastTransfer?.totalTransferred).toBeGreaterThan(0);
   });
 });
 

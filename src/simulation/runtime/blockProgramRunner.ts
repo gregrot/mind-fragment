@@ -14,6 +14,7 @@ import type {
   UseItemInstruction,
 } from './blockProgram';
 import { SimpleNavigator } from '../mechanism/modules/navigator';
+import { DEFAULT_STORAGE_BOX_ID } from '../storage/storageBox';
 
 export type ProgramRunnerStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -45,6 +46,9 @@ interface UseItemRuntimeState {
   swingsRemaining: number;
   cooldown: number;
 }
+
+type StoreStorageInstruction = Extract<BlockInstruction, { kind: 'store-storage' }>;
+type WithdrawStorageInstruction = Extract<BlockInstruction, { kind: 'withdraw-storage' }>;
 
 type ExecutionFrameKind = 'sequence' | 'loop-forever' | 'loop-counted';
 
@@ -358,6 +362,18 @@ export class BlockProgramRunner {
         this.applyLinearVelocity(0, 0);
         this.applyAngularVelocity(0);
         this.executeUseItemInstruction(instruction, telemetry);
+        break;
+      }
+      case 'store-storage': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.executeStoreStorage(instruction, telemetry);
+        break;
+      }
+      case 'withdraw-storage': {
+        this.applyLinearVelocity(0, 0);
+        this.applyAngularVelocity(0);
+        this.executeWithdrawStorage(instruction, telemetry);
         break;
       }
       case 'deposit': {
@@ -729,12 +745,68 @@ export class BlockProgramRunner {
     }
   }
 
+  private executeStoreStorage(instruction: StoreStorageInstruction, telemetry: ValuesSnapshot): void {
+    if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+      return;
+    }
+
+    const amountLabel = instruction.amount.literal?.label ?? 'Store Storage → amount';
+    const requestedAmount = Math.max(
+      0,
+      this.evaluateNumberBinding(instruction.amount, amountLabel, telemetry),
+    );
+
+    const payload: Record<string, unknown> = {};
+    const boxId = instruction.boxId.value.trim();
+    if (boxId.length > 0) {
+      payload.boxId = boxId;
+    }
+    const resourceId = instruction.resource.value.trim();
+    if (resourceId.length > 0) {
+      payload.resource = resourceId;
+    }
+    if (requestedAmount > 0) {
+      payload.amount = requestedAmount;
+    }
+
+    this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'storeInStorageBox', payload);
+  }
+
+  private executeWithdrawStorage(instruction: WithdrawStorageInstruction, telemetry: ValuesSnapshot): void {
+    if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
+      return;
+    }
+
+    const amountLabel = instruction.amount.literal?.label ?? 'Withdraw Storage → amount';
+    const requestedAmount = Math.max(
+      0,
+      this.evaluateNumberBinding(instruction.amount, amountLabel, telemetry),
+    );
+
+    const payload: Record<string, unknown> = {};
+    const boxId = instruction.boxId.value.trim();
+    if (boxId.length > 0) {
+      payload.boxId = boxId;
+    }
+    const resourceId = instruction.resource.value.trim();
+    if (resourceId.length > 0) {
+      payload.resource = resourceId;
+    }
+    if (requestedAmount > 0) {
+      payload.amount = requestedAmount;
+    }
+
+    this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'withdrawFromStorageBox', payload);
+  }
+
   private executeDeposit(): void {
     if (!this.mechanism.moduleStack.getModule(MANIPULATOR_MODULE_ID)) {
       return;
     }
 
-    this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'dropResource', {});
+    this.mechanism.invokeAction(MANIPULATOR_MODULE_ID, 'storeInStorageBox', {
+      boxId: DEFAULT_STORAGE_BOX_ID,
+    });
   }
 
   private resolveUseItemTarget(

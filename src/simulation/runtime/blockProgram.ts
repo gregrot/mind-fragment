@@ -157,6 +157,20 @@ export type BlockInstruction =
       target: 'auto';
     })
   | (BlockInstructionMetadata & {
+      kind: 'store-storage';
+      duration: NumberParameterBinding;
+      boxId: StringLiteralValue;
+      resource: StringLiteralValue;
+      amount: NumberParameterBinding;
+    })
+  | (BlockInstructionMetadata & {
+      kind: 'withdraw-storage';
+      duration: NumberParameterBinding;
+      boxId: StringLiteralValue;
+      resource: StringLiteralValue;
+      amount: NumberParameterBinding;
+    })
+  | (BlockInstructionMetadata & {
       kind: 'deposit';
       duration: NumberParameterBinding;
     })
@@ -1046,6 +1060,56 @@ const compileBlock = (
           sourceBlockId,
         },
       ];
+    case 'store-storage': {
+      const boxId = resolveStringParameter(block, 'boxId', diagnostics, {
+        fallback: 'storage.box.base',
+        allowEmpty: true,
+      });
+      const resource = resolveStringParameter(block, 'resource', diagnostics, {
+        fallback: '',
+        allowEmpty: true,
+      });
+      const amount = resolveNumberBinding(block, 'amount', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('store-storage'), 'amount'),
+        fallback: 0,
+        minimum: 0,
+      });
+      return [
+        {
+          kind: 'store-storage',
+          duration: createNumberLiteralBinding(WAIT_DURATION, { label: 'Store Storage → duration' }),
+          boxId,
+          resource,
+          amount,
+          sourceBlockId,
+        },
+      ];
+    }
+    case 'withdraw-storage': {
+      const boxId = resolveStringParameter(block, 'boxId', diagnostics, {
+        fallback: 'storage.box.base',
+        allowEmpty: true,
+      });
+      const resource = resolveStringParameter(block, 'resource', diagnostics, {
+        fallback: '',
+        allowEmpty: true,
+      });
+      const amount = resolveNumberBinding(block, 'amount', diagnostics, {
+        label: formatParameterLabel(getBlockLabel('withdraw-storage'), 'amount'),
+        fallback: 0,
+        minimum: 0,
+      });
+      return [
+        {
+          kind: 'withdraw-storage',
+          duration: createNumberLiteralBinding(WAIT_DURATION, { label: 'Withdraw Storage → duration' }),
+          boxId,
+          resource,
+          amount,
+          sourceBlockId,
+        },
+      ];
+    }
     case 'toggle-status':
       return [
         {

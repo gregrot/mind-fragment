@@ -1,0 +1,536 @@
+{
+  "instructions": [
+    {
+      "kind": "loop",
+      "mode": "forever",
+      "instructions": [
+        {
+          "kind": "scan",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 0.5,
+              "source": "default",
+              "label": "Default Startup → scan for trees"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 0.5,
+              "source": "default",
+              "label": "Default Startup → scan for trees"
+            }
+          },
+          "filter": "tree",
+          "sourceBlockId": "default-startup-scan-for-trees"
+        },
+        {
+          "kind": "move-to",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → travel to tree duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → travel to tree duration"
+            }
+          },
+          "speed": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → travel speed"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → travel speed"
+            }
+          },
+          "target": {
+            "useScanHit": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": true,
+                "source": "default",
+                "label": "Default Startup → use scan hit for tree"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": true,
+                "source": "default",
+                "label": "Default Startup → use scan hit for tree"
+              }
+            },
+            "scanHitIndex": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → scan hit index"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → scan hit index"
+              }
+            },
+            "literalPosition": {
+              "x": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -340,
+                  "source": "default",
+                  "label": "Default Startup → fallback tree X"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -340,
+                  "source": "default",
+                  "label": "Default Startup → fallback tree X"
+                }
+              },
+              "y": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -220,
+                  "source": "default",
+                  "label": "Default Startup → fallback tree Y"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -220,
+                  "source": "default",
+                  "label": "Default Startup → fallback tree Y"
+                }
+              }
+            }
+          },
+          "sourceBlockId": "default-startup-move-to-tree"
+        },
+        {
+          "kind": "wait",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 0.5,
+              "source": "default",
+              "label": "Default Startup → settle before chopping"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 0.5,
+              "source": "default",
+              "label": "Default Startup → settle before chopping"
+            }
+          },
+          "sourceBlockId": "default-startup-settle-before-chop"
+        },
+        {
+          "kind": "use-item",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 3,
+              "source": "default",
+              "label": "Default Startup → swing axe duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 3,
+              "source": "default",
+              "label": "Default Startup → swing axe duration"
+            }
+          },
+          "slot": {
+            "index": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → tool slot index"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → tool slot index"
+              }
+            },
+            "label": {
+              "value": "Primary Tool",
+              "source": "default",
+              "label": "Default Startup → tool slot label"
+            }
+          },
+          "target": {
+            "useScanHit": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": true,
+                "source": "default",
+                "label": "Default Startup → use scan hit for swing"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": true,
+                "source": "default",
+                "label": "Default Startup → use scan hit for swing"
+              }
+            },
+            "scanHitIndex": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → swing scan hit index"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → swing scan hit index"
+              }
+            },
+            "literalPosition": {
+              "x": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -340,
+                  "source": "default",
+                  "label": "Default Startup → swing fallback X"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -340,
+                  "source": "default",
+                  "label": "Default Startup → swing fallback X"
+                }
+              },
+              "y": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -220,
+                  "source": "default",
+                  "label": "Default Startup → swing fallback Y"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": -220,
+                  "source": "default",
+                  "label": "Default Startup → swing fallback Y"
+                }
+              }
+            }
+          },
+          "sourceBlockId": "default-startup-chop-tree"
+        },
+        {
+          "kind": "gather",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1.5,
+              "source": "default",
+              "label": "Default Startup → gather logs duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1.5,
+              "source": "default",
+              "label": "Default Startup → gather logs duration"
+            }
+          },
+          "target": "auto",
+          "sourceBlockId": "default-startup-gather-logs"
+        },
+        {
+          "kind": "move-to",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → return duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → return duration"
+            }
+          },
+          "speed": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → return speed"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → return speed"
+            }
+          },
+          "target": {
+            "useScanHit": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": false,
+                "source": "default",
+                "label": "Default Startup → use scan hit for return"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": false,
+                "source": "default",
+                "label": "Default Startup → use scan hit for return"
+              }
+            },
+            "scanHitIndex": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → return scan hit index"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → return scan hit index"
+              }
+            },
+            "literalPosition": {
+              "x": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 0,
+                  "source": "default",
+                  "label": "Default Startup → origin X"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 0,
+                  "source": "default",
+                  "label": "Default Startup → origin X"
+                }
+              },
+              "y": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 0,
+                  "source": "default",
+                  "label": "Default Startup → origin Y"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 0,
+                  "source": "default",
+                  "label": "Default Startup → origin Y"
+                }
+              }
+            }
+          },
+          "sourceBlockId": "default-startup-return-to-origin"
+        },
+        {
+          "kind": "deposit",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1,
+              "source": "default",
+              "label": "Default Startup → deposit duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1,
+              "source": "default",
+              "label": "Default Startup → deposit duration"
+            }
+          },
+          "sourceBlockId": "default-startup-deposit-cargo"
+        },
+        {
+          "kind": "move-to",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → secondary travel duration"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 8,
+              "source": "default",
+              "label": "Default Startup → secondary travel duration"
+            }
+          },
+          "speed": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → secondary travel speed"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 80,
+              "source": "default",
+              "label": "Default Startup → secondary travel speed"
+            }
+          },
+          "target": {
+            "useScanHit": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": false,
+                "source": "default",
+                "label": "Default Startup → use scan hit for secondary tree"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "boolean",
+                "value": false,
+                "source": "default",
+                "label": "Default Startup → use scan hit for secondary tree"
+              }
+            },
+            "scanHitIndex": {
+              "literal": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → secondary scan hit index"
+              },
+              "expression": {
+                "kind": "literal",
+                "valueType": "number",
+                "value": 1,
+                "source": "default",
+                "label": "Default Startup → secondary scan hit index"
+              }
+            },
+            "literalPosition": {
+              "x": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 360,
+                  "source": "default",
+                  "label": "Default Startup → secondary fallback X"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 360,
+                  "source": "default",
+                  "label": "Default Startup → secondary fallback X"
+                }
+              },
+              "y": {
+                "literal": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 260,
+                  "source": "default",
+                  "label": "Default Startup → secondary fallback Y"
+                },
+                "expression": {
+                  "kind": "literal",
+                  "valueType": "number",
+                  "value": 260,
+                  "source": "default",
+                  "label": "Default Startup → secondary fallback Y"
+                }
+              }
+            }
+          },
+          "sourceBlockId": "default-startup-move-to-secondary-tree"
+        },
+        {
+          "kind": "wait",
+          "duration": {
+            "literal": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1,
+              "source": "default",
+              "label": "Default Startup → loop pause"
+            },
+            "expression": {
+              "kind": "literal",
+              "valueType": "number",
+              "value": 1,
+              "source": "default",
+              "label": "Default Startup → loop pause"
+            }
+          },
+          "sourceBlockId": "default-startup-loop-pause"
+        }
+      ],
+      "sourceBlockId": "default-startup-harvest-loop"
+    }
+  ]
+}

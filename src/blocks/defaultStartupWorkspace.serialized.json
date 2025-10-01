@@ -1,0 +1,394 @@
+[
+  {
+    "instanceId": "default-startup-when-started",
+    "type": "start",
+    "slots": {
+      "do": [
+        {
+          "instanceId": "default-startup-harvest-loop",
+          "type": "forever",
+          "slots": {
+            "do": [
+              {
+                "instanceId": "default-startup-scan-for-trees",
+                "type": "scan-resources"
+              },
+              {
+                "instanceId": "default-startup-move-to-tree",
+                "type": "move-to",
+                "parameters": {
+                  "useScanHit": {
+                    "kind": "boolean",
+                    "value": true
+                  },
+                  "scanHitIndex": {
+                    "kind": "number",
+                    "value": 1
+                  },
+                  "targetX": {
+                    "kind": "number",
+                    "value": -340
+                  },
+                  "targetY": {
+                    "kind": "number",
+                    "value": -220
+                  },
+                  "speed": {
+                    "kind": "number",
+                    "value": 80
+                  }
+                },
+                "expressionInputs": {
+                  "useScanHit": [
+                    {
+                      "instanceId": "block-4",
+                      "type": "literal-boolean",
+                      "parameters": {
+                        "value": {
+                          "kind": "boolean",
+                          "value": true
+                        }
+                      }
+                    }
+                  ],
+                  "scanHitIndex": [
+                    {
+                      "instanceId": "block-5",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      }
+                    }
+                  ],
+                  "targetX": [
+                    {
+                      "instanceId": "block-6",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": -340
+                        }
+                      }
+                    }
+                  ],
+                  "targetY": [
+                    {
+                      "instanceId": "block-7",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": -220
+                        }
+                      }
+                    }
+                  ],
+                  "speed": [
+                    {
+                      "instanceId": "block-8",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 80
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "instanceId": "default-startup-settle-before-chop",
+                "type": "wait"
+              },
+              {
+                "instanceId": "default-startup-chop-tree",
+                "type": "use-item-slot",
+                "parameters": {
+                  "slotIndex": {
+                    "kind": "number",
+                    "value": 1
+                  },
+                  "slotLabel": {
+                    "kind": "string",
+                    "value": "Primary Tool"
+                  },
+                  "useScanHit": {
+                    "kind": "boolean",
+                    "value": true
+                  },
+                  "scanHitIndex": {
+                    "kind": "number",
+                    "value": 1
+                  },
+                  "targetX": {
+                    "kind": "number",
+                    "value": -340
+                  },
+                  "targetY": {
+                    "kind": "number",
+                    "value": -220
+                  }
+                },
+                "expressionInputs": {
+                  "slotIndex": [
+                    {
+                      "instanceId": "block-11",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      }
+                    }
+                  ],
+                  "useScanHit": [
+                    {
+                      "instanceId": "block-12",
+                      "type": "literal-boolean",
+                      "parameters": {
+                        "value": {
+                          "kind": "boolean",
+                          "value": true
+                        }
+                      }
+                    }
+                  ],
+                  "scanHitIndex": [
+                    {
+                      "instanceId": "block-13",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      }
+                    }
+                  ],
+                  "targetX": [
+                    {
+                      "instanceId": "block-14",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": -340
+                        }
+                      }
+                    }
+                  ],
+                  "targetY": [
+                    {
+                      "instanceId": "block-15",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": -220
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "instanceId": "default-startup-gather-logs",
+                "type": "gather-resource"
+              },
+              {
+                "instanceId": "default-startup-return-to-origin",
+                "type": "move-to",
+                "parameters": {
+                  "useScanHit": {
+                    "kind": "boolean",
+                    "value": false
+                  },
+                  "scanHitIndex": {
+                    "kind": "number",
+                    "value": 1
+                  },
+                  "targetX": {
+                    "kind": "number",
+                    "value": 0
+                  },
+                  "targetY": {
+                    "kind": "number",
+                    "value": 0
+                  },
+                  "speed": {
+                    "kind": "number",
+                    "value": 80
+                  }
+                },
+                "expressionInputs": {
+                  "useScanHit": [
+                    {
+                      "instanceId": "block-18",
+                      "type": "literal-boolean",
+                      "parameters": {
+                        "value": {
+                          "kind": "boolean",
+                          "value": false
+                        }
+                      }
+                    }
+                  ],
+                  "scanHitIndex": [
+                    {
+                      "instanceId": "block-19",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      }
+                    }
+                  ],
+                  "targetX": [
+                    {
+                      "instanceId": "block-20",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 0
+                        }
+                      }
+                    }
+                  ],
+                  "targetY": [
+                    {
+                      "instanceId": "block-21",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 0
+                        }
+                      }
+                    }
+                  ],
+                  "speed": [
+                    {
+                      "instanceId": "block-22",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 80
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "instanceId": "default-startup-deposit-cargo",
+                "type": "deposit-cargo"
+              },
+              {
+                "instanceId": "default-startup-move-to-secondary-tree",
+                "type": "move-to",
+                "parameters": {
+                  "useScanHit": {
+                    "kind": "boolean",
+                    "value": false
+                  },
+                  "scanHitIndex": {
+                    "kind": "number",
+                    "value": 1
+                  },
+                  "targetX": {
+                    "kind": "number",
+                    "value": 360
+                  },
+                  "targetY": {
+                    "kind": "number",
+                    "value": 260
+                  },
+                  "speed": {
+                    "kind": "number",
+                    "value": 80
+                  }
+                },
+                "expressionInputs": {
+                  "useScanHit": [
+                    {
+                      "instanceId": "block-25",
+                      "type": "literal-boolean",
+                      "parameters": {
+                        "value": {
+                          "kind": "boolean",
+                          "value": false
+                        }
+                      }
+                    }
+                  ],
+                  "scanHitIndex": [
+                    {
+                      "instanceId": "block-26",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      }
+                    }
+                  ],
+                  "targetX": [
+                    {
+                      "instanceId": "block-27",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 360
+                        }
+                      }
+                    }
+                  ],
+                  "targetY": [
+                    {
+                      "instanceId": "block-28",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 260
+                        }
+                      }
+                    }
+                  ],
+                  "speed": [
+                    {
+                      "instanceId": "block-29",
+                      "type": "literal-number",
+                      "parameters": {
+                        "value": {
+                          "kind": "number",
+                          "value": 80
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "instanceId": "default-startup-loop-pause",
+                "type": "wait"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

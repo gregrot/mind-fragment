@@ -111,6 +111,7 @@ const renderAppWithOverlay = async () => {
 describe('block workspace drag and drop', () => {
   it('allows dragging a palette block into the workspace root', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -126,6 +127,7 @@ describe('block workspace drag and drop', () => {
 
   it('supports dropping blocks into C-shaped slots', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -151,6 +153,7 @@ describe('block workspace drag and drop', () => {
 
   it('moves existing blocks between containers', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -187,6 +190,7 @@ describe('block workspace drag and drop', () => {
 
   it('allows event blocks to host starting behaviours', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -211,6 +215,7 @@ describe('block workspace drag and drop', () => {
 
   it('populates both branches of a parallel block', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [parallelPaletteItem] = screen.getAllByTestId('palette-parallel');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -244,6 +249,7 @@ describe('block workspace drag and drop', () => {
 
   it('prevents dropping a block into its own descendant', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [repeatPaletteItem] = screen.getAllByTestId('palette-repeat');
     const workspaceDropzone = getWorkspaceDropzone();
@@ -277,6 +283,7 @@ describe('block workspace drag and drop', () => {
 
   it('restores saved workspaces when switching between mechanisms', async () => {
     await renderAppWithOverlay();
+    await clearWorkspace();
 
     const [startPaletteItem] = screen.getAllByTestId('palette-start');
     const initialDropzone = getWorkspaceDropzone();
